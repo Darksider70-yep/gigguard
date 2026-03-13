@@ -1,5 +1,5 @@
 ---
-name: gigguard-devtrails-2026
+name: gigguard
 description: >
   Complete build guide for GigGuard — the AI-powered parametric income insurance
   platform for food delivery gig workers (Zomato/Swiggy), built for the Guidewire
