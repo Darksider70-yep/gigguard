@@ -183,7 +183,19 @@ It's possible for multiple triggers to be active simultaneously (e.g., Heavy Rai
 
 ---
 
-## 5. Fraud Guard Per Trigger
+## 5. Hybrid Fraud Detection Strategy
+
+A single fraud model is not sufficient. We employ a multi-layered, hybrid strategy to handle different types of users and attack vectors effectively.
+
+-   **Layer 1: Rule-Based Pre-Screening (for New Users):** The Isolation Forest model is less effective for new workers with no claim history (a "cold start" problem). For any worker with fewer than 3 historical claims, we apply a strict, simple ruleset first. A claim from a brand-new user within 48 hours of onboarding, for instance, is automatically flagged for a quick manual review, regardless of the ML score.
+
+-   **Layer 2: ML-Powered Anomaly Detection (for Established Users):** Once a worker has a baseline of activity, their claim patterns are fed into the Isolation Forest model. This model excels at detecting subtle deviations from normal behavior over time, such as a worker's claim frequency suddenly becoming much higher than their peers in the same zone.
+
+-   **Layer 3: Post-Claim Validation:** As described below, specific checks like GPS location verification are performed after a claim is triggered to defend against tactical fraud vectors.
+
+---
+
+## 6. Fraud Guard Per Trigger
 
 -   **Heavy Rain / Extreme Heat:**
     -   **Vector:** GPS spoofing. A worker might use an app to fake their location to appear inside a disruption zone and get a claim while they are actually in a different, unaffected area.

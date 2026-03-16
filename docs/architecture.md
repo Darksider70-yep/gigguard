@@ -74,14 +74,13 @@ The PostgreSQL database schema is designed to be normalized and scalable. We use
 
 #### 1. `workers` Table
 Stores information about the delivery workers.
-
 ```sql
 CREATE TABLE "workers" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "phone_number" varchar(15) UNIQUE NOT NULL, -- Used for login/auth
   "full_name" varchar(255) NOT NULL,
-  "city" varchar(100) NOT NULL, -- e.g., 'Mumbai', 'Delhi'
-  "zone" varchar(100) NOT NULL, -- A specific operational area, e.g., 'Andheri West'
+  "city_id" integer NOT NULL, -- Foreign key to cities table
+  "zone_id" integer NOT NULL, -- Foreign key to zones table
   "avg_daily_earning" integer NOT NULL, -- In Rupees, e.g., 800
   "vehicle_type" varchar(50), -- e.g., 'motorcycle', 'e-bike'
   "created_at" timestamptz NOT NULL DEFAULT (now()),

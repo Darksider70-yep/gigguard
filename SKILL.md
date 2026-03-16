@@ -16,7 +16,6 @@ description: >
 # GigGuard — Agent Skill Document
 ## Guidewire DEVTrails 2026 · AI-Powered Insurance for India's Gig Economy
 
----
 
 ## 1. Project Context
 
@@ -175,6 +174,25 @@ gigguard/
 
 ## 3. Database Schema
 
+**Suggested Improvement:** For better data integrity, we can normalize `city` and `zone`.
+
+```sql
+-- Add these tables
+CREATE TABLE cities (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(50) UNIQUE NOT NULL
+);
+
+CREATE TABLE zones (
+  id SERIAL PRIMARY KEY,
+  city_id INTEGER REFERENCES cities(id) NOT NULL,
+  name VARCHAR(50) NOT NULL,
+  lat DECIMAL(9,6),
+  lon DECIMAL(9,6),
+  UNIQUE(city_id, name)
+);
+```
+
 Write this to `backend/db/schema.sql` exactly:
 
 ```sql
@@ -183,8 +201,8 @@ CREATE TABLE workers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) NOT NULL,
   phone VARCHAR(15) UNIQUE NOT NULL,
-  city VARCHAR(50) NOT NULL,            -- 'Mumbai', 'Delhi', 'Chennai', 'Bangalore', 'Hyderabad'
-  zone VARCHAR(50) NOT NULL,            -- hyper-local zone within city
+  city_id INTEGER REFERENCES cities(id) NOT NULL,
+  zone_id INTEGER REFERENCES zones(id) NOT NULL,
   platform VARCHAR(20) NOT NULL,        -- 'zomato' | 'swiggy'
   avg_daily_hours DECIMAL(4,2) NOT NULL,
   avg_daily_earning DECIMAL(10,2) NOT NULL,
@@ -603,13 +621,25 @@ For each worker with active policy:
   - Top flagged claims (fraud_score > 0.65) list
 
 **Week 6 tasks (Apr 12–17) — Polish + Submit:**
-- [ ] Write `infra/docker-compose.yml` — brings up all 4 services with one command
-- [ ] Write E2E test: simulate rainstorm → assert claim created → assert payout status = 'paid'
-- [ ] Full end-to-end run-through — fix any broken flows
-- [ ] Record 5-min demo video (must show: live trigger simulation → auto claim → payout)
-- [ ] Build pitch deck PDF (slides: persona, problem, solution, AI architecture, weekly pricing business case, fraud detection, demo screenshots)
-- [ ] Clean up GitHub — ensure `README.md` has working demo link and setup instructions
-- [ ] Submit by Apr 17 EOD
+```yaml
+# infra/docker-compose.yml
+version: '3.8'
+services:
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: gigguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./backend/db/init:/docker-entrypoint-initdb.d # Auto-runs .sql scripts
+      - pgdata:/var/lib/postgresql/data
+  # ... other services (backend, frontend, ml-service)
+volumes:
+  pgdata:
+```
 
 **Fraud detection to implement (Phase 3 only):**
 1. GPS zone mismatch check (sync, fast — runs before ML scorer)
@@ -673,31 +703,24 @@ NEXT_PUBLIC_RAZORPAY_KEY=rzp_test_xxxx
 
 ## 11. Quick-Start Commands
 
-```bash
-# 1. Clone and install
-git clone https://github.com/your-org/gigguard.git && cd gigguard
+```pseudocode
+// Manual Setup (for individual service development)
 
-# 2. Backend
-cd backend && npm install
-cp ../.env.example .env   # fill in your keys
-npx ts-node src/index.ts
+1. Clone the repository.
+2. For each service (backend, frontend, ml-service):
+   a. Navigate into the service directory.
+   b. Install dependencies (e.g., `npm install` or `pip install`).
+3. Create a `.env` file from the example and add your API keys.
+4. Manually run the database schema and seed scripts.
+5. Start each service in a separate terminal.
 
-# 3. Frontend
-cd ../frontend && npm install
-npm run dev               # http://localhost:3000
+// Recommended Setup (using Docker)
 
-# 4. ML service
-cd ../ml-service
-pip install -r requirements.txt
-python models/train_premium.py && python models/train_fraud.py
-python app.py             # http://localhost:5001
-
-# 5. Database
-psql $DATABASE_URL -f backend/db/schema.sql
-psql $DATABASE_URL -f backend/db/seeds/test-workers.sql
-
-# 6. All services (Phase 3)
-docker-compose up --build
+1. Clone the repository.
+2. Create a `.env` file from the example and add your API keys.
+3. Run `docker-compose up --build` from the root directory.
+   // This single command builds and starts all services
+   // and automatically initializes the database on the first run.
 ```
 
 ---
