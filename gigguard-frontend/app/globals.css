@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 248 250 252; /* slate-50 */
+    --foreground: 15 23 42; /* slate-900 */
+
+    --card: 0 0% 100%;
+    --card-foreground: 15 23 42;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 15 23 42;
+
+    --primary: 14 165 233; /* sky-500 */
+    --primary-foreground: 248 250 252;
+
+    --secondary: 241 245 249; /* slate-100 */
+    --secondary-foreground: 15 23 42;
+
+    --muted: 241 245 249;
+    --muted-foreground: 100 116 139; /* slate-500 */
+
+    --accent: 16 185 129; /* emerald-500 */
+    --accent-foreground: 248 250 252;
+
+    --destructive: 239 68 68; /* red-500 */
+    --destructive-foreground: 248 250 252;
+    
+    --warning: 245 158 11; /* amber-500 */
+    --warning-foreground: 248 250 252;
+
+    --border: 226 232 240; /* slate-200 */
+    --input: 226 232 240;
+    --ring: 14 165 233;
+
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-slate-900;
+  }
+}
