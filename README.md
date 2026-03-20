@@ -1,5 +1,8 @@
-# GigGuard
-### AI-powered parametric income insurance for India's gig economy
+# GigGuard: Secure Your Hustle.
+
+### AI-powered parametric income insurance for India's gig economy.
+
+**GigGuard is a revolutionary InsurTech platform designed from the ground up to protect the backbone of the modern economy: the gig worker.** We provide a simple, automated, and transparent financial safety net, ensuring that disruptions like bad weather or city-wide shutdowns don't have to mean a lost day's income.
 
 ![Built for Guidewire DEVTrails 2026](https://img.shields.io/badge/Built%20for-Guidewire%20DEVTrails%202026-blue)
 ![Phase-1](https://img.shields.io/badge/Phase-1-brightgreen)
@@ -41,7 +44,7 @@ The services communicate via REST APIs to perform their functions:
 3.  **ML Service (Python/Flask):** This service houses our machine learning models. When the Backend needs to calculate a premium or assess risk, it sends a request to this service, which returns the result. This isolates complex AI logic from the core business application.
 4.  **Database (PostgreSQL):** The single source of truth for all persistent data, including worker profiles, policy details, disruption events, and claim statuses.
 
-> For a deeper technical dive, including the full database schema and API design, see the [**Architecture Document**](docs/architecture.md) and the [**ER Model**](docs/GigGuard_ER_Model.pdf).
+> For a deeper technical dive, including the full database schema and API design, see the [**Architecture Document**](docs/System_architecture.docx) and the [**ER Model**](docs/GigGuard_ER_Model.docx).
 
 ---
 
@@ -72,7 +75,7 @@ To ensure pricing is both fair and sustainable, our weekly premium is not a fixe
 -   **Weather Multiplier:** A short-term, forward-looking adjustment based on the 7-day weather and air quality forecast.
 -   **History Multiplier:** A personal discount or surcharge based on the worker's individual claims history, rewarding safe behavior.
 
-> For a complete breakdown of the formula and business viability analysis, see the [**Premium Model Document**](docs/premium-model.md).
+> For a complete breakdown of the formula and business viability analysis, see the [**Premium Model Document**](docs/Premium_model.docx).
 
 ### AI-Powered Fraud Detection
 To protect the platform and keep premiums low, we use an **Isolation Forest** model to analyze claim patterns in real-time. This is an anomaly detection algorithm that excels at finding unusual behavior. It assigns a fraud score to each claim based on features like a worker's claim frequency compared to their zone's average. High-risk claims are flagged for a quick manual review, while legitimate claims are processed instantly.
@@ -242,7 +245,7 @@ Beyond the core engine, we have a strategic plan to implement advanced features 
 | **Causal Inference Validation**     | Netflix / Spotify  | Uses causal inference to determine if a worker would have been offline anyway, ensuring we only pay for income loss *caused* by the disruption event. |
 | **Smart Contract Execution**        | AXA Fizzy          | Encodes the policy terms on a public blockchain (like Polygon) to create a mathematically guaranteed, tamper-proof insurance contract, offering ultimate transparency. |
 
-> For technical details, schema changes, and implementation timelines for each innovation, see the [**Innovation Plan Document**](docs/GigGuard_Innovation_Plan.pdf).
+> For technical details, schema changes, and implementation timelines for each innovation, see the [**Innovation Plan Document**](docs/GigGuard_Innovation_Plan.docx).
 
 ---
 
@@ -307,8 +310,8 @@ docker-compose up --build
 
 For more in-depth information, please refer to the documents in the `/docs` directory:
 
--   [**Architecture Deep Dive**](docs/architecture.md)
--   [**Premium Model Details**](docs/premium-model.md)
+-   [**Architecture Deep Dive**](docs/System_architecture.docx)
+-   [**Premium Model Details**](docs/Premium_model.docx)
 -   [**Trigger Definitions**](docs/trigger-definitions.md)
--   [**Innovation Plan**](docs/GigGuard_Innovation_Plan.pdf)
--   [**Database ER Model**](docs/GigGuard_ER_Model.pdf)
+-   [**Innovation Plan**](docs/GigGuard_Innovation_Plan.docx)
+-   [**Database ER Model**](docs/GigGuard_ER_Model.docx)
