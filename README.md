@@ -287,7 +287,7 @@ cp .env.example .env
 pnpm install --prefix backend
 
 # Install frontend dependencies
-pnpm install --prefix frontend
+pnpm install --prefix gigguard-frontend
 
 # Install ML service dependencies
 pip install -r ml-service/requirements.txt
