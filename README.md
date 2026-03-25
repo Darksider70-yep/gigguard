@@ -300,6 +300,14 @@ This is the recommended way to run the entire stack.
 docker-compose up --build
 ```
 
+If your project is inside OneDrive on Windows and Docker BuildKit fails with `invalid file request ...`, run Compose with the classic builder:
+```powershell
+$env:COMPOSE_DOCKER_CLI_BUILD='0'
+$env:DOCKER_BUILDKIT='0'
+docker compose build --no-cache
+docker compose up
+```
+
 **5. Access URLs:**
 - **Frontend App:** [http://localhost:3000](http://localhost:3000)
 - **Backend API:** [http://localhost:4000](http://localhost:4000)
