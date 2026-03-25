@@ -1,10 +1,225 @@
-import { randomUUID } from 'crypto';
-import { gridDisk, latLngToCell } from 'h3-js';
+import cron from 'node-cron';
+import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { query } from '../db';
-import { getCurrentWeekRange } from '../services/premiumService';
-import { enqueueClaimCreationJob } from '../workers/claimCreation';
+import { weatherService } from '../services/weatherService';
+import { premiumService } from '../services/premiumService';
+import { claimCreationQueue } from '../queues';
 
-export interface TriggerEventInput {
+const TRIGGER_CONFIGS = [
+  {
+    type: 'heavy_rainfall',
+    check: (conditions: any) =>
+      conditions.rain_1h != null && conditions.rain_1h > 15 ? conditions.rain_1h : null,
+  },
+  {
+    type: 'extreme_heat',
+    check: (conditions: any) =>
+      conditions.feels_like != null && conditions.feels_like > 44
+        ? conditions.feels_like
+        : conditions.temp != null && conditions.temp > 44
+          ? conditions.temp
+          : null,
+  },
+];
+
+export function startTriggerMonitor(): void {
+  cron.schedule('*/30 * * * *', async () => {
+    console.info('[TriggerMonitor] Poll cycle started');
+    try {
+      await runTriggerCycle();
+    } catch (err) {
+      console.error('[TriggerMonitor] Cycle failed:', err);
+    }
+  });
+  console.info('[TriggerMonitor] Scheduled - every 30 minutes');
+}
+
+export async function runTriggerCycle(): Promise<void> {
+  const { rows: activeHexes } = await query<{ home_hex_id: string; city: string }>(
+    `SELECT DISTINCT w.home_hex_id::text, w.city
+     FROM workers w
+     JOIN policies p ON p.worker_id = w.id
+     WHERE p.status = 'active'
+       AND p.week_start = date_trunc('week', NOW())::date
+       AND w.home_hex_id IS NOT NULL`
+  );
+
+  if (activeHexes.length === 0) {
+    console.info('[TriggerMonitor] No active policies found');
+    return;
+  }
+
+  const cityMap = new Map<string, bigint>();
+  for (const row of activeHexes) {
+    if (!cityMap.has(row.city)) {
+      cityMap.set(row.city, BigInt(row.home_hex_id));
+    }
+  }
+
+  const triggerPromises = Array.from(cityMap.entries()).map(([city, hexId]) =>
+    checkCityTriggers(city, hexId)
+  );
+
+  const results = await Promise.allSettled(triggerPromises);
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.error('[TriggerMonitor] City check failed:', result.reason);
+    }
+  });
+
+  const cities = [...new Set(activeHexes.map((r) => r.city))];
+  for (const city of cities) {
+    await checkAQITrigger(city, activeHexes).catch((err) => {
+      console.error(`[TriggerMonitor] AQI check failed for ${city}:`, err);
+    });
+  }
+}
+
+async function checkCityTriggers(city: string, representativeHex: bigint): Promise<void> {
+  const [lat, lng] = cellToLatLng(representativeHex.toString(16));
+  const conditions = await weatherService.getCurrentConditions(lat, lng);
+
+  for (const trigger of TRIGGER_CONFIGS) {
+    const value = trigger.check(conditions);
+    if (value === null) {
+      continue;
+    }
+
+    await processTrigger({
+      triggerType: trigger.type,
+      city,
+      lat,
+      lng,
+      value,
+    });
+  }
+}
+
+async function checkAQITrigger(
+  city: string,
+  activeHexes: Array<{ home_hex_id: string; city: string }>
+): Promise<void> {
+  const aqi = await weatherService.getAQI(city);
+  if (aqi === null || aqi <= 300) {
+    return;
+  }
+
+  const cityHex = activeHexes.find((row) => row.city === city);
+  if (!cityHex) {
+    return;
+  }
+
+  const [lat, lng] = cellToLatLng(BigInt(cityHex.home_hex_id).toString(16));
+  await processTrigger({
+    triggerType: 'severe_aqi',
+    city,
+    lat,
+    lng,
+    value: aqi,
+  });
+}
+
+async function processTrigger(params: {
+  triggerType: string;
+  city: string;
+  lat: number;
+  lng: number;
+  value: number;
+}): Promise<{
+  eventId: string;
+  workerIds: string[];
+  ringHexes: string[];
+  eventHex: string;
+} | null> {
+  const { triggerType, city, lat, lng, value } = params;
+
+  const eventHex = latLngToCell(lat, lng, 8);
+  const ringHexes = gridDisk(eventHex, 1);
+
+  const { rows: existing } = await query<{ id: string }>(
+    `SELECT id
+     FROM disruption_events
+     WHERE city=$1 AND trigger_type=$2
+       AND event_start > NOW() - INTERVAL '6 hours'
+       AND event_end IS NULL
+     LIMIT 1`,
+    [city, triggerType]
+  );
+  if (existing.length > 0) {
+    console.info(`[TriggerMonitor] Duplicate suppressed: ${triggerType} in ${city}`);
+    return null;
+  }
+
+  const ringBigints = ringHexes.map((h) => BigInt(`0x${h}`));
+  const { rows: affectedWorkers } = await query<{ id: string }>(
+    `SELECT DISTINCT w.id
+     FROM workers w
+     JOIN policies p ON p.worker_id = w.id
+     WHERE w.home_hex_id = ANY($1::bigint[])
+       AND p.status = 'active'
+       AND p.week_start = date_trunc('week', NOW())::date`,
+    [ringBigints]
+  );
+
+  if (affectedWorkers.length === 0) {
+    console.info(`[TriggerMonitor] ${triggerType} in ${city} - no affected workers`);
+    return null;
+  }
+
+  const disruptionHours = premiumService.getDisruptionHours(triggerType);
+  const threshold = premiumService.getThreshold(triggerType);
+  const severity = premiumService.computeSeverity(triggerType, value);
+
+  const { rows: events } = await query<{ id: string }>(
+    `INSERT INTO disruption_events (
+       trigger_type, city, trigger_value, trigger_threshold,
+       severity, disruption_hours, affected_hex_ids,
+       affected_workers_count, status
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active')
+     RETURNING id`,
+    [
+      triggerType,
+      city,
+      value,
+      threshold,
+      severity,
+      disruptionHours,
+      ringBigints,
+      affectedWorkers.length,
+    ]
+  );
+
+  const eventId = events[0].id;
+  const workerIds = affectedWorkers.map((w) => w.id);
+
+  console.info(
+    `[TriggerMonitor] ${triggerType} in ${city} - ` +
+      `${value} (threshold ${threshold}) - ` +
+      `${workerIds.length} workers affected`
+  );
+
+  await claimCreationQueue.add(
+    'create-claims',
+    {
+      disruption_event_id: eventId,
+      trigger_type: triggerType,
+      disruption_hours: disruptionHours,
+      trigger_value: value,
+      worker_ids: workerIds,
+    },
+    {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5000 },
+      removeOnComplete: { count: 1000 },
+      removeOnFail: { count: 500 },
+    }
+  );
+
+  return { eventId, workerIds, ringHexes, eventHex };
+}
+
+// Backward-compatible simulation entrypoint used by /triggers/simulate.
+export async function processTriggerEvent(input: {
   trigger_type: string;
   city: string;
   zone?: string;
@@ -12,86 +227,29 @@ export interface TriggerEventInput {
   lng: number;
   trigger_value?: number;
   disruption_hours?: number;
-}
+}): Promise<{
+  event_id: string | null;
+  event_hex: string;
+  affected_hex_ids: string[];
+  affected_worker_count: number;
+  worker_ids: string[];
+}> {
+  const result = await processTrigger({
+    triggerType: input.trigger_type,
+    city: input.city,
+    lat: input.lat,
+    lng: input.lng,
+    value: input.trigger_value ?? premiumService.getThreshold(input.trigger_type),
+  });
 
-function h3ToBigIntStrings(hexes: string[]): string[] {
-  return hexes.map((hex) => BigInt(`0x${hex}`).toString());
-}
-
-export async function processTriggerEvent(input: TriggerEventInput) {
   const eventHex = latLngToCell(input.lat, input.lng, 8);
   const ringHexes = gridDisk(eventHex, 1);
-  const ringBigints = h3ToBigIntStrings(ringHexes);
-
-  const { weekStart } = getCurrentWeekRange();
-
-  const workersResult = await query(
-    `SELECT DISTINCT w.id
-     FROM workers w
-     JOIN policies p ON p.worker_id = w.id
-     WHERE w.home_hex_id = ANY($1::bigint[])
-     AND p.status = 'active'
-     AND p.week_start = $2::date`,
-    [ringBigints, weekStart]
-  );
-
-  const workerIds = workersResult.rows.map((row: any) => String(row.id));
-
-  const eventId = randomUUID();
-  await query(
-    `INSERT INTO disruption_events (
-      id,
-      trigger_type,
-      city,
-      zone,
-      affected_hex_ids,
-      trigger_value,
-      disruption_hours,
-      affected_worker_count,
-      total_payout,
-      status,
-      event_start
-    ) VALUES (
-      $1,$2,$3,$4,$5::bigint[],$6,$7,$8,0,'active',NOW()
-    )`,
-    [
-      eventId,
-      input.trigger_type,
-      input.city,
-      input.zone || null,
-      ringBigints,
-      input.trigger_value || 0,
-      input.disruption_hours || 4,
-      workerIds.length,
-    ]
-  );
-
-  await query(
-    `UPDATE disruption_events
-     SET affected_hex_ids = $1::bigint[], affected_worker_count = $2
-     WHERE id = $3`,
-    [ringBigints, workerIds.length, eventId]
-  );
-
-  if (workerIds.length > 0) {
-    await enqueueClaimCreationJob({
-      disruption_event_id: eventId,
-      worker_ids: workerIds,
-    });
-  }
 
   return {
-    event_id: eventId,
+    event_id: result?.eventId ?? null,
     event_hex: eventHex,
     affected_hex_ids: ringHexes,
-    affected_worker_count: workerIds.length,
-    worker_ids: workerIds,
+    affected_worker_count: result?.workerIds.length ?? 0,
+    worker_ids: result?.workerIds ?? [],
   };
-}
-
-export function startTriggerMonitor(): void {
-  const intervalMs = 30 * 60 * 1000;
-  setInterval(() => {
-    // Hook point for real trigger polling pipeline.
-  }, intervalMs);
 }

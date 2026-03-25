@@ -1,154 +1,125 @@
-import { randomUUID } from 'crypto';
-import { query } from '../db';
-import { calculateCoverage, getCurrentWeekRange } from '../services/premiumService';
-import { enqueueClaimValidationJob } from './claimValidation';
+import { Job, Worker } from 'bullmq';
+import { query, withTransaction } from '../db';
+import { premiumService } from '../services/premiumService';
+import { claimValidationQueue, redisConnection } from '../queues';
+import { config } from '../config';
 
-interface ClaimCreationJobPayload {
+export interface ClaimCreationJob {
   disruption_event_id: string;
+  trigger_type: string;
+  disruption_hours: number;
+  trigger_value: number;
   worker_ids: string[];
 }
 
-let claimCreationQueue: any;
+export async function processClaimCreationJob(
+  data: ClaimCreationJob
+): Promise<{ claims_created: number }> {
+  const {
+    disruption_event_id,
+    trigger_type,
+    disruption_hours,
+    trigger_value,
+    worker_ids,
+  } = data;
 
-function getClaimCreationQueue(): any {
-  if (claimCreationQueue !== undefined) {
-    return claimCreationQueue;
+  let claimsCreated = 0;
+
+  for (const workerId of worker_ids) {
+    try {
+      const created = await withTransaction(async (client) => {
+        const { weekStart } = premiumService.getWeekBounds();
+        const { rows: policies } = await client.query(
+          `SELECT p.id, w.avg_daily_earning
+           FROM policies p
+           JOIN workers w ON w.id = p.worker_id
+           WHERE p.worker_id = $1
+             AND p.week_start = $2
+             AND p.status = 'active'
+           LIMIT 1`,
+          [workerId, weekStart]
+        );
+
+        if (policies.length === 0) {
+          return false;
+        }
+        const policy = policies[0];
+
+        const { rows: existing } = await client.query(
+          `SELECT 1
+           FROM claims
+           WHERE worker_id = $1
+             AND created_at::date = NOW()::date
+             AND status != 'denied'
+           LIMIT 1`,
+          [workerId]
+        );
+        if (existing.length > 0) {
+          return false;
+        }
+
+        const payout = premiumService.calculateCoverageAmount(
+          Number(policy.avg_daily_earning),
+          trigger_type
+        );
+
+        const { rows: claims } = await client.query(
+          `INSERT INTO claims (
+             worker_id, policy_id, disruption_event_id,
+             trigger_type, trigger_value,
+             trigger_threshold, disruption_hours, payout_amount,
+             status
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'triggered')
+           RETURNING id`,
+          [
+            workerId,
+            policy.id,
+            disruption_event_id,
+            trigger_type,
+            trigger_value,
+            premiumService.getThreshold(trigger_type),
+            disruption_hours,
+            payout,
+          ]
+        );
+
+        return claims[0].id as string;
+      });
+
+      if (created) {
+        claimsCreated += 1;
+        await claimValidationQueue.add(
+          'validate-claim',
+          { claim_id: created },
+          { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
+        );
+      }
+    } catch (err) {
+      console.error(`Failed to create claim for worker ${workerId}:`, err);
+    }
   }
 
-  try {
-    const { Queue } = require('bullmq');
-    const IORedis = require('ioredis');
-    const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379');
-    claimCreationQueue = new Queue('claim-creation', {
-      connection,
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-        removeOnComplete: false,
-      },
-    });
-  } catch {
-    claimCreationQueue = null;
-  }
-
-  return claimCreationQueue;
-}
-
-export async function processClaimCreationJob(payload: ClaimCreationJobPayload): Promise<void> {
-  const eventResult = await query(
-    `SELECT id, trigger_type, disruption_hours
-     FROM disruption_events
-     WHERE id = $1
-     LIMIT 1`,
-    [payload.disruption_event_id]
+  await query(
+    `UPDATE disruption_events
+     SET total_claims_triggered = total_claims_triggered + $1,
+         affected_workers_count = $2
+     WHERE id = $3`,
+    [claimsCreated, worker_ids.length, disruption_event_id]
   );
 
-  const event = eventResult.rows[0] as any;
-  if (!event) {
-    throw new Error('Disruption event not found');
-  }
-
-  const { weekStart } = getCurrentWeekRange();
-  const disruptionHours = Number(event.disruption_hours || 4);
-
-  for (const workerId of payload.worker_ids) {
-    const policyResult = await query(
-      `SELECT id
-       FROM policies
-       WHERE worker_id = $1
-       AND week_start = $2::date
-       AND status = 'active'
-       LIMIT 1`,
-      [workerId, weekStart]
-    );
-
-    const policy = policyResult.rows[0] as any;
-    if (!policy) {
-      continue;
-    }
-
-    const existingClaim = await query(
-      `SELECT 1
-       FROM claims
-       WHERE worker_id = $1
-       AND created_at::date = NOW()::date
-       AND status != 'denied'
-       LIMIT 1`,
-      [workerId]
-    );
-
-    if (existingClaim.rowCount && existingClaim.rowCount > 0) {
-      continue;
-    }
-
-    const workerResult = await query(
-      `SELECT avg_daily_earning
-       FROM workers
-       WHERE id = $1
-       LIMIT 1`,
-      [workerId]
-    );
-
-    const avgDailyEarning = Number((workerResult.rows[0] as any)?.avg_daily_earning || 0);
-    const payoutAmount = calculateCoverage(avgDailyEarning, disruptionHours);
-
-    const claimId = randomUUID();
-
-    await query(
-      `INSERT INTO claims (
-        id,
-        worker_id,
-        policy_id,
-        disruption_event_id,
-        trigger_type,
-        payout_amount,
-        disruption_hours,
-        status,
-        created_at
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,'triggered',NOW()
-      )`,
-      [
-        claimId,
-        workerId,
-        policy.id,
-        payload.disruption_event_id,
-        event.trigger_type,
-        payoutAmount,
-        disruptionHours,
-      ]
-    );
-
-    await enqueueClaimValidationJob({ claim_id: claimId });
-  }
+  return { claims_created: claimsCreated };
 }
 
-export async function enqueueClaimCreationJob(payload: ClaimCreationJobPayload): Promise<void> {
-  const queue = getClaimCreationQueue();
-  if (!queue) {
-    setImmediate(() => {
-      processClaimCreationJob(payload).catch(() => undefined);
-    });
-    return;
-  }
-
-  await queue.add('claim-creation', payload);
-}
-
-export function startClaimCreationWorker(): void {
-  try {
-    const { Worker } = require('bullmq');
-    const IORedis = require('ioredis');
-    const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379');
-
-    new Worker(
-      'claim-creation',
-      async (job: any) => {
-        await processClaimCreationJob(job.data as ClaimCreationJobPayload);
-      },
-      { connection }
-    );
-  } catch {
-    // BullMQ optional in local dev.
-  }
-}
+export const claimCreationWorker =
+  config.NODE_ENV === 'test'
+    ? null
+    : new Worker<ClaimCreationJob>(
+        'claim-creation',
+        async (job: Job<ClaimCreationJob>) => processClaimCreationJob(job.data),
+        {
+          connection: redisConnection,
+          concurrency: 5,
+          removeOnComplete: { count: 1000 },
+          removeOnFail: { count: 500 },
+        } as any
+      );

@@ -1,156 +1,138 @@
-import { Router, Response } from 'express';
+import { Router } from 'express';
 import { query } from '../db';
-import { AuthenticatedRequest, requireWorker } from '../middleware/auth';
+import { authenticateWorker } from '../middleware/auth';
 
 const router = Router();
 
-function buildUnderReviewReason(claim: any) {
-  if (claim.status !== 'under_review') {
-    return null;
-  }
+router.get('/', authenticateWorker, async (req, res) => {
+  const workerId = req.worker!.id;
 
-  const graphFlags = Array.isArray(claim.graph_flags) ? claim.graph_flags : [];
-  const humanReadableFlags = graphFlags.map((flag: string) => {
-    if (flag === 'cell_tower_mismatch') {
-      return 'Cell tower mismatch (Andheri vs Bandra)';
+  const { rows: claims } = await query<{
+    id: string;
+    trigger_type: string;
+    trigger_value: string | null;
+    payout_amount: string;
+    disruption_hours: string;
+    fraud_score: number | null;
+    graph_flags: string[] | null;
+    bcs_score: number | null;
+    status: string;
+    notes: string | null;
+    created_at: string;
+    paid_at: string | null;
+    city: string | null;
+    zone: string | null;
+    razorpay_ref: string | null;
+  }>(
+    `SELECT
+       c.id, c.trigger_type, c.trigger_value, c.payout_amount,
+       c.disruption_hours, c.fraud_score, c.graph_flags, c.bcs_score,
+       c.status, c.notes, c.created_at, c.paid_at,
+       de.city, de.zone,
+       pay.razorpay_payout_id as razorpay_ref
+     FROM claims c
+     LEFT JOIN disruption_events de ON de.id = c.disruption_event_id
+     LEFT JOIN payouts pay ON pay.claim_id = c.id
+     WHERE c.worker_id = $1
+     ORDER BY c.created_at DESC`,
+    [workerId]
+  );
+
+  const { rows: stats } = await query<{
+    total_paid_out: string;
+    claims_this_month: string;
+    total_paid_count: string;
+  }>(
+    `SELECT
+       COALESCE(SUM(payout_amount) FILTER (WHERE status = 'paid'), 0)::text as total_paid_out,
+       COUNT(*) FILTER (
+         WHERE created_at > NOW() - INTERVAL '30 days'
+         AND status = 'paid'
+       )::text as claims_this_month,
+       COUNT(*) FILTER (WHERE status = 'paid')::text as total_paid_count
+     FROM claims
+     WHERE worker_id = $1`,
+    [workerId]
+  );
+
+  const enrichedClaims = claims.map((claim) => {
+    const base = {
+      ...claim,
+      payout_amount: Math.round(Number(claim.payout_amount)),
+      fraud_score: claim.fraud_score != null ? Number(claim.fraud_score) : null,
+      razorpay_ref: claim.razorpay_ref ?? null,
+      under_review_reason: null as any,
+    };
+
+    if (claim.status === 'under_review' && claim.bcs_score != null) {
+      const flags = Array.isArray(claim.graph_flags) ? claim.graph_flags : [];
+      const humanFlags = flags.map(flagToHumanReadable);
+      base.under_review_reason = {
+        behavioral_coherence_score: claim.bcs_score,
+        tier: claim.bcs_score < 34 ? 3 : 2,
+        flag_reasons: humanFlags,
+        reviewer_eta_hours: 4,
+        goodwill_bonus: claim.bcs_score < 40 ? 20 : 0,
+      };
     }
-    if (flag === 'platform_offline_at_event') {
-      return 'Platform status: Offline at event time';
-    }
-    return String(flag);
+
+    return base;
   });
 
-  return {
-    behavioral_coherence_score: Number(claim.bcs_score || 34),
-    tier: 3,
-    flag_reasons: humanReadableFlags,
-    reviewer_eta_hours: 4,
-    goodwill_bonus: 20,
+  res.json({
+    stats: {
+      total_paid_out: Math.round(Number(stats[0].total_paid_out)),
+      claims_this_month: parseInt(stats[0].claims_this_month, 10),
+      paid_streak: parseInt(stats[0].total_paid_count, 10),
+    },
+    claims: enrichedClaims,
+  });
+});
+
+router.get('/:id', authenticateWorker, async (req, res) => {
+  const { rows } = await query<{
+    [key: string]: any;
+  }>(
+    `SELECT c.*, de.city, de.zone, de.trigger_type as event_trigger,
+            pay.razorpay_payout_id, pay.status as payout_status
+     FROM claims c
+     LEFT JOIN disruption_events de ON de.id = c.disruption_event_id
+     LEFT JOIN payouts pay ON pay.claim_id = c.id
+     WHERE c.id = $1 AND c.worker_id = $2`,
+    [req.params.id, req.worker!.id]
+  );
+
+  if (rows.length === 0) {
+    return res.status(404).json({
+      code: 'CLAIM_NOT_FOUND',
+      message: 'Claim not found',
+    });
+  }
+
+  const claim = rows[0];
+  res.json({
+    ...claim,
+    payout_amount:
+      claim.payout_amount != null ? Math.round(Number(claim.payout_amount)) : claim.payout_amount,
+    trigger_value: claim.trigger_value != null ? Number(claim.trigger_value) : claim.trigger_value,
+    trigger_threshold:
+      claim.trigger_threshold != null ? Number(claim.trigger_threshold) : claim.trigger_threshold,
+    disruption_hours:
+      claim.disruption_hours != null ? Number(claim.disruption_hours) : claim.disruption_hours,
+    fraud_score: claim.fraud_score != null ? Number(claim.fraud_score) : claim.fraud_score,
+  });
+});
+
+function flagToHumanReadable(flag: string): string {
+  const map: Record<string, string> = {
+    cell_tower_mismatch: 'Cell tower mismatch (location inconsistency)',
+    platform_offline_at_event: 'Platform status: Offline at event time',
+    shared_upi_with_workers: 'UPI address shared with multiple accounts',
+    same_device_multiple_accounts: 'Device linked to multiple accounts',
+    registration_burst: 'Account registered during mass registration event',
+    high_claim_frequency: 'Unusually high claim frequency vs zone average',
   };
+  return map[flag] ?? flag;
 }
-
-router.get('/', requireWorker, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const workerId = req.user!.id;
-    const limitParam = Number(req.query.limit || 0);
-
-    const claimsResult = await query(
-      `SELECT
-         c.id,
-         c.trigger_type,
-         c.payout_amount,
-         c.disruption_hours,
-         c.status,
-         c.created_at,
-         c.paid_at,
-         c.fraud_score,
-         c.graph_flags,
-         c.bcs_score,
-         de.trigger_value,
-         de.city,
-         de.zone,
-         de.disruption_hours AS event_disruption_hours,
-         pay.razorpay_payout_id AS razorpay_ref
-       FROM claims c
-       JOIN disruption_events de ON de.id = c.disruption_event_id
-       LEFT JOIN payouts pay ON pay.claim_id = c.id
-       WHERE c.worker_id = $1
-       ORDER BY c.created_at DESC
-       ${limitParam > 0 ? 'LIMIT $2' : ''}`,
-      limitParam > 0 ? [workerId, limitParam] : [workerId]
-    );
-
-    const statsResult = await query(
-      `SELECT
-         COALESCE(SUM(payout_amount) FILTER (WHERE status = 'paid'), 0)::float8 AS total_paid_out,
-         COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days' AND status = 'paid')::int AS claims_this_month,
-         COUNT(*) FILTER (WHERE status = 'paid')::int AS paid_streak
-       FROM claims
-       WHERE worker_id = $1`,
-      [workerId]
-    );
-
-    const statsRow = statsResult.rows[0] as any;
-
-    const claims = claimsResult.rows.map((claim: any) => ({
-      id: claim.id,
-      trigger_type: claim.trigger_type,
-      trigger_value: claim.trigger_value ? Number(claim.trigger_value) : null,
-      city: claim.city,
-      zone: claim.zone,
-      payout_amount: Math.round(Number(claim.payout_amount || 0)),
-      disruption_hours: Number(claim.disruption_hours || claim.event_disruption_hours || 0),
-      status: claim.status,
-      created_at: claim.created_at,
-      paid_at: claim.paid_at,
-      razorpay_ref: claim.razorpay_ref,
-      fraud_score: Number(claim.fraud_score || 0),
-      graph_flags: Array.isArray(claim.graph_flags) ? claim.graph_flags : [],
-      bcs_score: claim.bcs_score ? Number(claim.bcs_score) : null,
-      under_review_reason: buildUnderReviewReason(claim),
-    }));
-
-    return res.status(200).json({
-      stats: {
-        total_paid_out: Math.round(Number(statsRow?.total_paid_out || 0)),
-        claims_this_month: Number(statsRow?.claims_this_month || 0),
-        paid_streak: Number(statsRow?.paid_streak || 0),
-      },
-      claims,
-    });
-  } catch {
-    return res.status(500).json({ message: 'Failed to fetch claims' });
-  }
-});
-
-router.get('/:id', requireWorker, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const workerId = req.user!.id;
-    const claimId = req.params.id;
-
-    const result = await query(
-      `SELECT
-         c.*,
-         de.trigger_value,
-         de.city,
-         de.zone,
-         de.disruption_hours AS event_disruption_hours,
-         pay.razorpay_payout_id AS razorpay_ref
-       FROM claims c
-       JOIN disruption_events de ON de.id = c.disruption_event_id
-       LEFT JOIN payouts pay ON pay.claim_id = c.id
-       WHERE c.id = $1 AND c.worker_id = $2
-       LIMIT 1`,
-      [claimId, workerId]
-    );
-
-    if (!result.rows[0]) {
-      return res.status(404).json({ message: 'Claim not found' });
-    }
-
-    const claim = result.rows[0] as any;
-
-    return res.status(200).json({
-      id: claim.id,
-      trigger_type: claim.trigger_type,
-      trigger_value: claim.trigger_value ? Number(claim.trigger_value) : null,
-      city: claim.city,
-      zone: claim.zone,
-      payout_amount: Math.round(Number(claim.payout_amount || 0)),
-      disruption_hours: Number(claim.disruption_hours || claim.event_disruption_hours || 0),
-      status: claim.status,
-      created_at: claim.created_at,
-      paid_at: claim.paid_at,
-      razorpay_ref: claim.razorpay_ref,
-      fraud_score: Number(claim.fraud_score || 0),
-      graph_flags: Array.isArray(claim.graph_flags) ? claim.graph_flags : [],
-      bcs_score: claim.bcs_score ? Number(claim.bcs_score) : null,
-      notes: claim.notes,
-      under_review_reason: buildUnderReviewReason(claim),
-    });
-  } catch {
-    return res.status(500).json({ message: 'Failed to fetch claim' });
-  }
-});
 
 export default router;

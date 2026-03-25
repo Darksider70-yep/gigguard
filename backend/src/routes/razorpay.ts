@@ -1,29 +1,23 @@
-import { Router, Response } from 'express';
-import { randomUUID } from 'crypto';
-import { AuthenticatedRequest, requireWorker } from '../middleware/auth';
-import { createOrder, getRazorpayPublicConfig } from '../services/razorpayService';
+import { Router } from 'express';
+import { z } from 'zod';
+import { authenticateWorker } from '../middleware/auth';
+import { razorpayService } from '../services/razorpayService';
 
 const router = Router();
 
-router.post('/create-order', requireWorker, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const amount = Number(req.body?.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ message: 'amount is required in paise' });
-    }
-
-    const receipt = `policy_${req.user!.id}_${randomUUID().slice(0, 8)}`;
-    const order = await createOrder(Math.round(amount), receipt);
-
-    return res.status(200).json({
-      order_id: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      key_id: getRazorpayPublicConfig().key_id,
+router.post('/create-order', authenticateWorker, async (req, res) => {
+  const schema = z.object({ amount: z.number().int().positive() });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid request body',
+      errors: parsed.error.flatten().fieldErrors,
     });
-  } catch {
-    return res.status(500).json({ message: 'Failed to create Razorpay order' });
   }
+  const { amount } = parsed.data;
+  const order = await razorpayService.createOrder(amount);
+  res.json(order);
 });
 
 export default router;

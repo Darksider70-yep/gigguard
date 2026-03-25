@@ -1,49 +1,68 @@
-import express, { Router, Response } from 'express';
-import { query } from '../db';
-import { verifyWebhookSignature } from '../services/razorpayService';
+import express, { Router } from 'express';
+import { query, withTransaction } from '../db';
+import { razorpayService } from '../services/razorpayService';
 
 const router = Router();
 
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res: Response) => {
-  try {
-    const signature = req.header('x-razorpay-signature') || '';
-    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
+router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const signature = req.headers['x-razorpay-signature'] as string;
+  const rawBody = req.body.toString();
 
-    if (!verifyWebhookSignature(rawBody, signature)) {
-      return res.status(401).json({ message: 'Invalid webhook signature' });
-    }
+  const valid = razorpayService.verifyWebhookSignature(rawBody, signature);
+  if (!valid) {
+    console.warn('Invalid Razorpay webhook signature received');
+    return res.status(401).json({ code: 'INVALID_SIGNATURE' });
+  }
 
-    const payload = JSON.parse(rawBody.toString('utf8')) as any;
-    const eventType = payload.event as string;
-    const payoutEntity = payload.payload?.payout?.entity || {};
-    const payoutId = String(payoutEntity.id || '');
+  const event = JSON.parse(rawBody);
+  const eventType = event.event;
+  const payoutId = event.payload?.payout?.entity?.id;
 
-    if (!payoutId) {
-      return res.status(400).json({ message: 'Missing payout id' });
-    }
+  if (!payoutId) {
+    return res.json({ received: true });
+  }
 
-    const payoutRecord = await query(
-      `SELECT id, claim_id FROM payouts WHERE razorpay_payout_id = $1 LIMIT 1`,
+  if (eventType === 'payout.processed') {
+    await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        `UPDATE payouts
+         SET status = 'paid', completed_at = NOW()
+         WHERE razorpay_payout_id = $1
+         RETURNING claim_id`,
+        [payoutId]
+      );
+      if (rows.length === 0) {
+        return;
+      }
+
+      const claimId = rows[0].claim_id;
+
+      await client.query(
+        `UPDATE claims
+         SET status = 'paid', paid_at = NOW()
+         WHERE id = $1`,
+        [claimId]
+      );
+
+      await client.query(
+        `UPDATE policies
+         SET status = 'claimed'
+         WHERE id = (SELECT policy_id FROM claims WHERE id = $1)`,
+        [claimId]
+      );
+    });
+  }
+
+  if (eventType === 'payout.failed') {
+    await query(
+      `UPDATE payouts
+       SET status = 'failed'
+       WHERE razorpay_payout_id = $1`,
       [payoutId]
     );
-
-    if (!payoutRecord.rows[0]) {
-      return res.status(200).json({ received: true });
-    }
-
-    const payout = payoutRecord.rows[0] as any;
-
-    if (eventType === 'payout.processed') {
-      await query(`UPDATE payouts SET status = 'processed', processed_at = NOW() WHERE id = $1`, [payout.id]);
-      await query(`UPDATE claims SET status = 'paid', paid_at = NOW() WHERE id = $1`, [payout.claim_id]);
-    } else if (eventType === 'payout.failed') {
-      await query(`UPDATE payouts SET status = 'failed', processed_at = NOW() WHERE id = $1`, [payout.id]);
-    }
-
-    return res.status(200).json({ received: true });
-  } catch {
-    return res.status(500).json({ message: 'Webhook processing failed' });
   }
+
+  res.json({ received: true });
 });
 
 export default router;

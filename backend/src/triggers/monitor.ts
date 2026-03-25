@@ -64,8 +64,8 @@ const K_RING_SIZE = 1;   // k=1 ring covers ~2 km radius (7 hexagons total)
 export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
   const { lat, lng, trigger_type, city, metadata } = event;
 
-  console.log(`\n[TRIGGER] Processing ${trigger_type} event in ${city}`);
-  console.log(`  Location: (${lat.toFixed(6)}, ${lng.toFixed(6)})`);
+  console.info(`\n[TRIGGER] Processing ${trigger_type} event in ${city}`);
+  console.info(`  Location: (${lat.toFixed(6)}, ${lng.toFixed(6)})`);
 
   try {
     // --- Step 1: Convert event location to H3 hexagon ---
@@ -75,7 +75,7 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
     // Resolution 8 provides a good balance of precision (~750m) and query performance
     //
     const eventHexId = latLngToCell(lat, lng, H3_RESOLUTION);
-    console.log(`  Event Hex ID: ${eventHexId}`);
+    console.info(`  Event Hex ID: ${eventHexId}`);
 
     // --- Step 2: Get the k-ring around the event hex ---
     // 
@@ -92,8 +92,8 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
     // Convert h3-js hex strings to BigInt for database storage
     // h3-js returns hexadecimal strings, so we parse with radix 16
     const affectedHexIds = affectedHexStrings.map(h => BigInt('0x' + h));
-    console.log(`  Affected hex ring (k=${K_RING_SIZE}): ${affectedHexIds.length} hexagons`);
-    console.log(`  Hex IDs: ${affectedHexIds.join(', ')}`);
+    console.info(`  Affected hex ring (k=${K_RING_SIZE}): ${affectedHexIds.length} hexagons`);
+    console.info(`  Hex IDs: ${affectedHexIds.join(', ')}`);
 
     // --- Step 3: Query workers in the affected hexagons ---
     // 
@@ -109,10 +109,10 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
       [affectedHexIds]
     );
 
-    console.log(`  Found ${affectedWorkers.length} workers in affected area`);
+    console.info(`  Found ${affectedWorkers.length} workers in affected area`);
 
     if (affectedWorkers.length > 0) {
-      console.log(`  Worker IDs: ${affectedWorkers.map(w => w.id.substring(0, 8)).join(', ')}...`);
+      console.info(`  Worker IDs: ${affectedWorkers.map(w => w.id.substring(0, 8)).join(', ')}...`);
     }
 
     const affectedWorkerIds = affectedWorkers.map(w => w.id);
@@ -123,7 +123,7 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
     // a disruption event. This keeps the database clean of zero-impact events.
     //
     if (affectedWorkerIds.length === 0) {
-      console.log(`  ⚠ No workers in affected area. Skipping disruption event creation.\n`);
+      console.info(`  ⚠ No workers in affected area. Skipping disruption event creation.\n`);
       return [];
     }
 
@@ -169,7 +169,7 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
         ]
       );
 
-      console.log(`  Created disruption_event: ${insertResult.rows[0].id}`);
+      console.info(`  Created disruption_event: ${insertResult.rows[0].id}`);
     } catch (dbError) {
       console.error(`  Error creating disruption_event:`, dbError);
       // Re-throw to signal upstream that something went wrong
@@ -185,7 +185,7 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
     // 4. Initiate payments via Razorpay
     // 5. Update claim records with payment status
     //
-    console.log(`  Passing ${affectedWorkerIds.length} worker IDs to payout service\n`);
+    console.info(`  Passing ${affectedWorkerIds.length} worker IDs to payout service\n`);
     return affectedWorkerIds;
 
   } catch (error) {

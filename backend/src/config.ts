@@ -1,53 +1,91 @@
 import dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config({ path: '../.env' });
+dotenv.config();
+dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 
-function getEnv(name: string, defaultValue?: string): string {
+function getStringEnv(name: string, fallback = ''): string {
   const value = process.env[name];
-  if (value !== undefined && value !== '') {
-    return value;
+  if (value === undefined || value.trim() === '') {
+    return fallback;
   }
-  if (defaultValue !== undefined) {
-    return defaultValue;
-  }
-  throw new Error(`Missing required environment variable: ${name}`);
+  return value.trim();
 }
 
-function getNumberEnv(name: string, defaultValue: number): number {
+function getNumberEnv(name: string, fallback: number): number {
   const raw = process.env[name];
-  if (!raw) {
-    return defaultValue;
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
   }
   const parsed = Number(raw);
-  if (Number.isNaN(parsed)) {
-    throw new Error(`Environment variable ${name} must be a number`);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
   }
   return parsed;
 }
 
-function getBooleanEnv(name: string, defaultValue: boolean): boolean {
+function getBooleanEnv(name: string, fallback: boolean): boolean {
   const raw = process.env[name];
-  if (!raw) {
-    return defaultValue;
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
   }
-  return raw.toLowerCase() === 'true';
+  const normalized = raw.trim().toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 'yes';
 }
 
+const OPENWEATHERMAP_API_KEY =
+  getStringEnv('OPENWEATHERMAP_API_KEY') || getStringEnv('OPENWEATHER_API_KEY');
+const OPENWEATHERMAP_BASE_URL =
+  getStringEnv('OPENWEATHERMAP_BASE_URL') ||
+  getStringEnv('OPENWEATHER_BASE_URL', 'https://api.openweathermap.org/data/3.0');
+
+const AQICN_API_KEY = getStringEnv('AQICN_API_KEY') || getStringEnv('AQI_API_KEY');
+const AQICN_BASE_URL = getStringEnv('AQICN_BASE_URL', 'https://api.waqi.info/feed');
+
 export const config = {
+  DATABASE_URL: getStringEnv('DATABASE_URL', 'postgresql://gigguard:password@localhost:5432/gigguard'),
+  REDIS_URL: getStringEnv('REDIS_URL', 'redis://localhost:6379'),
+
+  ML_SERVICE_URL: getStringEnv('ML_SERVICE_URL', 'http://localhost:5001'),
+  ML_SERVICE_TIMEOUT_MS: getNumberEnv('ML_SERVICE_TIMEOUT_MS', getNumberEnv('ML_TIMEOUT_MS', 500)),
+
+  OPENWEATHERMAP_API_KEY,
+  OPENWEATHERMAP_BASE_URL,
+
+  AQICN_API_KEY,
+  AQICN_BASE_URL,
+
+  RAZORPAY_KEY_ID: getStringEnv('RAZORPAY_KEY_ID', 'rzp_test_xxx'),
+  RAZORPAY_KEY_SECRET: getStringEnv('RAZORPAY_KEY_SECRET', ''),
+  RAZORPAY_ACCOUNT_NUMBER: getStringEnv('RAZORPAY_ACCOUNT_NUMBER', ''),
+  RAZORPAY_WEBHOOK_SECRET: getStringEnv('RAZORPAY_WEBHOOK_SECRET', ''),
+
+  JWT_SECRET: getStringEnv('JWT_SECRET', getStringEnv('RAZORPAY_KEY_SECRET', 'dev_jwt_secret')),
+
+  USE_MOCK_APIS: getBooleanEnv('USE_MOCK_APIS', true),
+  USE_MOCK_PAYOUT: getBooleanEnv('USE_MOCK_PAYOUT', true),
+
+  PORT: getNumberEnv('PORT', 4000),
+  NODE_ENV: getStringEnv('NODE_ENV', 'development'),
+
+  INSURER_LOGIN_SECRET: getStringEnv('INSURER_LOGIN_SECRET', ''),
+
+  // Legacy aliases for backward compatibility.
   port: getNumberEnv('PORT', 4000),
-  databaseUrl: getEnv('DATABASE_URL'),
-  mlServiceUrl: getEnv('ML_SERVICE_URL', 'http://localhost:5001'),
-  mlTimeoutMs: getNumberEnv('ML_TIMEOUT_MS', 500),
-  useMockApis: getBooleanEnv('USE_MOCK_APIS', false),
-  openWeatherApiKey: process.env.OPENWEATHER_API_KEY || '',
-  openWeatherBaseUrl: getEnv('OPENWEATHER_BASE_URL', 'https://api.openweathermap.org'),
-  jwtSecret: getEnv('JWT_SECRET', process.env.RAZORPAY_KEY_SECRET),
-  razorpayKeyId: process.env.RAZORPAY_KEY_ID || '',
-  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || '',
-  razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
-  razorpayAccountNumber: process.env.RAZORPAY_ACCOUNT_NUMBER || '',
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
-  insurerLoginSecret: process.env.INSURER_LOGIN_SECRET || '',
-};
+  databaseUrl: getStringEnv('DATABASE_URL', 'postgresql://gigguard:password@localhost:5432/gigguard'),
+  mlServiceUrl: getStringEnv('ML_SERVICE_URL', 'http://localhost:5001'),
+  mlTimeoutMs: getNumberEnv('ML_SERVICE_TIMEOUT_MS', getNumberEnv('ML_TIMEOUT_MS', 500)),
+  useMockApis: getBooleanEnv('USE_MOCK_APIS', true),
+  useMockPayout: getBooleanEnv('USE_MOCK_PAYOUT', true),
+  openWeatherApiKey: OPENWEATHERMAP_API_KEY,
+  openWeatherBaseUrl: OPENWEATHERMAP_BASE_URL,
+  jwtSecret: getStringEnv('JWT_SECRET', getStringEnv('RAZORPAY_KEY_SECRET', 'dev_jwt_secret')),
+  razorpayKeyId: getStringEnv('RAZORPAY_KEY_ID', 'rzp_test_xxx'),
+  razorpayKeySecret: getStringEnv('RAZORPAY_KEY_SECRET', ''),
+  razorpayWebhookSecret: getStringEnv('RAZORPAY_WEBHOOK_SECRET', ''),
+  razorpayAccountNumber: getStringEnv('RAZORPAY_ACCOUNT_NUMBER', ''),
+  redisUrl: getStringEnv('REDIS_URL', 'redis://localhost:6379'),
+  insurerLoginSecret: getStringEnv('INSURER_LOGIN_SECRET', ''),
+} as const;
 
 export type AppConfig = typeof config;

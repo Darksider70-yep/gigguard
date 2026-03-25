@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { NextFunction, Request, Response } from 'express';
+import { query } from '../db';
 import { config } from '../config';
 
 export type AuthRole = 'worker' | 'insurer';
@@ -11,11 +12,39 @@ export interface AuthPayload {
   iat: number;
 }
 
+export interface WorkerAuthContext {
+  id: string;
+  name: string;
+  platform: string;
+  city: string;
+  zone: string | null;
+  home_hex_id: string | null;
+  avg_daily_earning: number;
+  zone_multiplier: number;
+  history_multiplier: number;
+  created_at: string;
+  experience_tier: string | null;
+  upi_vpa: string | null;
+}
+
 export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     role: AuthRole;
   };
+  worker?: WorkerAuthContext;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: string;
+        role: AuthRole;
+      };
+      worker?: WorkerAuthContext;
+    }
+  }
 }
 
 function base64UrlEncode(value: string): string {
@@ -46,7 +75,7 @@ function signToken(payload: Omit<AuthPayload, 'iat' | 'exp'>, expiresInSeconds: 
   const payloadEncoded = base64UrlEncode(JSON.stringify(completePayload));
   const data = `${headerEncoded}.${payloadEncoded}`;
   const signature = crypto
-    .createHmac('sha256', config.jwtSecret)
+    .createHmac('sha256', config.JWT_SECRET)
     .update(data)
     .digest('base64')
     .replace(/=/g, '')
@@ -65,7 +94,7 @@ function verifyToken(token: string): AuthPayload {
   const [headerEncoded, payloadEncoded, providedSignature] = parts;
   const data = `${headerEncoded}.${payloadEncoded}`;
   const expectedSignature = crypto
-    .createHmac('sha256', config.jwtSecret)
+    .createHmac('sha256', config.JWT_SECRET)
     .update(data)
     .digest('base64')
     .replace(/=/g, '')
@@ -85,6 +114,77 @@ function verifyToken(token: string): AuthPayload {
   return payload;
 }
 
+function unauthorized(res: Response): Response {
+  return res.status(401).json({ message: 'Unauthorized' });
+}
+
+function forbidden(res: Response): Response {
+  return res.status(403).json({ message: 'Forbidden' });
+}
+
+function getBearerToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  return authHeader.slice('Bearer '.length);
+}
+
+async function loadWorker(workerId: string): Promise<WorkerAuthContext | null> {
+  const { rows } = await query<{
+    id: string;
+    name: string;
+    platform: string;
+    city: string;
+    zone: string | null;
+    home_hex_id: string | null;
+    avg_daily_earning: string;
+    zone_multiplier: number;
+    history_multiplier: number;
+    created_at: string;
+    experience_tier: string | null;
+    upi_vpa: string | null;
+  }>(
+    `SELECT
+       id,
+       name,
+       platform,
+       city,
+       zone,
+       home_hex_id::text,
+       avg_daily_earning::text,
+       zone_multiplier,
+       history_multiplier,
+       created_at,
+       experience_tier,
+       upi_vpa
+     FROM workers
+     WHERE id = $1
+     LIMIT 1`,
+    [workerId]
+  );
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const worker = rows[0];
+  return {
+    id: worker.id,
+    name: worker.name,
+    platform: worker.platform,
+    city: worker.city,
+    zone: worker.zone,
+    home_hex_id: worker.home_hex_id,
+    avg_daily_earning: Number(worker.avg_daily_earning),
+    zone_multiplier: Number(worker.zone_multiplier ?? 1),
+    history_multiplier: Number(worker.history_multiplier ?? 1),
+    created_at: worker.created_at,
+    experience_tier: worker.experience_tier,
+    upi_vpa: worker.upi_vpa,
+  };
+}
+
 export function decodeAuthToken(token: string): AuthPayload | null {
   try {
     return verifyToken(token);
@@ -93,51 +193,79 @@ export function decodeAuthToken(token: string): AuthPayload | null {
   }
 }
 
-function unauthorized(res: Response): Response {
-  return res.status(401).json({ message: 'Unauthorized' });
-}
-
-export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): Response | void {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+export function requireAuth(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Response | void {
+  const token = getBearerToken(req);
+  if (!token) {
     return unauthorized(res);
   }
 
-  const token = authHeader.slice('Bearer '.length);
-  try {
-    const payload = verifyToken(token);
-    req.user = { id: payload.sub, role: payload.role };
-    return next();
-  } catch {
+  const payload = decodeAuthToken(token);
+  if (!payload) {
     return unauthorized(res);
   }
-}
 
-export function requireWorker(req: AuthenticatedRequest, res: Response, next: NextFunction): Response | void {
-  const result = requireAuth(req, res, () => undefined);
-  if (result) {
-    return result;
-  }
-
-  if (!req.user || req.user.role !== 'worker') {
-    return res.status(403).json({ message: 'Worker role required' });
-  }
-
+  req.user = { id: payload.sub, role: payload.role };
   return next();
 }
 
-export function requireInsurer(req: AuthenticatedRequest, res: Response, next: NextFunction): Response | void {
-  const result = requireAuth(req, res, () => undefined);
-  if (result) {
-    return result;
+export async function authenticateWorker(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<Response | void> {
+  const token = getBearerToken(req);
+  if (!token) {
+    return unauthorized(res);
   }
 
-  if (!req.user || req.user.role !== 'insurer') {
-    return res.status(403).json({ message: 'Insurer role required' });
+  const payload = decodeAuthToken(token);
+  if (!payload) {
+    return unauthorized(res);
   }
 
+  if (payload.role !== 'worker') {
+    return forbidden(res);
+  }
+
+  const worker = await loadWorker(payload.sub);
+  if (!worker) {
+    return unauthorized(res);
+  }
+
+  req.user = { id: payload.sub, role: payload.role };
+  req.worker = worker;
   return next();
 }
+
+export function authenticateInsurer(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Response | void {
+  const token = getBearerToken(req);
+  if (!token) {
+    return unauthorized(res);
+  }
+
+  const payload = decodeAuthToken(token);
+  if (!payload) {
+    return unauthorized(res);
+  }
+
+  if (payload.role !== 'insurer') {
+    return forbidden(res);
+  }
+
+  req.user = { id: payload.sub, role: payload.role };
+  return next();
+}
+
+export const requireWorker = authenticateWorker;
+export const requireInsurer = authenticateInsurer;
 
 export function issueWorkerToken(workerId: string): string {
   return signToken({ sub: workerId, role: 'worker' }, 7 * 24 * 60 * 60);

@@ -1,17 +1,6 @@
 import { config } from '../config';
 
-export type Season = 'monsoon' | 'summer' | 'winter' | 'other';
-export type ZoneRisk = 'low' | 'medium' | 'high';
-export type ExperienceTier = 'new' | 'mid' | 'veteran';
-
-export interface PremiumPredictionInput {
-  worker_id: string;
-  zone_multiplier: number;
-  weather_multiplier: number;
-  history_multiplier: number;
-}
-
-export interface PremiumPredictionResult {
+export interface PremiumResponse {
   premium: number;
   formula_breakdown: {
     base_rate: number;
@@ -24,7 +13,178 @@ export interface PremiumPredictionResult {
   shadow_logged: boolean;
 }
 
-export interface FraudScoreInput {
+export interface FraudResponse {
+  fraud_score: number;
+  gnn_fraud_score: number | null;
+  graph_flags: string[];
+  tier: 1 | 2 | 3;
+  flagged: boolean;
+  scorer: string;
+}
+
+export interface BanditRecommendation {
+  recommended_arm: number;
+  recommended_premium: number;
+  recommended_coverage: number;
+  context_key: string;
+  exploration: boolean;
+}
+
+class MLService {
+  private baseUrl: string;
+  private timeout: number;
+
+  constructor() {
+    this.baseUrl = config.ML_SERVICE_URL;
+    this.timeout = config.ML_SERVICE_TIMEOUT_MS;
+  }
+
+  private async post<T>(path: string, body: object): Promise<T | null> {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeout);
+      const res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        throw new Error(`ML service ${path} returned ${res.status}`);
+      }
+      return (await res.json()) as T;
+    } catch (err) {
+      console.warn(`ML service call failed: ${path}`, err);
+      return null;
+    }
+  }
+
+  private async get<T>(path: string): Promise<T | null> {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeout);
+      const res = await fetch(`${this.baseUrl}${path}`, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) {
+        throw new Error(`ML service GET ${path} returned ${res.status}`);
+      }
+      return (await res.json()) as T;
+    } catch (err) {
+      console.warn(`ML service GET failed: ${path}`, err);
+      return null;
+    }
+  }
+
+  async predictPremium(
+    workerId: string,
+    zoneMultiplier: number,
+    weatherMultiplier: number,
+    historyMultiplier: number
+  ): Promise<PremiumResponse> {
+    const result = await this.post<PremiumResponse>('/predict-premium', {
+      worker_id: workerId,
+      zone_multiplier: zoneMultiplier,
+      weather_multiplier: weatherMultiplier,
+      history_multiplier: historyMultiplier,
+    });
+
+    if (!result) {
+      const raw = 35 * zoneMultiplier * weatherMultiplier * historyMultiplier;
+      return {
+        premium: Math.round(raw),
+        formula_breakdown: {
+          base_rate: 35,
+          zone_multiplier: zoneMultiplier,
+          weather_multiplier: weatherMultiplier,
+          history_multiplier: historyMultiplier,
+          raw_premium: raw,
+        },
+        rl_premium: null,
+        shadow_logged: false,
+      };
+    }
+
+    return result;
+  }
+
+  async scoreFraud(params: {
+    claim_id: string;
+    worker_id: string;
+    payout_amount: number;
+    claim_freq_30d: number;
+    hours_since_trigger: number;
+    zone_multiplier: number;
+    platform: string;
+    account_age_days: number;
+  }): Promise<FraudResponse> {
+    const result = await this.post<FraudResponse>('/score-fraud', params);
+    if (!result) {
+      return {
+        fraud_score: 0.0,
+        gnn_fraud_score: null,
+        graph_flags: [],
+        tier: 1,
+        flagged: false,
+        scorer: 'fallback_default',
+      };
+    }
+    return result;
+  }
+
+  async recommendTier(
+    workerId: string,
+    context: {
+      platform: string;
+      city: string;
+      experience_tier: string;
+      season: string;
+      zone_risk: string;
+    }
+  ): Promise<BanditRecommendation | null> {
+    return this.post<BanditRecommendation>('/recommend-tier', {
+      worker_id: workerId,
+      context,
+    });
+  }
+
+  updateBandit(
+    workerId: string,
+    contextKey: string,
+    arm: number,
+    reward: number
+  ): void {
+    this.post('/bandit-update', {
+      worker_id: workerId,
+      context_key: contextKey,
+      arm,
+      reward,
+    }).catch(() => {});
+  }
+
+  async getShadowComparison(): Promise<Record<string, unknown> | null> {
+    return this.get<Record<string, unknown>>('/shadow-comparison');
+  }
+}
+
+export const mlService = new MLService();
+
+// Backward-compatible helpers.
+export async function predictPremium(params: {
+  worker_id: string;
+  zone_multiplier: number;
+  weather_multiplier: number;
+  history_multiplier: number;
+}): Promise<PremiumResponse> {
+  return mlService.predictPremium(
+    params.worker_id,
+    params.zone_multiplier,
+    params.weather_multiplier,
+    params.history_multiplier
+  );
+}
+
+export async function scoreFraud(params: {
   claim_id: string;
   worker_id: string;
   payout_amount: number;
@@ -33,181 +193,32 @@ export interface FraudScoreInput {
   zone_multiplier: number;
   platform: string;
   account_age_days: number;
+}): Promise<FraudResponse> {
+  return mlService.scoreFraud(params);
 }
 
-export interface FraudScoreResult {
-  fraud_score: number;
-  gnn_fraud_score: number | null;
-  graph_flags: string[];
-  tier: number;
-  flagged: boolean;
-  scorer: string;
-}
-
-export interface RecommendTierInput {
+export async function recommendTier(params: {
   worker_id: string;
   context: {
-    platform: 'zomato' | 'swiggy';
+    platform: string;
     city: string;
-    experience_tier: ExperienceTier;
-    season: Season;
-    zone_risk: ZoneRisk;
+    experience_tier: string;
+    season: string;
+    zone_risk: string;
   };
+}): Promise<BanditRecommendation | null> {
+  return mlService.recommendTier(params.worker_id, params.context);
 }
 
-export interface RecommendTierResult {
-  recommended_arm: number;
-  recommended_premium: number;
-  recommended_coverage: number;
-  context_key: string;
-  exploration: boolean;
+export function banditUpdate(
+  workerId: string,
+  contextKey: string,
+  arm: number,
+  reward: number
+): void {
+  mlService.updateBandit(workerId, contextKey, arm, reward);
 }
 
-export interface ShadowComparisonResult {
-  total_logged: number;
-  mean_formula_premium: number;
-  mean_rl_premium: number;
-  rl_lower_count: number;
-  rl_higher_count: number;
-  avg_delta: number;
-}
-
-class TimeoutError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'TimeoutError';
-  }
-}
-
-async function request<T>(path: string, init: RequestInit): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), config.mlTimeoutMs);
-
-  try {
-    const response = await fetch(`${config.mlServiceUrl}${path}`, {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(init.headers || {}),
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`ML service ${path} failed with status ${response.status}`);
-    }
-
-    return (await response.json()) as T;
-  } catch (error: any) {
-    if (error?.name === 'AbortError') {
-      throw new TimeoutError(`ML service ${path} timed out after ${config.mlTimeoutMs}ms`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-export function fallbackPremium(input: PremiumPredictionInput): PremiumPredictionResult {
-  const zoneMultiplier = Number.isFinite(input.zone_multiplier) ? input.zone_multiplier : 1.1;
-  const weatherMultiplier = Number.isFinite(input.weather_multiplier) ? input.weather_multiplier : 1.0;
-  const historyMultiplier = Number.isFinite(input.history_multiplier) ? input.history_multiplier : 1.0;
-  const rawPremium = 35 * zoneMultiplier * weatherMultiplier * historyMultiplier;
-
-  return {
-    premium: Number(rawPremium.toFixed(2)),
-    formula_breakdown: {
-      base_rate: 35,
-      zone_multiplier: zoneMultiplier,
-      weather_multiplier: weatherMultiplier,
-      history_multiplier: historyMultiplier,
-      raw_premium: rawPremium,
-    },
-    rl_premium: null,
-    shadow_logged: false,
-  };
-}
-
-export async function predictPremium(input: PremiumPredictionInput): Promise<PremiumPredictionResult> {
-  try {
-    return await request<PremiumPredictionResult>('/predict-premium', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    });
-  } catch {
-    return fallbackPremium({
-      ...input,
-      zone_multiplier: 1.1,
-      weather_multiplier: input.weather_multiplier,
-      history_multiplier: input.history_multiplier,
-    });
-  }
-}
-
-export async function scoreFraud(input: FraudScoreInput): Promise<FraudScoreResult> {
-  try {
-    return await request<FraudScoreResult>('/score-fraud', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    });
-  } catch {
-    return {
-      fraud_score: 0,
-      gnn_fraud_score: null,
-      graph_flags: [],
-      tier: 1,
-      flagged: false,
-      scorer: 'fallback',
-    };
-  }
-}
-
-export async function recommendTier(input: RecommendTierInput): Promise<RecommendTierResult> {
-  try {
-    return await request<RecommendTierResult>('/recommend-tier', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    });
-  } catch {
-    return {
-      recommended_arm: 1,
-      recommended_premium: 44,
-      recommended_coverage: 440,
-      context_key: `${input.context.platform}_${input.context.city}_${input.context.experience_tier}_${input.context.season}_${input.context.zone_risk}`,
-      exploration: false,
-    };
-  }
-}
-
-export async function banditUpdate(workerId: string, contextKey: string, arm: number, reward: number): Promise<void> {
-  try {
-    await request<{ success: boolean }>('/bandit-update', {
-      method: 'POST',
-      body: JSON.stringify({
-        worker_id: workerId,
-        context_key: contextKey,
-        arm,
-        reward,
-      }),
-    });
-  } catch {
-    // Fire-and-forget path intentionally swallows errors.
-  }
-}
-
-export async function getShadowComparison(): Promise<ShadowComparisonResult> {
-  try {
-    return await request<ShadowComparisonResult>('/shadow-comparison', {
-      method: 'GET',
-    });
-  } catch {
-    return {
-      total_logged: 0,
-      mean_formula_premium: 0,
-      mean_rl_premium: 0,
-      rl_lower_count: 0,
-      rl_higher_count: 0,
-      avg_delta: 0,
-    };
-  }
+export async function getShadowComparison(): Promise<Record<string, unknown> | null> {
+  return mlService.getShadowComparison();
 }
