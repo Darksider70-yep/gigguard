@@ -17,25 +17,42 @@ class WeatherService {
 
     try {
       const url =
-        `${config.OPENWEATHERMAP_BASE_URL}/onecall` +
-        `?lat=${lat}&lon=${lng}&exclude=minutely,alerts` +
+        `${config.OPENWEATHERMAP_BASE_URL}/forecast` +
+        `?lat=${lat}&lon=${lng}` +
         `&appid=${config.OPENWEATHERMAP_API_KEY}&units=metric`;
       const res = await fetch(url);
       if (!res.ok) {
         throw new Error(`OWM returned ${res.status}`);
       }
       const data = await res.json();
-      return this.computeWeatherMultiplier(Array.isArray(data.daily) ? data.daily : []);
+      return this.computeWeatherMultiplier(Array.isArray(data.list) ? data.list : []);
     } catch (err) {
       console.warn('Weather API failed, using default multiplier:', err);
       return 1.0;
     }
   }
 
-  private computeWeatherMultiplier(daily: any[]): number {
+  private computeWeatherMultiplier(points: any[]): number {
+    const perDay = new Map<string, { rainMm: number; hot: boolean }>();
+
+    for (const point of points.slice(0, 56)) {
+      const dtTxt = String(point?.dt_txt ?? '');
+      const day = dtTxt.length >= 10 ? dtTxt.slice(0, 10) : '';
+      if (!day) continue;
+
+      const rainMm = Number(point?.rain?.['3h'] ?? 0);
+      const feelsLike = Number(point?.main?.feels_like ?? 0);
+      const existing = perDay.get(day) ?? { rainMm: 0, hot: false };
+      existing.rainMm += Number.isFinite(rainMm) ? rainMm : 0;
+      existing.hot = existing.hot || feelsLike > 42;
+      perDay.set(day, existing);
+    }
+
+    const daily = Array.from(perDay.values()).slice(0, 7);
     let multiplier = 1.0;
-    const rainyDays = daily.filter((d) => (d.rain ?? 0) > 10).length;
-    const hotDays = daily.filter((d) => (d.feels_like?.day ?? 0) > 42).length;
+    const rainyDays = daily.filter((d) => d.rainMm > 10).length;
+    const hotDays = daily.filter((d) => d.hot).length;
+
     if (rainyDays >= 3) {
       multiplier += 0.1;
     }
@@ -61,8 +78,8 @@ class WeatherService {
 
     try {
       const url =
-        `${config.OPENWEATHERMAP_BASE_URL}/onecall` +
-        `?lat=${lat}&lon=${lng}&exclude=minutely,hourly,daily,alerts` +
+        `${config.OPENWEATHERMAP_BASE_URL}/weather` +
+        `?lat=${lat}&lon=${lng}` +
         `&appid=${config.OPENWEATHERMAP_API_KEY}&units=metric`;
       const res = await fetch(url);
       if (!res.ok) {
@@ -71,9 +88,9 @@ class WeatherService {
       const data = await res.json();
       return {
         weather_multiplier: 1.0,
-        rain_1h: data.current?.rain?.['1h'] ?? null,
-        feels_like: data.current?.feels_like ?? null,
-        temp: data.current?.temp ?? null,
+        rain_1h: data?.rain?.['1h'] ?? null,
+        feels_like: data?.main?.feels_like ?? null,
+        temp: data?.main?.temp ?? null,
         aqi: null,
       };
     } catch (err) {

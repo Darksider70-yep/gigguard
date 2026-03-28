@@ -37,7 +37,7 @@ const OPENWEATHERMAP_API_KEY =
   getStringEnv('OPENWEATHERMAP_API_KEY') || getStringEnv('OPENWEATHER_API_KEY');
 const OPENWEATHERMAP_BASE_URL =
   getStringEnv('OPENWEATHERMAP_BASE_URL') ||
-  getStringEnv('OPENWEATHER_BASE_URL', 'https://api.openweathermap.org/data/3.0');
+  getStringEnv('OPENWEATHER_BASE_URL', 'https://api.openweathermap.org/data/2.5');
 
 const AQICN_API_KEY = getStringEnv('AQICN_API_KEY') || getStringEnv('AQI_API_KEY');
 const AQICN_BASE_URL = getStringEnv('AQICN_BASE_URL', 'https://api.waqi.info/feed');
