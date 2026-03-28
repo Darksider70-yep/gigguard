@@ -21,7 +21,11 @@ function getClient(): Razorpay {
   return client;
 }
 
-function safeCompare(a: string, b: string): boolean {
+function safeCompare(a: string, b?: string | null): boolean {
+  if (typeof b !== 'string') {
+    return false;
+  }
+
   const left = Buffer.from(a);
   const right = Buffer.from(b);
   if (left.length !== right.length) {
@@ -51,7 +55,11 @@ class RazorpayService {
     };
   }
 
-  verifyPaymentSignature(orderId: string, paymentId: string, signature: string): boolean {
+  verifyPaymentSignature(
+    orderId: string,
+    paymentId: string,
+    signature?: string
+  ): boolean {
     const body = `${orderId}|${paymentId}`;
     const expected = crypto
       .createHmac('sha256', config.RAZORPAY_KEY_SECRET)
@@ -60,7 +68,7 @@ class RazorpayService {
     return safeCompare(expected, signature);
   }
 
-  verifyWebhookSignature(body: string, signature: string): boolean {
+  verifyWebhookSignature(body: string, signature?: string): boolean {
     const expected = crypto
       .createHmac('sha256', config.RAZORPAY_WEBHOOK_SECRET)
       .update(body)

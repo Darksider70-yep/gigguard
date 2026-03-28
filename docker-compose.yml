@@ -67,13 +67,19 @@ services:
     restart: unless-stopped
     environment:
       PORT: 4000
+      NODE_ENV: production
       DATABASE_URL: postgresql://postgres:password@postgres:5432/gigguard
       ML_SERVICE_URL: http://ml-service:5001
-      ML_TIMEOUT_MS: 500
+      ML_SERVICE_TIMEOUT_MS: 500
+      OPENWEATHERMAP_API_KEY: your_key_here
+      OPENWEATHERMAP_BASE_URL: https://api.openweathermap.org/data/3.0
+      AQICN_API_KEY: your_key_here
+      AQICN_BASE_URL: https://api.waqi.info/feed
       JWT_SECRET: change_me_backend_jwt_secret
       INSURER_LOGIN_SECRET: change_me_insurer_secret
       REDIS_URL: redis://redis:6379
       USE_MOCK_APIS: "true"
+      USE_MOCK_PAYOUT: "true"
       RAZORPAY_KEY_ID: rzp_test_xxxx
       RAZORPAY_KEY_SECRET: change_me_razorpay_secret
       RAZORPAY_WEBHOOK_SECRET: change_me_razorpay_webhook_secret
