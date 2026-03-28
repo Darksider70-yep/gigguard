@@ -1,0 +1,19 @@
+flask==3.0.3
+flask-cors==4.0.1
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+scikit-learn==1.4.2
+numpy==1.26.4
+pandas==2.2.2
+stable-baselines3==2.3.2
+gymnasium==0.29.1
+torch==2.3.0
+torch-geometric==2.5.3
+# torch-scatter and torch-sparse may need platform wheel:
+# pip install torch-scatter torch-sparse -f
+# https://data.pyg.org/whl/torch-2.0.0+cpu.html
+networkx==3.2.1
+gunicorn==22.0.0
+python-dotenv==1.0.1
+pytest==8.2.2
+pytest-flask==1.3.0

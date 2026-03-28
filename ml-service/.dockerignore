@@ -1,0 +1,11 @@
+__pycache__
+.pytest_cache
+*.pyc
+*.pyo
+*.pyd
+venv
+.venv
+npm-debug.log
+.env
+data
+models

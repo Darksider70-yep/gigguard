@@ -1,31 +1,52 @@
-// components/TriggerBadge.tsx
-import { CloudRain, Thermometer, Waves, Wind, ShieldAlert } from 'lucide-react';
+import { CloudRain, ShieldAlert, Thermometer, Waves, Wind } from 'lucide-react';
 
 interface TriggerBadgeProps {
   triggerType: string;
-  triggerLabel: string;
 }
 
-const triggerConfig: { [key: string]: { icon: React.ElementType; color: string } } = {
-  heavy_rainfall: { icon: CloudRain, color: 'bg-blue-100 text-blue-800' },
-  extreme_heat: { icon: Thermometer, color: 'bg-orange-100 text-orange-800' },
-  flood_alert: { icon: Waves, color: 'bg-red-100 text-red-800' },
-  severe_aqi: { icon: Wind, color: 'bg-purple-100 text-purple-800' },
-  curfew_strike: { icon: ShieldAlert, color: 'bg-slate-100 text-slate-800' },
+const triggerConfig: Record<
+  string,
+  {
+    label: string;
+    icon: typeof CloudRain;
+    className: string;
+  }
+> = {
+  heavy_rainfall: {
+    label: 'Heavy Rainfall',
+    icon: CloudRain,
+    className: 'bg-blue-100 text-blue-800',
+  },
+  extreme_heat: {
+    label: 'Extreme Heat',
+    icon: Thermometer,
+    className: 'bg-orange-100 text-orange-800',
+  },
+  flood_red_alert: {
+    label: 'Flood / Red Alert',
+    icon: Waves,
+    className: 'bg-cyan-100 text-cyan-800',
+  },
+  severe_aqi: {
+    label: 'Severe AQI',
+    icon: Wind,
+    className: 'bg-violet-100 text-violet-800',
+  },
+  curfew_strike: {
+    label: 'Curfew / Strike',
+    icon: ShieldAlert,
+    className: 'bg-slate-200 text-slate-800',
+  },
 };
 
-const TriggerBadge = ({ triggerType, triggerLabel }: TriggerBadgeProps) => {
-  const config = triggerConfig[triggerType] || triggerConfig['curfew_strike'];
+export default function TriggerBadge({ triggerType }: TriggerBadgeProps) {
+  const config = triggerConfig[triggerType] || triggerConfig.curfew_strike;
   const Icon = config.icon;
 
   return (
-    <span
-      className={`inline-flex items-center gap-x-1.5 rounded-md px-2 py-1 text-xs font-medium ${config.color}`}
-    >
+    <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold ${config.className}`}>
       <Icon className="h-3.5 w-3.5" />
-      {triggerLabel}
+      {config.label}
     </span>
   );
-};
-
-export default TriggerBadge;
+}

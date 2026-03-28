@@ -1,8 +1,22 @@
 // components/PolicyCard.tsx
-import { MOCK_ACTIVE_POLICY } from '@/lib/mockData';
 import { BadgeCheck, ChevronsRight } from 'lucide-react';
 
-type Policy = typeof MOCK_ACTIVE_POLICY;
+interface Policy {
+  id: string;
+  weekLabel: string;
+  purchasedAt: string;
+  premium: number;
+  coverageAmount: number;
+  zone: string;
+  city: string;
+  multipliers: {
+    baseRate: number;
+    zoneMultiplier: number;
+    weatherMultiplier: number;
+    historyMultiplier: number;
+    finalPremium: number;
+  };
+}
 
 interface PolicyCardProps {
   policy: Policy;

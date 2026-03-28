@@ -1,0 +1,9 @@
+node_modules
+dist
+npm-debug.log
+.env
+tests
+scripts
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
