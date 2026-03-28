@@ -1,4 +1,4 @@
-"""Gymnasium environment for shadow RL premium optimization."""
+"""GigGuard Gymnasium environment for SAC premium optimization."""
 
 from __future__ import annotations
 
@@ -10,57 +10,44 @@ from gymnasium import spaces
 
 
 def compute_reward(premium: float, purchased: bool, claim_filed: bool, payout: float) -> float:
-    """Compute scalar RL reward from premium outcome."""
-    premium_value = float(premium)
-    payout_value = float(payout)
-
-    if purchased:
-        margin = premium_value - payout_value
-        reward = margin / 50.0
-        reward += 0.2 if not claim_filed else -0.2
-        return float(reward)
-
-    return float(-0.5 if premium_value > 60.0 else -0.1)
+    """Reward function shared by the environment and external evaluators."""
+    purchase_reward = 1.0 if purchased else -0.3
+    loss_ratio = float(payout) / max(float(premium), 1.0)
+    loss_penalty = max(0.0, loss_ratio - 0.8) * 5.0
+    churn_penalty = 0.5 if (float(premium) > 65.0 and not purchased) else 0.0
+    _ = claim_filed  # Included for signature completeness.
+    return float(purchase_reward - loss_penalty - churn_penalty)
 
 
 class GigGuardEnv(gym.Env):
-    """Synthetic environment for premium selection with stochastic outcomes."""
+    """Synthetic weekly insurance environment (52-step episodes)."""
 
     metadata = {"render_modes": []}
 
     def __init__(self) -> None:
-        """Initialize observation/action spaces and state."""
         super().__init__()
         self.observation_space = spaces.Box(low=0.0, high=2.0, shape=(8,), dtype=np.float32)
         self.action_space = spaces.Box(low=0.5, high=2.0, shape=(1,), dtype=np.float32)
         self.step_count = 0
-        self._state = self._sample_worker_state()
+        self.current_state = self._sample_worker_state()
 
     def _sample_worker_state(self) -> np.ndarray:
-        """Sample a plausible worker-environment state vector."""
-        zone_risk = np.random.uniform(0.8, 1.6)
-        rain_prob_7d = np.random.uniform(0.0, 1.0)
-        aqi_avg_7d = np.random.uniform(0.0, 1.5)
-        claim_rate_90d = np.random.uniform(0.0, 0.6)
-        worker_hours = np.random.uniform(0.6, 1.8)
-        platform_enc = np.random.choice([0.0, 1.0])
-        season_enc = np.random.uniform(0.0, 1.0)
-        competitor_price = np.random.uniform(0.7, 1.8)
-
-        vector = np.array(
+        return np.array(
             [
-                zone_risk,
-                rain_prob_7d,
-                aqi_avg_7d,
-                claim_rate_90d,
-                worker_hours,
-                platform_enc,
-                season_enc,
-                competitor_price,
+                np.random.uniform(0.85, 1.45),  # zone_risk
+                float(np.random.beta(2, 5)),  # rain_prob_7d
+                float(np.random.beta(1, 4)),  # aqi_avg_7d
+                float(np.clip(np.random.beta(1, 8), 0.0, 1.0)),  # claim_rate_90d
+                float(np.random.uniform(0.4, 0.9)),  # worker_hours
+                float(np.random.randint(0, 2)),  # platform_enc
+                float(np.random.choice([0.0, 0.33, 0.66, 1.0])),  # season_enc
+                float(np.random.uniform(0.25, 0.55)),  # competitor_price
             ],
             dtype=np.float32,
         )
-        return np.clip(vector, 0.0, 2.0).astype(np.float32)
+
+    def _compute_reward(self, premium: float, purchased: bool, claim_filed: bool, payout: float) -> float:
+        return compute_reward(premium=premium, purchased=purchased, claim_filed=claim_filed, payout=payout)
 
     def reset(
         self,
@@ -68,38 +55,49 @@ class GigGuardEnv(gym.Env):
         seed: int | None = None,
         options: Dict[str, Any] | None = None,
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
-        """Reset episode and return initial state."""
         super().reset(seed=seed)
         if seed is not None:
             np.random.seed(seed)
         self.step_count = 0
-        self._state = self._sample_worker_state()
-        return self._state.copy(), {}
+        state = self._sample_worker_state()
+        self.current_state = state
+        return state.copy(), {}
 
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
-        """Advance one timestep given premium multiplier action."""
-        multiplier = float(np.clip(action[0], 0.5, 2.0))
-        premium = 35.0 * multiplier
+        action_val = float(np.clip(action[0], 0.5, 2.0))
+        premium = 35.0 * action_val
 
         purchase_prob = 1.0 / (1.0 + np.exp(-(3.0 - 0.05 * premium)))
         purchased = bool(np.random.random() < purchase_prob)
 
-        claim_prob = float(self._state[0]) * 0.3 if purchased else 0.0
-        claim_prob = float(np.clip(claim_prob, 0.0, 1.0))
+        zone_risk = float(self.current_state[0])
+        claim_prob = zone_risk * 0.25 if purchased else 0.0
         claim_filed = bool(np.random.random() < claim_prob)
-        payout = premium * float(np.random.beta(2, 5)) if claim_filed else 0.0
 
-        reward = compute_reward(premium, purchased, claim_filed, payout)
+        payout = 0.0
+        if claim_filed:
+            loss_ratio = float(np.random.beta(2, 5))
+            payout = premium * loss_ratio
+
+        reward = self._compute_reward(
+            premium=premium,
+            purchased=purchased,
+            claim_filed=claim_filed,
+            payout=payout,
+        )
 
         self.step_count += 1
         terminated = self.step_count >= 52
-        self._state = self._sample_worker_state()
+
+        next_state = self._sample_worker_state()
+        self.current_state = next_state
 
         info = {
-            "premium": premium,
+            "premium": round(premium, 2),
             "purchased": purchased,
             "claim_filed": claim_filed,
-            "payout": payout,
+            "payout": round(payout, 2),
+            "action_val": round(action_val, 4),
         }
-        return self._state.copy(), float(reward), terminated, False, info
+        return next_state.copy(), float(reward), terminated, False, info
 

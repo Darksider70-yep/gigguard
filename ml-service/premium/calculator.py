@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List
 
+from premium.zones import ZONES_BY_ID
+
 
 @dataclass(frozen=True)
 class CoverageTier:
@@ -57,4 +59,16 @@ class PremiumCalculator:
             key=lambda item: (abs(item["premium"] - premium_value), item["premium"]),
         )
         return dict(tier)
+
+    def get_zone_multiplier(self, zone_id: str) -> float:
+        """Use ML model for zone multiplier, fallback to 1.0."""
+        zone = ZONES_BY_ID.get(zone_id)
+        if not zone:
+            return 1.0
+        try:
+            from premium.zone_model import predict_zone_multiplier
+
+            return float(predict_zone_multiplier(zone))
+        except Exception:
+            return 1.0
 
