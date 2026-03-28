@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { AuthenticatedRequest, requireInsurer } from '../middleware/auth';
 import { processTriggerEvent } from '../jobs/triggerMonitor';
+import { query } from '../db';
 
 const router = Router();
 
@@ -11,6 +12,52 @@ const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   bangalore: { lat: 12.9716, lng: 77.5946 },
   hyderabad: { lat: 17.385, lng: 78.4867 },
 };
+
+router.get('/live-events', async (req, res: Response) => {
+  try {
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '1'), 10) || 1, 1), 50);
+
+    const sqlWithStatus = `SELECT id, trigger_type, city, zone, trigger_value,
+                                  trigger_threshold as threshold,
+                                  affected_workers_count as affected_worker_count,
+                                  total_payout_amount as total_payout,
+                                  status, event_start
+                           FROM disruption_events
+                           WHERE status = $1
+                           ORDER BY event_start DESC
+                           LIMIT $2`;
+
+    const sqlWithoutStatus = `SELECT id, trigger_type, city, zone, trigger_value,
+                                     trigger_threshold as threshold,
+                                     affected_workers_count as affected_worker_count,
+                                     total_payout_amount as total_payout,
+                                     status, event_start
+                              FROM disruption_events
+                              ORDER BY event_start DESC
+                              LIMIT $1`;
+
+    const rows = status
+      ? (await query(sqlWithStatus, [status, limit])).rows
+      : (await query(sqlWithoutStatus, [limit])).rows;
+
+    return res.status(200).json({
+      events: rows.map((event: any) => ({
+        ...event,
+        trigger_value: event.trigger_value != null ? Number(event.trigger_value) : event.trigger_value,
+        threshold: event.threshold != null ? Number(event.threshold) : event.threshold,
+        affected_worker_count:
+          event.affected_worker_count != null
+            ? Number(event.affected_worker_count)
+            : event.affected_worker_count,
+        total_payout: event.total_payout != null ? Math.round(Number(event.total_payout)) : event.total_payout,
+      })),
+    });
+  } catch (err) {
+    console.error('[Triggers] live-events failed:', err);
+    return res.status(500).json({ message: 'Failed to fetch live events' });
+  }
+});
 
 router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: Response) => {
   try {

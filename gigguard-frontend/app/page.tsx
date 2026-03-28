@@ -17,7 +17,7 @@ export default function HomePage() {
 
     const loadTicker = async () => {
       try {
-        const data = await api.getDisruptionEvents('active', 1);
+        const data = await api.getPublicDisruptionEvents('active', 1);
         if (!active) {
           return;
         }

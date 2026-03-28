@@ -151,6 +151,15 @@ class GigGuardAPI {
     return this.request<DisruptionEventsResponse>(`/insurer/disruption-events?${search.toString()}`);
   }
 
+  getPublicDisruptionEvents(status = 'active', limit = 1) {
+    const search = new URLSearchParams();
+    if (status) {
+      search.set('status', status);
+    }
+    search.set('limit', String(limit));
+    return this.request<DisruptionEventsResponse>(`/triggers/live-events?${search.toString()}`);
+  }
+
   getAntiSpoofingAlerts() {
     return this.request<AntiSpoofingAlertsResponse>('/insurer/anti-spoofing-alerts');
   }

@@ -116,21 +116,18 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
   const policy = await withTransaction(async (client) => {
     const result = await client.query(
       `INSERT INTO policies (
-        worker_id, week_start, week_end, weekly_premium, premium_paid,
-        coverage_amount, zone_multiplier, weather_multiplier,
-        history_multiplier, recommended_arm, arm_accepted, context_key,
+        worker_id, zone, week_start, week_end, premium_paid,
+        coverage_amount, status, recommended_arm, arm_accepted, context_key,
         razorpay_order_id, razorpay_payment_id
-      ) VALUES ($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ) VALUES ($1,$2,$3,$4,$5,$6,'active',$7,$8,$9,$10,$11)
       RETURNING *`,
       [
         worker.id,
+        worker.zone,
         weekStart,
         weekEnd,
         body.premium_paid,
         body.coverage_amount,
-        worker.zone_multiplier,
-        1.0,
-        worker.history_multiplier,
         body.recommended_arm ?? null,
         body.arm_accepted ?? null,
         body.context_key ?? null,
@@ -151,7 +148,7 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
       id: policy.id,
       week_start: policy.week_start,
       week_end: policy.week_end,
-      premium_paid: Math.round(Number(policy.weekly_premium)),
+      premium_paid: Math.round(Number(policy.premium_paid)),
       coverage_amount: Number(policy.coverage_amount),
       status: policy.status,
       razorpay_payment_id: policy.razorpay_payment_id,
@@ -167,7 +164,7 @@ router.get('/active', authenticateWorker, async (req, res) => {
     id: string;
     week_start: string;
     week_end: string;
-    weekly_premium: string;
+    premium_paid: string;
     coverage_amount: string;
     status: string;
     claim_id: string | null;
@@ -203,7 +200,7 @@ router.get('/active', authenticateWorker, async (req, res) => {
       id: row.id,
       week_start: row.week_start,
       week_end: row.week_end,
-      premium_paid: Math.round(Number(row.weekly_premium)),
+      premium_paid: Math.round(Number(row.premium_paid)),
       coverage_amount: Number(row.coverage_amount),
       zone: req.worker!.zone,
       city: req.worker!.city,
@@ -244,8 +241,6 @@ router.get('/history', authenticateWorker, async (req, res) => {
 
   const normalizedPolicies = rows.map((row: any) => ({
     ...row,
-    weekly_premium:
-      row.weekly_premium != null ? Math.round(Number(row.weekly_premium)) : row.weekly_premium,
     premium_paid: row.premium_paid != null ? Math.round(Number(row.premium_paid)) : row.premium_paid,
     coverage_amount:
       row.coverage_amount != null ? Math.round(Number(row.coverage_amount)) : row.coverage_amount,

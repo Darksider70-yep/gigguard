@@ -56,6 +56,14 @@ export function createApp() {
   // Legacy compatibility paths from Phase 1.
   app.use('/api/policies', policiesRouter);
 
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(`[API] ${req.method} ${req.originalUrl} failed:`, err);
+    if (res.headersSent) {
+      return next(err);
+    }
+    return res.status(500).json({ message: 'Internal server error' });
+  });
+
   app.use((_req, res) => {
     return res.status(404).json({ message: 'Route not found' });
   });
