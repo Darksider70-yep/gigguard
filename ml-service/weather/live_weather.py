@@ -24,7 +24,7 @@ class LiveWeatherClient:
     AQICN_BASE = "https://api.waqi.info/feed"
 
     def __init__(self) -> None:
-        self.owm_key = os.environ.get("OPENWEATHERMAP_API_KEY", "")
+        self.owm_key = os.environ.get("OPENWEATHERMAP_API_KEY", "") or os.environ.get("OPENWEATHER_API_KEY", "")
         self.aqicn_key = os.environ.get("AQICN_API_KEY", "")
         self.use_mock = os.environ.get("USE_MOCK_APIS", "false").strip().lower() == "true"
         self._cache: Dict[str, Tuple[dict, datetime]] = {}
@@ -146,4 +146,3 @@ class LiveWeatherClient:
 
 
 weather_client = LiveWeatherClient()
-

@@ -1,5 +1,5 @@
 services:
-  postgres:
+  db:
     image: postgres:15-alpine
     container_name: gigguard-postgres
     restart: unless-stopped
@@ -37,13 +37,19 @@ services:
       dockerfile: Dockerfile
     container_name: gigguard-ml
     restart: unless-stopped
+    env_file:
+      - ./.env
     environment:
       FLASK_ENV: production
       ML_SERVICE_PORT: 5001
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/gigguard
+      DATABASE_URL: postgresql://postgres:password@db:5432/gigguard
       SAC_MODEL_PATH: /app/models/sac_premium_v1.zip
       IF_MODEL_PATH: /app/models/isolation_forest.pkl
       LOG_LEVEL: INFO
+      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY:-}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
+      AQICN_API_KEY: ${AQICN_API_KEY:-}
+      USE_MOCK_APIS: ${USE_MOCK_APIS:-false}
     ports:
       - "5001:5001"
     volumes:
@@ -56,7 +62,7 @@ services:
       retries: 5
       start_period: 20s
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
 
   backend:
@@ -65,25 +71,28 @@ services:
       dockerfile: Dockerfile
     container_name: gigguard-backend
     restart: unless-stopped
+    env_file:
+      - ./.env
     environment:
       PORT: 4000
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/gigguard
+      DATABASE_URL: postgresql://postgres:password@db:5432/gigguard
       ML_SERVICE_URL: http://ml-service:5001
-      ML_SERVICE_TIMEOUT_MS: 500
-      OPENWEATHERMAP_API_KEY: your_key_here
-      OPENWEATHERMAP_BASE_URL: https://api.openweathermap.org/data/3.0
-      AQICN_API_KEY: your_key_here
-      AQICN_BASE_URL: https://api.waqi.info/feed
-      JWT_SECRET: change_me_backend_jwt_secret
-      INSURER_LOGIN_SECRET: change_me_insurer_secret
+      ML_SERVICE_TIMEOUT_MS: ${ML_SERVICE_TIMEOUT_MS:-500}
+      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY:-}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
+      OPENWEATHERMAP_BASE_URL: ${OPENWEATHERMAP_BASE_URL:-https://api.openweathermap.org/data/2.5}
+      AQICN_API_KEY: ${AQICN_API_KEY:-}
+      AQICN_BASE_URL: ${AQICN_BASE_URL:-https://api.waqi.info/feed}
+      JWT_SECRET: ${JWT_SECRET:-change_me_backend_jwt_secret}
+      INSURER_LOGIN_SECRET: ${INSURER_LOGIN_SECRET:-change_me_insurer_secret}
       REDIS_URL: redis://redis:6379
-      USE_MOCK_APIS: "true"
-      USE_MOCK_PAYOUT: "true"
-      RAZORPAY_KEY_ID: rzp_test_xxxx
-      RAZORPAY_KEY_SECRET: change_me_razorpay_secret
-      RAZORPAY_WEBHOOK_SECRET: change_me_razorpay_webhook_secret
-      RAZORPAY_ACCOUNT_NUMBER: "1234567890"
+      USE_MOCK_APIS: ${USE_MOCK_APIS:-false}
+      USE_MOCK_PAYOUT: ${USE_MOCK_PAYOUT:-true}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-rzp_test_xxxx}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-change_me_razorpay_secret}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-change_me_razorpay_webhook_secret}
+      RAZORPAY_ACCOUNT_NUMBER: ${RAZORPAY_ACCOUNT_NUMBER:-1234567890}
     ports:
       - "4000:4000"
     healthcheck:
@@ -93,7 +102,7 @@ services:
       retries: 5
       start_period: 20s
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
       ml-service:
         condition: service_healthy
