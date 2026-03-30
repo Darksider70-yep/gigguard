@@ -69,18 +69,24 @@ export default function BuyPolicyQuotePage() {
       if (!quote) return;
       if (isPaying) return;
       const token = localStorage.getItem('gigguard_token');
+      if (!token) return;
 
-      const payload = JSON.stringify({
-        token,
-        context_key: quote.context_key,
-        arm: quote.recommended_arm,
-        reward: 0,
-      });
-
-      navigator.sendBeacon(
+      void fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/policies/bandit-update`,
-        new Blob([payload], { type: 'application/json' })
-      );
+        {
+          method: 'POST',
+          keepalive: true,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            context_key: quote.context_key,
+            arm: quote.recommended_arm,
+            reward: 0,
+          }),
+        }
+      ).catch(() => {});
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);

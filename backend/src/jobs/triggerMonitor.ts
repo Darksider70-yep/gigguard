@@ -167,8 +167,8 @@ async function processTrigger(params: {
   }
 
   const ringBigints = ringHexes.map((h) => BigInt(`0x${h}`));
-  const { rows: affectedWorkers } = await query<{ id: string }>(
-    `SELECT DISTINCT w.id
+  const { rows: affectedWorkers } = await query<{ id: string; hex_is_centroid_fallback: boolean }>(
+    `SELECT DISTINCT w.id, COALESCE(w.hex_is_centroid_fallback, FALSE) AS hex_is_centroid_fallback
      FROM workers w
      JOIN policies p ON p.worker_id = w.id
      WHERE w.home_hex_id = ANY($1::bigint[])
@@ -187,6 +187,13 @@ async function processTrigger(params: {
   const disruptionHours = premiumService.getDisruptionHours(triggerType);
   const threshold = premiumService.getThreshold(triggerType);
   const severity = premiumService.computeSeverity(triggerType, value);
+
+  const centroidWorkers = affectedWorkers.filter((worker) => worker.hex_is_centroid_fallback);
+  if (centroidWorkers.length > 0) {
+    console.warn(
+      `[TriggerMonitor] ${centroidWorkers.length} affected workers use centroid fallback hexes in ${city} zone ${zoneKey}.`
+    );
+  }
 
   const { rows: events } = await query<{ id: string }>(
     `INSERT INTO disruption_events (

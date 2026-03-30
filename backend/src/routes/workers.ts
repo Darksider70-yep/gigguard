@@ -22,6 +22,32 @@ function estimateHomeHexId(city: string): string {
   return BigInt(`0x${hex}`).toString();
 }
 
+function normalizeIncomingHexId(value: unknown): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    if (/^\d+$/.test(raw)) {
+      return BigInt(raw).toString();
+    }
+    if (/^0x[0-9a-f]+$/i.test(raw)) {
+      return BigInt(raw).toString();
+    }
+    if (/^[0-9a-f]+$/i.test(raw)) {
+      return BigInt(`0x${raw}`).toString();
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 interface InsurerProfileRow {
   id: string;
   name: string;
@@ -78,7 +104,9 @@ router.post('/register', async (req, res: Response) => {
     const platform = String(req.body?.platform || '').toLowerCase();
     const city = String(req.body?.city || '').trim();
 
-    const homeHexId = estimateHomeHexId(city);
+    const suppliedHexId = normalizeIncomingHexId(req.body?.home_hex_id);
+    const homeHexId = suppliedHexId ?? estimateHomeHexId(city);
+    const isCentroidFallback = suppliedHexId === null;
 
     if (!name || !phoneNumber || !city || !['zomato', 'swiggy'].includes(platform)) {
       return res.status(400).json({ message: 'Invalid worker payload' });
@@ -89,10 +117,10 @@ router.post('/register', async (req, res: Response) => {
     const result = await query(
       `INSERT INTO workers (
         id, name, phone_number, platform, city, zone, avg_daily_earning, zone_multiplier,
-        history_multiplier, upi_vpa, experience_tier, home_hex_id, created_at
+        history_multiplier, upi_vpa, experience_tier, home_hex_id, hex_is_centroid_fallback, created_at
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,COALESCE($8,1.0),COALESCE($9,1.0),$10,$11,$12,NOW()
-      ) RETURNING id, name, platform, city, zone, home_hex_id::text, avg_daily_earning, created_at`,
+        $1,$2,$3,$4,$5,$6,$7,COALESCE($8,1.0),COALESCE($9,1.0),$10,$11,$12,$13,NOW()
+      ) RETURNING id, name, platform, city, zone, home_hex_id::text, hex_is_centroid_fallback, avg_daily_earning, created_at`,
       [
         workerId,
         name,
@@ -106,6 +134,7 @@ router.post('/register', async (req, res: Response) => {
         req.body?.upi_vpa || null,
         req.body?.experience_tier || null,
         homeHexId,
+        isCentroidFallback,
       ]
     );
 
@@ -152,9 +181,9 @@ router.post('/login', async (req, res: Response) => {
       const insert = await query(
         `INSERT INTO workers (
           id, name, phone_number, platform, city, zone, avg_daily_earning,
-          zone_multiplier, history_multiplier, home_hex_id, created_at
-        ) VALUES ($1,$2,$3,'zomato','mumbai','Andheri West',900,1.1,1.0,$4,NOW())
-        RETURNING id, name, platform, city, zone, home_hex_id::text, avg_daily_earning, zone_multiplier, created_at`,
+          zone_multiplier, history_multiplier, home_hex_id, hex_is_centroid_fallback, created_at
+        ) VALUES ($1,$2,$3,'zomato','mumbai','Andheri West',900,1.1,1.0,$4,TRUE,NOW())
+        RETURNING id, name, platform, city, zone, home_hex_id::text, hex_is_centroid_fallback, avg_daily_earning, zone_multiplier, created_at`,
         [id, 'GigGuard Worker', phoneNumber, estimateHomeHexId('mumbai')]
       );
       worker = insert.rows[0];
@@ -180,6 +209,7 @@ router.get('/me', requireWorker, async (req: AuthenticatedRequest, res: Response
          city,
          zone,
          home_hex_id::text,
+         hex_is_centroid_fallback,
          avg_daily_earning,
          zone_multiplier,
          history_multiplier,

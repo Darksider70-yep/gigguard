@@ -1,13 +1,21 @@
 {
   "scripts": {
-    "test": "jest --runInBand",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "prepare": "husky",
+    "test": "npm run test:unit",
+    "test:unit": "jest --config jest.config.js --runInBand",
+    "test:integration": "jest --config jest.integration.config.js --runInBand --forceExit",
+    "test:e2e": "jest --config jest.e2e.config.js --runInBand --forceExit",
+    "test:all": "npm run test:unit && npm run test:integration",
+    "test:ci:fast": "npm run test:unit",
+    "test:ci:gated": "npm run test:integration",
+    "test:watch": "jest --config jest.config.js --watch",
+    "test:coverage": "jest --config jest.config.js --coverage"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node-fetch": "^2.6.13",
     "@types/pg": "^8.20.0",
+    "husky": "^9.1.7",
     "jest": "^30.3.0",
     "node-fetch": "^2.7.0",
     "pg": "^8.20.0",

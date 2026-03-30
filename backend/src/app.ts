@@ -9,6 +9,7 @@ import triggersRouter from './routes/triggers';
 import healthRouter from './routes/health';
 import { startTriggerMonitor } from './jobs/triggerMonitor';
 import { startPolicyExpiryJob } from './jobs/policyExpiryJob';
+import { startHexBackfillJob } from './jobs/hexBackfillJob';
 import { claimCreationWorker } from './workers/claimCreation';
 import { claimValidationWorker } from './workers/claimValidation';
 import { payoutCreationWorker } from './workers/payoutCreation';
@@ -25,6 +26,7 @@ function startBackgroundProcesses(): void {
   void payoutCreationWorker;
   startTriggerMonitor();
   startPolicyExpiryJob();
+  startHexBackfillJob();
   backgroundStarted = true;
 }
 

@@ -193,10 +193,13 @@ class GigGuardAPI {
   }
 
   banditUpdate(context_key: string, arm: number, reward: number) {
-    return this.request<{ success: boolean }>('/policies/bandit-update', {
+    return this.request<{ success: boolean; ml_service: 'updated' | 'unavailable' }>(
+      '/policies/bandit-update',
+      {
       method: 'POST',
       body: JSON.stringify({ context_key, arm, reward }),
-    });
+      }
+    );
   }
 }
 

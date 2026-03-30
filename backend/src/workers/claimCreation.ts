@@ -74,6 +74,22 @@ export async function processClaimCreationJob(
             return { claimId: null, claimCreated: false, claimUpdated: false };
           }
 
+          const { rows: payoutLocks } = await client.query<{ status: string }>(
+            `SELECT status
+             FROM payouts
+             WHERE claim_id = $1
+               AND status IN ('processing', 'paid')
+             LIMIT 1`,
+            [existingClaim.id]
+          );
+          if (payoutLocks.length > 0) {
+            console.info(
+              `[ClaimCreation] Higher trigger arrived for worker ${workerId} ` +
+                `but payout is already ${payoutLocks[0].status}. Upgrade blocked.`
+            );
+            return { claimId: null, claimCreated: false, claimUpdated: false };
+          }
+
           await client.query(
             `UPDATE claims
              SET disruption_event_id = $1,

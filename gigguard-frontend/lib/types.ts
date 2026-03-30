@@ -5,6 +5,7 @@ export interface WorkerProfile {
   city: string;
   zone: string | null;
   home_hex_id?: string | null;
+  hex_is_centroid_fallback?: boolean;
   avg_daily_earning: number;
   zone_multiplier: number;
   history_multiplier: number;

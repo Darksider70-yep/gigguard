@@ -1,7 +1,7 @@
-import express, { Router } from 'express';
+import { Router } from 'express';
 import { z } from 'zod';
 import { query, withTransaction } from '../db';
-import { authenticateWorker, decodeAuthToken } from '../middleware/auth';
+import { authenticateWorker } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { mlService } from '../services/mlService';
 import { weatherService } from '../services/weatherService';
@@ -84,42 +84,21 @@ const purchasePolicySchema = z.object({
 const banditUpdateSchema = z.object({
   context_key: z.string().min(1),
   arm: z.number().int().min(0).max(3),
-  reward: z.number().min(0).max(1),
-  token: z.string().optional(),
-  worker_id: z.string().optional(),
+  reward: z.union([z.literal(0), z.literal(1)]),
 });
 
 const sessionExitSchema = z.object({
   context_key: z.string().min(1),
   arm: z.number().int().min(0).max(3),
-  token: z.string().optional(),
-  worker_id: z.string().optional(),
 });
 
-function resolveWorkerId(
-  req: express.Request,
-  tokenFromBody?: string,
-  workerIdFromBody?: string
-): string | null {
-  const authHeader = req.headers.authorization;
-  const bearerToken =
-    authHeader && authHeader.startsWith('Bearer ')
-      ? authHeader.slice('Bearer '.length)
-      : null;
+function normalizeContextCity(city: string): string {
+  return city.trim().toLowerCase().replace(/\s+/g, '_');
+}
 
-  const token = bearerToken || tokenFromBody;
-  if (token) {
-    const payload = decodeAuthToken(token);
-    if (payload?.role === 'worker') {
-      return payload.sub;
-    }
-  }
-
-  if (workerIdFromBody && workerIdFromBody.trim().length > 0) {
-    return workerIdFromBody.trim();
-  }
-
-  return null;
+function contextMatchesWorker(contextKey: string, worker: { platform: string; city: string }): boolean {
+  const expectedPrefix = `${worker.platform}_${normalizeContextCity(worker.city)}_`;
+  return contextKey.startsWith(expectedPrefix);
 }
 
 router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (req, res) => {
@@ -200,40 +179,32 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
   });
 });
 
-router.post('/bandit-update', validateBody(banditUpdateSchema), async (req, res) => {
+router.post('/bandit-update', authenticateWorker, validateBody(banditUpdateSchema), async (req, res) => {
+  const worker = req.worker!;
   const body = req.body as z.infer<typeof banditUpdateSchema>;
-  const workerId = resolveWorkerId(req, body.token, body.worker_id);
-
-  if (!workerId) {
-    return res.status(401).json({ code: 'UNAUTHORIZED', message: 'Worker identity is required' });
+  if (!contextMatchesWorker(body.context_key, worker)) {
+    return res.status(400).json({
+      code: 'CONTEXT_MISMATCH',
+      message: 'context_key does not match authenticated worker',
+    });
   }
 
-  await mlService.updateBandit(workerId, body.context_key, body.arm, body.reward);
+  const success = await mlService.updateBandit(worker.id, body.context_key, body.arm, body.reward);
 
-  return res.json({ success: true });
+  return res.json({
+    success,
+    ml_service: success ? 'updated' : 'unavailable',
+  });
 });
 
-router.post('/session-exit', express.text({ type: 'text/plain' }), async (req, res) => {
-  let payload: unknown = req.body;
-  if (typeof payload === 'string') {
-    try {
-      payload = JSON.parse(payload);
-    } catch {
-      payload = {};
-    }
-  }
-
-  const parsed = sessionExitSchema.safeParse(payload);
-  if (!parsed.success) {
+router.post('/session-exit', authenticateWorker, validateBody(sessionExitSchema), async (req, res) => {
+  const worker = req.worker!;
+  const body = req.body as z.infer<typeof sessionExitSchema>;
+  if (!contextMatchesWorker(body.context_key, worker)) {
     return res.status(204).send();
   }
 
-  const workerId = resolveWorkerId(req, parsed.data.token, parsed.data.worker_id);
-  if (!workerId) {
-    return res.status(204).send();
-  }
-
-  await mlService.updateBandit(workerId, parsed.data.context_key, parsed.data.arm, 0.0);
+  await mlService.updateBandit(worker.id, body.context_key, body.arm, 0.0);
   return res.status(204).send();
 });
 

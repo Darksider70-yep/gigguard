@@ -9,9 +9,13 @@ export interface PayoutCreationJob {
   payout_amount?: number;
 }
 
+type PayoutCreationResult =
+  | { payout_id: string; amount: number }
+  | { skipped: true; reason: 'duplicate'; existing_payout_id: string };
+
 export async function processPayoutCreationJob(
   data: PayoutCreationJob
-): Promise<{ payout_id: string; amount: number } | void> {
+): Promise<PayoutCreationResult | void> {
   const { claim_id, payout_amount: overrideAmount } = data;
 
   const { rows } = await query<{
@@ -43,20 +47,71 @@ export async function processPayoutCreationJob(
     return;
   }
 
-  const { rows: payoutRows } = await query<{ id: string }>(
-    `INSERT INTO payouts (claim_id, worker_id, amount, upi_vpa, status)
-     VALUES ($1,$2,$3,$4,'pending')
-     RETURNING id`,
-    [claim_id, worker_id, finalAmount, upi_vpa]
+  const { rows: existingPayoutRows } = await query<{ id: string; status: string }>(
+    `SELECT id, status
+     FROM payouts
+     WHERE claim_id=$1
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [claim_id]
   );
-  const payoutId = payoutRows[0].id;
 
-  await query(
-    `UPDATE payouts
-     SET status='processing'
-     WHERE id=$1`,
-    [payoutId]
-  );
+  let payoutId: string;
+  if (existingPayoutRows.length > 0) {
+    const existing = existingPayoutRows[0];
+    if (existing.status === 'processing' || existing.status === 'paid') {
+      console.warn(
+        `[PayoutCreation] Skipping duplicate payout for claim ${claim_id}. ` +
+          `Existing payout ${existing.id} is ${existing.status}.`
+      );
+      return {
+        skipped: true,
+        reason: 'duplicate',
+        existing_payout_id: existing.id,
+      };
+    }
+
+    payoutId = existing.id;
+    await query(
+      `UPDATE payouts
+       SET status='processing',
+           amount=$2,
+           upi_vpa=$3,
+           created_at=NOW(),
+           processed_at=NULL
+       WHERE id=$1`,
+      [payoutId, finalAmount, upi_vpa]
+    );
+  } else {
+    try {
+      const { rows: payoutRows } = await query<{ id: string }>(
+        `INSERT INTO payouts (claim_id, worker_id, amount, upi_vpa, status)
+         VALUES ($1,$2,$3,$4,'processing')
+         RETURNING id`,
+        [claim_id, worker_id, finalAmount, upi_vpa]
+      );
+      payoutId = payoutRows[0].id;
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        const { rows: raceRows } = await query<{ id: string; status: string }>(
+          `SELECT id, status
+           FROM payouts
+           WHERE claim_id=$1
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [claim_id]
+        );
+        if (raceRows.length > 0) {
+          return {
+            skipped: true,
+            reason: 'duplicate',
+            existing_payout_id: raceRows[0].id,
+          };
+        }
+      }
+      throw err;
+    }
+  }
 
   const result = await razorpayService.createPayout({
     amount: finalAmount,

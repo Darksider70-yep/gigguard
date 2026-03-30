@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "rimraf .next .next-build && cross-env NEXT_DIST_DIR=.next-build next build",
+    "build:check": "tsc --noEmit && cross-env NEXT_DIST_DIR=.next-build next build",
+    "start": "cross-env NEXT_DIST_DIR=.next-build next start",
     "lint": "next lint"
   },
   "dependencies": {
@@ -23,7 +24,9 @@
     "autoprefixer": "^10.4.27",
     "eslint": "^8",
     "eslint-config-next": "14.2.0",
+    "cross-env": "^7.0.3",
     "postcss": "^8",
+    "rimraf": "^6.0.1",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
   }
