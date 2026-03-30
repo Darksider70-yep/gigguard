@@ -138,6 +138,7 @@ export interface PurchasePolicyBody {
   premium_paid: number;
   coverage_amount: number;
   recommended_arm: number;
+  selected_arm?: number;
   context_key: string;
   arm_accepted: boolean;
 }

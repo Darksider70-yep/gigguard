@@ -289,6 +289,37 @@ describe('Policies routes', () => {
     expect(mockMlService.updateBandit).toHaveBeenCalledWith(worker.id, 'ctx_1', 2, 1.0);
   });
 
+  test('POST /policies/bandit-update accepts token-in-body and updates reward', async () => {
+    const res = await request(app)
+      .post('/policies/bandit-update')
+      .send({
+        context_key: 'ctx_1',
+        arm: 1,
+        reward: 0,
+        token,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(mockMlService.updateBandit).toHaveBeenCalledWith(worker.id, 'ctx_1', 1, 0);
+  });
+
+  test('POST /policies/session-exit maps beacon payload to reward=0 update', async () => {
+    const res = await request(app)
+      .post('/policies/session-exit')
+      .set('Content-Type', 'text/plain')
+      .send(
+        JSON.stringify({
+          context_key: 'ctx_2',
+          arm: 0,
+          token,
+        })
+      );
+
+    expect(res.status).toBe(204);
+    expect(mockMlService.updateBandit).toHaveBeenCalledWith(worker.id, 'ctx_2', 0, 0);
+  });
+
   test('POST /policies policy_id matches format POL-YYYY-WNN-XXX', async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })

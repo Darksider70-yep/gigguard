@@ -27,6 +27,11 @@ const triggerConfig: Record<
     icon: Waves,
     className: 'bg-cyan-100 text-cyan-800',
   },
+  flood_alert: {
+    label: 'Flood / Red Alert',
+    icon: Waves,
+    className: 'bg-cyan-100 text-cyan-800',
+  },
   severe_aqi: {
     label: 'Severe AQI',
     icon: Wind,

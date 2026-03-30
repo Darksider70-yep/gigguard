@@ -68,7 +68,7 @@ export async function processPayoutCreationJob(
   await query(
     `UPDATE payouts
      SET razorpay_payout_id=$1, status=$2,
-         completed_at = CASE WHEN $2='paid' THEN NOW() ELSE NULL END
+         processed_at = CASE WHEN $2='paid' THEN NOW() ELSE NULL END
      WHERE id=$3`,
     [
       result.payout_id,

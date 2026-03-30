@@ -1,0 +1,592 @@
+001: GigGuard
+002: System Architecture
+003: AI-Powered Parametric Income Insurance · India Gig Economy
+004: Version 1.1 · March 2026
+005: System Overview
+006: GigGuard is a distributed microservices platform designed to deliver automated, zero-touch income protection to India’s gig-economy delivery workers. The architecture prioritises three properties: reliability (every trigger event must produce a payout, with no silent failures), real- time processing (a weather breach should produce a claim within minutes, not hours), and auditability (every premium component, trigger value, and payout calculation is stored verbatim for regulatory review).
+007: The platform comprises four containerised services. Each service owns a distinct domain and communicates over internal REST APIs, ensuring that a model redeployment or a frontend redesign never risks an outage in the claims pipeline.
+008: Service
+009: Port
+010: Responsibility
+011: Frontend (Next.js)
+012: :3000
+013: Worker onboarding, policy management, claims dashboard. Pure API consumer — no business logic.
+014: Backend (Node.js / Express)
+015: :4000
+016: Central API gateway, business logic, trigger monitor, claim and payout orchestration.
+017: ML Service (Python / Flask)
+018: :5001
+019: Premium calculation (Linear Regression) and fraud scoring (Isolation Forest). Stateless — no DB access.
+020: Database (PostgreSQL)
+021: :5432
+022: Single source of truth for all persistent data: workers, policies, claims, payouts, disruption events.
+023: Component Diagram
+024: The diagram below shows the primary communication paths. Arrows represent synchronous HTTP calls; the dashed line from the Trigger Monitor to the Job Queue represents an asynchronous message dispatch.
+025: +||||||(BullMQ)|| External| API pollBackend API (Node.js / Express) :4000[Worker & Policy Mgmt] --> [Trigger Monitor] --> [Job Queue]+||||||| REST / JSONv+||+· Claims DashboardOnboarding · PolicyFrontend (Next.js) :3000+||+| HTTPSv+|+User (Browser / Mobile Web)+|++||||||(BullMQ)|| External| API pollBackend API (Node.js / Express) :4000[Worker & Policy Mgmt] --> [Trigger Monitor] --> [Job Queue]+||||||| REST / JSONv+||+· Claims DashboardOnboarding · PolicyFrontend (Next.js) :3000+||+| HTTPSv+|+User (Browser / Mobile Web)+|+
+026: +
+027: |
+028: |
+029: |
+030: |
+031: |
+032: |
+033: (BullMQ)
+034: |
+035: | External
+036: | API poll
+037: Backend API (Node.js / Express) :4000
+038: [Worker & Policy Mgmt] --> [Trigger Monitor] --> [Job Queue]
+039: +
+040: |
+041: |
+042: |
+043: |
+044: |
+045: |
+046: | REST / JSON
+047: v
+048: +
+049: |
+050: |
+051: +
+052: · Claims Dashboard
+053: Onboarding · Policy
+054: Frontend (Next.js) :3000
+055: +
+056: |
+057: |
+058: +
+059: | HTTPS
+060: v
+061: +
+062: |
+063: +
+064: User (Browser / Mobile Web)
+065: +
+066: |
+067: +
+068: +
+069: |
+070: |
+071: |
+072: |
+073: |
+074: |
+075: (BullMQ)
+076: |
+077: | External
+078: | API poll
+079: Backend API (Node.js / Express) :4000
+080: [Worker & Policy Mgmt] --> [Trigger Monitor] --> [Job Queue]
+081: +
+082: |
+083: |
+084: |
+085: |
+086: |
+087: |
+088: | REST / JSON
+089: v
+090: +
+091: |
+092: |
+093: +
+094: · Claims Dashboard
+095: Onboarding · Policy
+096: Frontend (Next.js) :3000
+097: +
+098: |
+099: |
+100: +
+101: | HTTPS
+102: v
+103: +
+104: |
+105: +
+106: User (Browser / Mobile Web)
+107: +
+108: |
+109: +
+110: | ML calls| v++| Postgres || (writes) ||+| | APIs+ +| | External ||[Claim Worker]| v++++| OpenWeatherAQICNRazorpay++ ++ +| | Postgres| | :5432+ ++| ML Svc| :5001+|DB writes| v+| ML calls| v++| Postgres || (writes) ||+| | APIs+ +| | External ||[Claim Worker]| v++++| OpenWeatherAQICNRazorpay++ ++ +| | Postgres| | :5432+ ++| ML Svc| :5001+|DB writes| v+
+111: | ML calls
+112: | v
+113: +
+114: +
+115: | Postgres |
+116: | (writes) |
+117: |
+118: +
+119: | | APIs
+120: + +
+121: | | External |
+122: |
+123: [Claim Worker]
+124: | v
+125: +
+126: +
+127: +
+128: +
+129: | OpenWeather
+130: AQICN
+131: Razorpay
+132: +
+133: + +
+134: + +
+135: | | Postgres
+136: | | :5432
+137: + +
+138: +
+139: | ML Svc
+140: | :5001
+141: +
+142: |
+143: DB writes
+144: | v
+145: +
+146: | ML calls
+147: | v
+148: +
+149: +
+150: | Postgres |
+151: | (writes) |
+152: |
+153: +
+154: | | APIs
+155: + +
+156: | | External |
+157: |
+158: [Claim Worker]
+159: | v
+160: +
+161: +
+162: +
+163: +
+164: | OpenWeather
+165: AQICN
+166: Razorpay
+167: +
+168: + +
+169: + +
+170: | | Postgres
+171: | | :5432
+172: + +
+173: +
+174: | ML Svc
+175: | :5001
+176: +
+177: |
+178: DB writes
+179: | v
+180: +
+181: Database Schema
+182: All tables use UUID primary keys generated with gen_random_uuid(). Zone and city are stored as foreign keys to a dedicated reference table, not as free-text VARCHAR columns, ensuring referential integrity and consistent lat/lng coordinates for the trigger monitor.
+183: Design note: worker_id is denormalised onto both claims and payouts (not accessed solely via policies) so that a worker dashboard query never requires a multi-table join across the policies relationship.
+184: Reference Tables
+185: cities
+186: CREATE TABLE cities (id namecountry);SERIAL PRIMARY KEY,VARCHAR(50) UNIQUE NOT NULL, -- e.g. 'Mumbai' VARCHAR(3) NOT NULL DEFAULT 'IND'CREATE TABLE cities (id namecountry);SERIAL PRIMARY KEY,VARCHAR(50) UNIQUE NOT NULL, -- e.g. 'Mumbai' VARCHAR(3) NOT NULL DEFAULT 'IND'
+187: CREATE TABLE cities (
+188: id name
+189: country
+190: );
+191: SERIAL PRIMARY KEY,
+192: VARCHAR(50) UNIQUE NOT NULL, -- e.g. 'Mumbai' VARCHAR(3) NOT NULL DEFAULT 'IND'
+193: CREATE TABLE cities (
+194: id name
+195: country
+196: );
+197: SERIAL PRIMARY KEY,
+198: VARCHAR(50) UNIQUE NOT NULL, -- e.g. 'Mumbai' VARCHAR(3) NOT NULL DEFAULT 'IND'
+199: zones
+200: CREATE TABLE zones (id city_id name latlon risk_tierSERIAL PRIMARY KEY,INTEGER NOT NULL REFERENCES cities(id),VARCHAR(100) NOT NULL, DECIMAL(9,6) NOT NULL, DECIMAL(9,6) NOT NULL,-- e.g. 'Andheri West'-- centroid latitude-- centroid longitudeVARCHAR(10) NOT NULL DEFAULT 'medium', -- low / medium / highUNIQUE (city_id, name));CREATE TABLE zones (id city_id name latlon risk_tierSERIAL PRIMARY KEY,INTEGER NOT NULL REFERENCES cities(id),VARCHAR(100) NOT NULL, DECIMAL(9,6) NOT NULL, DECIMAL(9,6) NOT NULL,-- e.g. 'Andheri West'-- centroid latitude-- centroid longitudeVARCHAR(10) NOT NULL DEFAULT 'medium', -- low / medium / highUNIQUE (city_id, name));
+201: CREATE TABLE zones (
+202: id city_id name lat
+203: lon risk_tier
+204: SERIAL PRIMARY KEY,
+205: INTEGER NOT NULL REFERENCES cities(id),
+206: VARCHAR(100) NOT NULL, DECIMAL(9,6) NOT NULL, DECIMAL(9,6) NOT NULL,
+207: -- e.g. 'Andheri West'
+208: -- centroid latitude
+209: -- centroid longitude
+210: VARCHAR(10) NOT NULL DEFAULT 'medium', -- low / medium / high
+211: UNIQUE (city_id, name)
+212: );
+213: CREATE TABLE zones (
+214: id city_id name lat
+215: lon risk_tier
+216: SERIAL PRIMARY KEY,
+217: INTEGER NOT NULL REFERENCES cities(id),
+218: VARCHAR(100) NOT NULL, DECIMAL(9,6) NOT NULL, DECIMAL(9,6) NOT NULL,
+219: -- e.g. 'Andheri West'
+220: -- centroid latitude
+221: -- centroid longitude
+222: VARCHAR(10) NOT NULL DEFAULT 'medium', -- low / medium / high
+223: UNIQUE (city_id, name)
+224: );
+225: The trigger monitor queries zones by city_id to retrieve the lat/lon needed for OpenWeatherMap API calls. Using a FK here ensures every zone always has a valid coordinate pair.
+226: Core Tables
+227: workers
+228: CREATE TABLE workers (CREATE TABLE workers (
+229: CREATE TABLE workers (
+230: CREATE TABLE workers (
+231: idUUID PRIMARY KEY DEFAULT gen_random_uuid(), phone_numberVARCHAR(15) UNIQUE NOT NULL, -- login identifier full_nameVARCHAR(255) NOT NULL,city_idINTEGER NOT NULL REFERENCES cities(id), zone_idINTEGER NOT NULL REFERENCES zones(id),platformVARCHAR(20) NOT NULL CHECK (platform IN ('zomato','swiggy')), avg_daily_hoursDECIMAL(4,2) NOT NULL,avg_daily_earning DECIMAL(10,2) NOT NULL,risk_scoreDECIMAL(5,4) NOT NULL DEFAULT 0.5, -- 0.0–1.0, updated weekly created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_atTIMESTAMPTZ NOT NULL DEFAULT NOW());idUUID PRIMARY KEY DEFAULT gen_random_uuid(), phone_numberVARCHAR(15) UNIQUE NOT NULL, -- login identifier full_nameVARCHAR(255) NOT NULL,city_idINTEGER NOT NULL REFERENCES cities(id), zone_idINTEGER NOT NULL REFERENCES zones(id),platformVARCHAR(20) NOT NULL CHECK (platform IN ('zomato','swiggy')), avg_daily_hoursDECIMAL(4,2) NOT NULL,avg_daily_earning DECIMAL(10,2) NOT NULL,risk_scoreDECIMAL(5,4) NOT NULL DEFAULT 0.5, -- 0.0–1.0, updated weekly created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_atTIMESTAMPTZ NOT NULL DEFAULT NOW());
+232: idUUID PRIMARY KEY DEFAULT gen_random_uuid(), phone_numberVARCHAR(15) UNIQUE NOT NULL, -- login identifier full_nameVARCHAR(255) NOT NULL,
+233: city_idINTEGER NOT NULL REFERENCES cities(id), zone_idINTEGER NOT NULL REFERENCES zones(id),
+234: platformVARCHAR(20) NOT NULL CHECK (platform IN ('zomato','swiggy')), avg_daily_hoursDECIMAL(4,2) NOT NULL,
+235: avg_daily_earning DECIMAL(10,2) NOT NULL,
+236: risk_scoreDECIMAL(5,4) NOT NULL DEFAULT 0.5, -- 0.0–1.0, updated weekly created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),
+237: updated_atTIMESTAMPTZ NOT NULL DEFAULT NOW()
+238: );
+239: idUUID PRIMARY KEY DEFAULT gen_random_uuid(), phone_numberVARCHAR(15) UNIQUE NOT NULL, -- login identifier full_nameVARCHAR(255) NOT NULL,
+240: city_idINTEGER NOT NULL REFERENCES cities(id), zone_idINTEGER NOT NULL REFERENCES zones(id),
+241: platformVARCHAR(20) NOT NULL CHECK (platform IN ('zomato','swiggy')), avg_daily_hoursDECIMAL(4,2) NOT NULL,
+242: avg_daily_earning DECIMAL(10,2) NOT NULL,
+243: risk_scoreDECIMAL(5,4) NOT NULL DEFAULT 0.5, -- 0.0–1.0, updated weekly created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),
+244: updated_atTIMESTAMPTZ NOT NULL DEFAULT NOW()
+245: );
+246: policies
+247: CREATE TABLE policies (idUUID PRIMARY KEY DEFAULT gen_random_uuid(),worker_idUUID NOT NULL REFERENCES workers(id) ON DELETE CASCADE,zone_idINTEGER NOT NULL REFERENCES zones(id), -- zone at purchase time week_startDATE NOT NULL,week_endDATE NOT NULL,statusVARCHAR(20) NOT NULL DEFAULT 'active'CHECK (status IN ('active','expired','claimed')), weekly_premiumDECIMAL(10,2) NOT NULL,coverage_amountDECIMAL(10,2) NOT NULL, -- capped at ₹800base_rateDECIMAL(10,2) NOT NULL DEFAULT 35.00,zone_multiplier DECIMAL(5,4) NOT NULL, -- 0.80–1.40 weather_multiplier DECIMAL(5,4) NOT NULL, -- 0.90–1.30 history_multiplier DECIMAL(5,4) NOT NULL, -- 0.85–1.25 razorpay_payment_id VARCHAR(255) UNIQUE,created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),UNIQUE (worker_id, week_start) -- one policy per worker per week);CREATE TABLE policies (idUUID PRIMARY KEY DEFAULT gen_random_uuid(),worker_idUUID NOT NULL REFERENCES workers(id) ON DELETE CASCADE,zone_idINTEGER NOT NULL REFERENCES zones(id), -- zone at purchase time week_startDATE NOT NULL,week_endDATE NOT NULL,statusVARCHAR(20) NOT NULL DEFAULT 'active'CHECK (status IN ('active','expired','claimed')), weekly_premiumDECIMAL(10,2) NOT NULL,coverage_amountDECIMAL(10,2) NOT NULL, -- capped at ₹800base_rateDECIMAL(10,2) NOT NULL DEFAULT 35.00,zone_multiplier DECIMAL(5,4) NOT NULL, -- 0.80–1.40 weather_multiplier DECIMAL(5,4) NOT NULL, -- 0.90–1.30 history_multiplier DECIMAL(5,4) NOT NULL, -- 0.85–1.25 razorpay_payment_id VARCHAR(255) UNIQUE,created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),UNIQUE (worker_id, week_start) -- one policy per worker per week);
+248: CREATE TABLE policies (
+249: idUUID PRIMARY KEY DEFAULT gen_random_uuid(),
+250: worker_idUUID NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+251: zone_idINTEGER NOT NULL REFERENCES zones(id), -- zone at purchase time week_startDATE NOT NULL,
+252: week_endDATE NOT NULL,
+253: statusVARCHAR(20) NOT NULL DEFAULT 'active'
+254: CHECK (status IN ('active','expired','claimed')), weekly_premiumDECIMAL(10,2) NOT NULL,
+255: coverage_amountDECIMAL(10,2) NOT NULL, -- capped at ₹800
+256: base_rateDECIMAL(10,2) NOT NULL DEFAULT 35.00,
+257: zone_multiplier DECIMAL(5,4) NOT NULL, -- 0.80–1.40 weather_multiplier DECIMAL(5,4) NOT NULL, -- 0.90–1.30 history_multiplier DECIMAL(5,4) NOT NULL, -- 0.85–1.25 razorpay_payment_id VARCHAR(255) UNIQUE,
+258: created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+259: UNIQUE (worker_id, week_start) -- one policy per worker per week
+260: );
+261: CREATE TABLE policies (
+262: idUUID PRIMARY KEY DEFAULT gen_random_uuid(),
+263: worker_idUUID NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+264: zone_idINTEGER NOT NULL REFERENCES zones(id), -- zone at purchase time week_startDATE NOT NULL,
+265: week_endDATE NOT NULL,
+266: statusVARCHAR(20) NOT NULL DEFAULT 'active'
+267: CHECK (status IN ('active','expired','claimed')), weekly_premiumDECIMAL(10,2) NOT NULL,
+268: coverage_amountDECIMAL(10,2) NOT NULL, -- capped at ₹800
+269: base_rateDECIMAL(10,2) NOT NULL DEFAULT 35.00,
+270: zone_multiplier DECIMAL(5,4) NOT NULL, -- 0.80–1.40 weather_multiplier DECIMAL(5,4) NOT NULL, -- 0.90–1.30 history_multiplier DECIMAL(5,4) NOT NULL, -- 0.85–1.25 razorpay_payment_id VARCHAR(255) UNIQUE,
+271: created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+272: UNIQUE (worker_id, week_start) -- one policy per worker per week
+273: );
+274: disruption_events
+275: CREATE TABLE disruption_events (id city_id zone_idtrigger_typeUUID PRIMARY KEY DEFAULT gen_random_uuid(), INTEGER NOT NULL REFERENCES cities(id),INTEGER REFERENCES zones(id), -- NULL = entire city VARCHAR(50) NOT NULLCHECK (trigger_type IN ('heavy_rainfall','severe_aqi','extreme_heat','flood_alert','curfew_strike')),trigger_valueDECIMAL(10,4) NOT NULL,severityVARCHAR(10) NOT NULLCHECK (severity IN ('moderate','severe','extreme')), affected_workers_count INTEGER NOT NULL DEFAULT 0, total_claims_triggered INTEGER NOT NULL DEFAULT 0, total_payout_amountDECIMAL(12,2) NOT NULL DEFAULT 0, event_startTIMESTAMPTZ NOT NULL,event_endTIMESTAMPTZ, -- NULL while event is ongoingcreated_atTIMESTAMPTZ NOT NULL DEFAULT NOW());CREATE TABLE disruption_events (id city_id zone_idtrigger_typeUUID PRIMARY KEY DEFAULT gen_random_uuid(), INTEGER NOT NULL REFERENCES cities(id),INTEGER REFERENCES zones(id), -- NULL = entire city VARCHAR(50) NOT NULLCHECK (trigger_type IN ('heavy_rainfall','severe_aqi','extreme_heat','flood_alert','curfew_strike')),trigger_valueDECIMAL(10,4) NOT NULL,severityVARCHAR(10) NOT NULLCHECK (severity IN ('moderate','severe','extreme')), affected_workers_count INTEGER NOT NULL DEFAULT 0, total_claims_triggered INTEGER NOT NULL DEFAULT 0, total_payout_amountDECIMAL(12,2) NOT NULL DEFAULT 0, event_startTIMESTAMPTZ NOT NULL,event_endTIMESTAMPTZ, -- NULL while event is ongoingcreated_atTIMESTAMPTZ NOT NULL DEFAULT NOW());
+276: CREATE TABLE disruption_events (
+277: id city_id zone_id
+278: trigger_type
+279: UUID PRIMARY KEY DEFAULT gen_random_uuid(), INTEGER NOT NULL REFERENCES cities(id),
+280: INTEGER REFERENCES zones(id), -- NULL = entire city VARCHAR(50) NOT NULL
+281: CHECK (trigger_type IN ('heavy_rainfall','severe_aqi','extreme_heat','flood_alert','curfew_strike')),
+282: trigger_valueDECIMAL(10,4) NOT NULL,
+283: severityVARCHAR(10) NOT NULL
+284: CHECK (severity IN ('moderate','severe','extreme')), affected_workers_count INTEGER NOT NULL DEFAULT 0, total_claims_triggered INTEGER NOT NULL DEFAULT 0, total_payout_amountDECIMAL(12,2) NOT NULL DEFAULT 0, event_startTIMESTAMPTZ NOT NULL,
+285: event_endTIMESTAMPTZ, -- NULL while event is ongoing
+286: created_atTIMESTAMPTZ NOT NULL DEFAULT NOW()
+287: );
+288: CREATE TABLE disruption_events (
+289: id city_id zone_id
+290: trigger_type
+291: UUID PRIMARY KEY DEFAULT gen_random_uuid(), INTEGER NOT NULL REFERENCES cities(id),
+292: INTEGER REFERENCES zones(id), -- NULL = entire city VARCHAR(50) NOT NULL
+293: CHECK (trigger_type IN ('heavy_rainfall','severe_aqi','extreme_heat','flood_alert','curfew_strike')),
+294: trigger_valueDECIMAL(10,4) NOT NULL,
+295: severityVARCHAR(10) NOT NULL
+296: CHECK (severity IN ('moderate','severe','extreme')), affected_workers_count INTEGER NOT NULL DEFAULT 0, total_claims_triggered INTEGER NOT NULL DEFAULT 0, total_payout_amountDECIMAL(12,2) NOT NULL DEFAULT 0, event_startTIMESTAMPTZ NOT NULL,
+297: event_endTIMESTAMPTZ, -- NULL while event is ongoing
+298: created_atTIMESTAMPTZ NOT NULL DEFAULT NOW()
+299: );
+300: claims
+301: CREATE TABLE claims (idUUID PRIMARY KEY DEFAULT gen_random_uuid(), policy_idUUID NOT NULL REFERENCES policies(id),worker_idUUID NOT NULL REFERENCES workers(id), -- denormalisedCREATE TABLE claims (idUUID PRIMARY KEY DEFAULT gen_random_uuid(), policy_idUUID NOT NULL REFERENCES policies(id),worker_idUUID NOT NULL REFERENCES workers(id), -- denormalised
+302: CREATE TABLE claims (
+303: idUUID PRIMARY KEY DEFAULT gen_random_uuid(), policy_idUUID NOT NULL REFERENCES policies(id),
+304: worker_idUUID NOT NULL REFERENCES workers(id), -- denormalised
+305: CREATE TABLE claims (
+306: idUUID PRIMARY KEY DEFAULT gen_random_uuid(), policy_idUUID NOT NULL REFERENCES policies(id),
+307: worker_idUUID NOT NULL REFERENCES workers(id), -- denormalised
+308: disruption_event_id UUID NOT NULL REFERENCES disruption_events(id),trigger_type trigger_value trigger_threshold disruption_hours payout_amount fraud_score is_flagged fraud_reasons statusVARCHAR(50) NOT NULL, DECIMAL(10,4) NOT NULL, DECIMAL(10,4) NOT NULL, DECIMAL(4,2) NOT NULL, DECIMAL(10,2) NOT NULL, DECIMAL(5,4),-- NULL until scoredBOOLEAN NOT NULL DEFAULT FALSE, JSONB NOT NULL DEFAULT '[]',VARCHAR(20) NOT NULL DEFAULT 'triggered'CHECK (status IN ('triggered','validating','approved','paid','rejected')), notesTEXT,created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),paid_atTIMESTAMPTZ,UNIQUE (policy_id, disruption_event_id) -- one claim per event per policy);disruption_event_id UUID NOT NULL REFERENCES disruption_events(id),trigger_type trigger_value trigger_threshold disruption_hours payout_amount fraud_score is_flagged fraud_reasons statusVARCHAR(50) NOT NULL, DECIMAL(10,4) NOT NULL, DECIMAL(10,4) NOT NULL, DECIMAL(4,2) NOT NULL, DECIMAL(10,2) NOT NULL, DECIMAL(5,4),-- NULL until scoredBOOLEAN NOT NULL DEFAULT FALSE, JSONB NOT NULL DEFAULT '[]',VARCHAR(20) NOT NULL DEFAULT 'triggered'CHECK (status IN ('triggered','validating','approved','paid','rejected')), notesTEXT,created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),paid_atTIMESTAMPTZ,UNIQUE (policy_id, disruption_event_id) -- one claim per event per policy);
+309: disruption_event_id UUID NOT NULL REFERENCES disruption_events(id),
+310: trigger_type trigger_value trigger_threshold disruption_hours payout_amount fraud_score is_flagged fraud_reasons status
+311: VARCHAR(50) NOT NULL, DECIMAL(10,4) NOT NULL, DECIMAL(10,4) NOT NULL, DECIMAL(4,2) NOT NULL, DECIMAL(10,2) NOT NULL, DECIMAL(5,4),
+312: -- NULL until scored
+313: BOOLEAN NOT NULL DEFAULT FALSE, JSONB NOT NULL DEFAULT '[]',
+314: VARCHAR(20) NOT NULL DEFAULT 'triggered'
+315: CHECK (status IN ('triggered','validating','approved','paid','rejected')), notesTEXT,
+316: created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),
+317: paid_atTIMESTAMPTZ,
+318: UNIQUE (policy_id, disruption_event_id) -- one claim per event per policy
+319: );
+320: disruption_event_id UUID NOT NULL REFERENCES disruption_events(id),
+321: trigger_type trigger_value trigger_threshold disruption_hours payout_amount fraud_score is_flagged fraud_reasons status
+322: VARCHAR(50) NOT NULL, DECIMAL(10,4) NOT NULL, DECIMAL(10,4) NOT NULL, DECIMAL(4,2) NOT NULL, DECIMAL(10,2) NOT NULL, DECIMAL(5,4),
+323: -- NULL until scored
+324: BOOLEAN NOT NULL DEFAULT FALSE, JSONB NOT NULL DEFAULT '[]',
+325: VARCHAR(20) NOT NULL DEFAULT 'triggered'
+326: CHECK (status IN ('triggered','validating','approved','paid','rejected')), notesTEXT,
+327: created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),
+328: paid_atTIMESTAMPTZ,
+329: UNIQUE (policy_id, disruption_event_id) -- one claim per event per policy
+330: );
+331: payouts
+332: CREATE TABLE payouts (idUUID PRIMARY KEY DEFAULT gen_random_uuid(), claim_idUUID UNIQUE NOT NULL REFERENCES claims(id),worker_idUUID NOT NULL REFERENCES workers(id), -- denormalised amountDECIMAL(10,2) NOT NULL,payment_methodVARCHAR(20) NOT NULL DEFAULT 'upi' CHECK (payment_method IN ('upi','bank_transfer')),razorpay_payout_id VARCHAR(100),-- NULL in sandbox mode statusVARCHAR(20) NOT NULL DEFAULT 'pending'CHECK (status IN ('pending','processing','paid','failed')), created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),completed_atTIMESTAMPTZ);CREATE TABLE payouts (idUUID PRIMARY KEY DEFAULT gen_random_uuid(), claim_idUUID UNIQUE NOT NULL REFERENCES claims(id),worker_idUUID NOT NULL REFERENCES workers(id), -- denormalised amountDECIMAL(10,2) NOT NULL,payment_methodVARCHAR(20) NOT NULL DEFAULT 'upi' CHECK (payment_method IN ('upi','bank_transfer')),razorpay_payout_id VARCHAR(100),-- NULL in sandbox mode statusVARCHAR(20) NOT NULL DEFAULT 'pending'CHECK (status IN ('pending','processing','paid','failed')), created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),completed_atTIMESTAMPTZ);
+333: CREATE TABLE payouts (
+334: idUUID PRIMARY KEY DEFAULT gen_random_uuid(), claim_idUUID UNIQUE NOT NULL REFERENCES claims(id),
+335: worker_idUUID NOT NULL REFERENCES workers(id), -- denormalised amountDECIMAL(10,2) NOT NULL,
+336: payment_methodVARCHAR(20) NOT NULL DEFAULT 'upi' CHECK (payment_method IN ('upi','bank_transfer')),
+337: razorpay_payout_id VARCHAR(100),-- NULL in sandbox mode statusVARCHAR(20) NOT NULL DEFAULT 'pending'
+338: CHECK (status IN ('pending','processing','paid','failed')), created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),
+339: completed_atTIMESTAMPTZ
+340: );
+341: CREATE TABLE payouts (
+342: idUUID PRIMARY KEY DEFAULT gen_random_uuid(), claim_idUUID UNIQUE NOT NULL REFERENCES claims(id),
+343: worker_idUUID NOT NULL REFERENCES workers(id), -- denormalised amountDECIMAL(10,2) NOT NULL,
+344: payment_methodVARCHAR(20) NOT NULL DEFAULT 'upi' CHECK (payment_method IN ('upi','bank_transfer')),
+345: razorpay_payout_id VARCHAR(100),-- NULL in sandbox mode statusVARCHAR(20) NOT NULL DEFAULT 'pending'
+346: CHECK (status IN ('pending','processing','paid','failed')), created_atTIMESTAMPTZ NOT NULL DEFAULT NOW(),
+347: completed_atTIMESTAMPTZ
+348: );
+349: Indexes
+350: Indexes are chosen to support the three most frequent query patterns: worker dashboard load, trigger monitor deduplication, and insurer loss-ratio analytics.
+351: Index name
+352: Table (column)
+353: Purpose
+354: idx_policies_worker_id
+355: policies(worker_id)
+356: Fetch all policies for a worker instantly
+357: idx_policies_status
+358: policies(status)
+359: Find all active policies when trigger fires
+360: idx_claims_worker_id
+361: claims(worker_id)
+362: Claim history for worker without joining policies
+363: idx_claims_status
+364: claims(status)
+365: Find pending claims for fraud scoring queue
+366: idx_claims_created_at
+367: claims(created_at)
+368: Time-range queries for insurer analytics
+369: idx_disruption_city_zone
+370: disruption_events(city_id, zone_id)
+371: Anti-duplication lookup in trigger monitor
+372: idx_zones_city_id
+373: zones(city_id)
+374: Enumerate active zones per city during polling
+375: Authentication & Authorisation
+376: All worker-facing API endpoints (except /workers/register and /workers/login) require a valid JWT in the Authorization header. Insurer dashboard endpoints require a separate insurer- scoped token.
+377: Token Issuance
+378: Workers authenticate via OTP sent to their registered phone_number (no passwords).
+379: A successful OTP verification returns a signed JWT with a 7-day expiry.
+380: The JWT payload carries { workerId, role: 'worker' }. Insurer tokens carry { role: 'insurer'
+381: }.
+382: Middleware
+383: // backend/middleware/auth.tsexport const requireWorker = (req, res, next) => {const token = req.headers.authorization?.split(' ')[1];if (!token) return res.status(401).json({ error: 'Missing token' }); try {req.worker = jwt.verify(token, process.env.JWT_SECRET); next();} catch {res.status(401).json({ error: 'Invalid or expired token' });}};// backend/middleware/auth.tsexport const requireWorker = (req, res, next) => {const token = req.headers.authorization?.split(' ')[1];if (!token) return res.status(401).json({ error: 'Missing token' }); try {req.worker = jwt.verify(token, process.env.JWT_SECRET); next();} catch {res.status(401).json({ error: 'Invalid or expired token' });}};
+384: // backend/middleware/auth.ts
+385: export const requireWorker = (req, res, next) => {
+386: const token = req.headers.authorization?.split(' ')[1];
+387: if (!token) return res.status(401).json({ error: 'Missing token' }); try {
+388: req.worker = jwt.verify(token, process.env.JWT_SECRET); next();
+389: } catch {
+390: res.status(401).json({ error: 'Invalid or expired token' });
+391: }
+392: };
+393: // backend/middleware/auth.ts
+394: export const requireWorker = (req, res, next) => {
+395: const token = req.headers.authorization?.split(' ')[1];
+396: if (!token) return res.status(401).json({ error: 'Missing token' }); try {
+397: req.worker = jwt.verify(token, process.env.JWT_SECRET); next();
+398: } catch {
+399: res.status(401).json({ error: 'Invalid or expired token' });
+400: }
+401: };
+402: Rate Limiting
+403: OTP endpoint: 5 requests per phone number per 10 minutes (prevents SMS flooding).
+404: Premium quote endpoint: 30 requests per IP per minute (prevents scraping).
+405: Simulation endpoint (/triggers/simulate): insurer role only, not accessible to workers.
+406: API Design (REST)
+407: All endpoints are served from the Backend service (:4000). Requests and responses use JSON. Error responses always include a machine-readable code field alongside message.
+408: Worker Management
+409: POST /workers/register
+410: Onboards a new worker. Creates the worker record and triggers an initial ML risk score calculation.
+411: // Request{ "fullName": "Ramesh Kumar", "phoneNumber": "9876543210", "cityId": 1, "zoneId": 4, "platform": "zomato","avgDailyHours": 8, "avgDailyEarning": 750 }// Response 201// Request{ "fullName": "Ramesh Kumar", "phoneNumber": "9876543210", "cityId": 1, "zoneId": 4, "platform": "zomato","avgDailyHours": 8, "avgDailyEarning": 750 }// Response 201
+412: // Request
+413: { "fullName": "Ramesh Kumar", "phoneNumber": "9876543210", "cityId": 1, "zoneId": 4, "platform": "zomato",
+414: "avgDailyHours": 8, "avgDailyEarning": 750 }
+415: // Response 201
+416: // Request
+417: { "fullName": "Ramesh Kumar", "phoneNumber": "9876543210", "cityId": 1, "zoneId": 4, "platform": "zomato",
+418: "avgDailyHours": 8, "avgDailyEarning": 750 }
+419: // Response 201
+420: { "id": "uuid", "fullName": "Ramesh Kumar", "riskScore": 0.52 }// Errors: 400 Bad Request | 409 Conflict (phone exists){ "id": "uuid", "fullName": "Ramesh Kumar", "riskScore": 0.52 }// Errors: 400 Bad Request | 409 Conflict (phone exists)
+421: { "id": "uuid", "fullName": "Ramesh Kumar", "riskScore": 0.52 }
+422: // Errors: 400 Bad Request | 409 Conflict (phone exists)
+423: { "id": "uuid", "fullName": "Ramesh Kumar", "riskScore": 0.52 }
+424: // Errors: 400 Bad Request | 409 Conflict (phone exists)
+425: POST /workers/login
+426: Initiates OTP verification. Returns a JWT on successful OTP confirmation.
+427: // Step 1 — Request OTP{ "phoneNumber": "9876543210" }// Response 200: { "message": "OTP sent" }// Step 2 — Verify OTP{ "phoneNumber": "9876543210", "otp": "482019" }// Response 200: { "token": "eyJ..." }// Step 1 — Request OTP{ "phoneNumber": "9876543210" }// Response 200: { "message": "OTP sent" }// Step 2 — Verify OTP{ "phoneNumber": "9876543210", "otp": "482019" }// Response 200: { "token": "eyJ..." }
+428: // Step 1 — Request OTP
+429: { "phoneNumber": "9876543210" }
+430: // Response 200: { "message": "OTP sent" }
+431: // Step 2 — Verify OTP
+432: { "phoneNumber": "9876543210", "otp": "482019" }
+433: // Response 200: { "token": "eyJ..." }
+434: // Step 1 — Request OTP
+435: { "phoneNumber": "9876543210" }
+436: // Response 200: { "message": "OTP sent" }
+437: // Step 2 — Verify OTP
+438: { "phoneNumber": "9876543210", "otp": "482019" }
+439: // Response 200: { "token": "eyJ..." }
+440: GET /workers/me
+441: Returns the authenticated worker’s profile. Auth: Bearer JWT.
+442: Policy Management
+443: GET /policies/premium
+444: Returns a real-time premium quote including the full formula breakdown.
+445: // Query params: ?zoneId=4// Response 200{ "weeklyPremium": 49.14, "coverageAmount": 800.00, "formula": {"baseRate": 35, "zoneMultiplier": 1.3,"weatherMultiplier": 1.2, "historyMultiplier": 0.9}}// Query params: ?zoneId=4// Response 200{ "weeklyPremium": 49.14, "coverageAmount": 800.00, "formula": {"baseRate": 35, "zoneMultiplier": 1.3,"weatherMultiplier": 1.2, "historyMultiplier": 0.9}}
+446: // Query params: ?zoneId=4
+447: // Response 200
+448: { "weeklyPremium": 49.14, "coverageAmount": 800.00, "formula": {
+449: "baseRate": 35, "zoneMultiplier": 1.3,
+450: "weatherMultiplier": 1.2, "historyMultiplier": 0.9
+451: }
+452: }
+453: // Query params: ?zoneId=4
+454: // Response 200
+455: { "weeklyPremium": 49.14, "coverageAmount": 800.00, "formula": {
+456: "baseRate": 35, "zoneMultiplier": 1.3,
+457: "weatherMultiplier": 1.2, "historyMultiplier": 0.9
+458: }
+459: }
+460: POST /policies
+461: Creates a new weekly policy after successful Razorpay payment. Validates that no active policy already exists for the current week.
+462: // Request{ "razorpayPaymentId": "pay_xyz", "zoneId": 4 }// Response 201{ "id": "uuid", "status": "active", "weekStart": "2026-03-16", "weekEnd": "2026-03- 22","weeklyPremium": 49.14, "coverageAmount": 800.00 }// Errors: 400 Bad Request | 409 Conflict (active policy exists)// Request{ "razorpayPaymentId": "pay_xyz", "zoneId": 4 }// Response 201{ "id": "uuid", "status": "active", "weekStart": "2026-03-16", "weekEnd": "2026-03- 22","weeklyPremium": 49.14, "coverageAmount": 800.00 }// Errors: 400 Bad Request | 409 Conflict (active policy exists)
+463: // Request
+464: { "razorpayPaymentId": "pay_xyz", "zoneId": 4 }
+465: // Response 201
+466: { "id": "uuid", "status": "active", "weekStart": "2026-03-16", "weekEnd": "2026-03- 22",
+467: "weeklyPremium": 49.14, "coverageAmount": 800.00 }
+468: // Errors: 400 Bad Request | 409 Conflict (active policy exists)
+469: // Request
+470: { "razorpayPaymentId": "pay_xyz", "zoneId": 4 }
+471: // Response 201
+472: { "id": "uuid", "status": "active", "weekStart": "2026-03-16", "weekEnd": "2026-03- 22",
+473: "weeklyPremium": 49.14, "coverageAmount": 800.00 }
+474: // Errors: 400 Bad Request | 409 Conflict (active policy exists)
+475: Claims & Payouts
+476: GET /claims
+477: Returns claim history for the authenticated worker, ordered by created_at DESC.
+478: POST /payouts/webhook
+479: Razorpay webhook for payout status updates. Validates the X-Razorpay-Signature header before processing.
+480: Internal & Simulation
+481: POST /triggers/simulate [insurer role only]
+482: // Request{ "triggerType": "heavy_rainfall", "cityId": 2, "zoneId": 7, "value": 20 }// Response 202{ "message": "Disruption event simulation accepted.", "eventId": "uuid" }// Request{ "triggerType": "heavy_rainfall", "cityId": 2, "zoneId": 7, "value": 20 }// Response 202{ "message": "Disruption event simulation accepted.", "eventId": "uuid" }
+483: // Request
+484: { "triggerType": "heavy_rainfall", "cityId": 2, "zoneId": 7, "value": 20 }
+485: // Response 202
+486: { "message": "Disruption event simulation accepted.", "eventId": "uuid" }
+487: // Request
+488: { "triggerType": "heavy_rainfall", "cityId": 2, "zoneId": 7, "value": 20 }
+489: // Response 202
+490: { "message": "Disruption event simulation accepted.", "eventId": "uuid" }
+491: GET /insurer/dashboard [insurer role only]
+492: // Response 200{ "totalPolicies": 1250, "totalPremiums": 62500,"totalPayouts": 41200, "lossRatio": 0.659,"activePolicies": 847, "pendingClaims": 12 }// Response 200{ "totalPolicies": 1250, "totalPremiums": 62500,"totalPayouts": 41200, "lossRatio": 0.659,"activePolicies": 847, "pendingClaims": 12 }
+493: // Response 200
+494: { "totalPolicies": 1250, "totalPremiums": 62500,
+495: "totalPayouts": 41200, "lossRatio": 0.659,
+496: "activePolicies": 847, "pendingClaims": 12 }
+497: // Response 200
+498: { "totalPolicies": 1250, "totalPremiums": 62500,
+499: "totalPayouts": 41200, "lossRatio": 0.659,
+500: "activePolicies": 847, "pendingClaims": 12 }
+501: Trigger Monitor
+502: The trigger monitor is the parametric engine’s heartbeat. It polls external data sources on a 30- minute cadence and dispatches asynchronous claim-creation jobs when thresholds are breached.
+503: Architecture
+504: The monitor is implemented as a node-cron job inside the Backend service. To prevent a slow zone from blocking the entire polling cycle, each zone’s API calls run in parallel using Promise.allSettled. When a breach is detected, the monitor does not process claims inline — it enqueues a job onto a BullMQ Redis queue. A separate claim-worker process consumes the queue, ensuring that a surge of simultaneous breach events does not create memory pressure on the API server.
+505: Polling Logic
+506: Fetch active zones: query zones WHERE id IN (SELECT DISTINCT zone_id FROM policies WHERE status = 'active').
+507: For each zone, fire parallel API calls: OpenWeatherMap (rainfall + heat) and AQICN (AQI per city).
+508: Compare each returned value against the hardcoded threshold for its trigger type.
+509: Anti-duplication check: query disruption_events WHERE city_id = $1 AND zone_id = $2 AND trigger_type = $3 AND event_start > NOW() - INTERVAL '6 hours' AND event_end IS NULL. If a row is returned, the event is already active — skip.
+510: If no active event: INSERT into disruption_events, then enqueue a ClaimCreationJob to the BullMQ queue.
+511: BullMQ Job Queue
+512: // backend/queues/claimQueue.tsimport { Queue, Worker } from 'bullmq';import { redisConnection } from '../config/redis';export const claimQueue = new Queue('claim-creation', { connection: redisConnection});// Enqueue from trigger monitorawait claimQueue.add('create-claims', { disruption_event_id: event.id, zone_id: zone.id,trigger_type: event.trigger_type, disruption_hours: event.disruption_hours,}, { attempts: 3, backoff: { type: 'exponential', delay: 2000 } });// Worker (separate process)const worker = new Worker('claim-creation', async (job) => { const { disruption_event_id, zone_id } = job.data;const activePolicies = await db.query(`SELECT * FROM policies WHERE zone_id = $1 AND status = 'active'`, [zone_id]);for (const policy of activePolicies.rows) { await createClaimForPolicy(policy, job.data);}}, { connection: redisConnection, concurrency: 5 });// backend/queues/claimQueue.tsimport { Queue, Worker } from 'bullmq';import { redisConnection } from '../config/redis';export const claimQueue = new Queue('claim-creation', { connection: redisConnection});// Enqueue from trigger monitorawait claimQueue.add('create-claims', { disruption_event_id: event.id, zone_id: zone.id,trigger_type: event.trigger_type, disruption_hours: event.disruption_hours,}, { attempts: 3, backoff: { type: 'exponential', delay: 2000 } });// Worker (separate process)const worker = new Worker('claim-creation', async (job) => { const { disruption_event_id, zone_id } = job.data;const activePolicies = await db.query(`SELECT * FROM policies WHERE zone_id = $1 AND status = 'active'`, [zone_id]);for (const policy of activePolicies.rows) { await createClaimForPolicy(policy, job.data);}}, { connection: redisConnection, concurrency: 5 });
+513: // backend/queues/claimQueue.ts
+514: import { Queue, Worker } from 'bullmq';
+515: import { redisConnection } from '../config/redis';
+516: export const claimQueue = new Queue('claim-creation', { connection: redisConnection
+517: });
+518: // Enqueue from trigger monitor
+519: await claimQueue.add('create-claims', { disruption_event_id: event.id, zone_id: zone.id,
+520: trigger_type: event.trigger_type, disruption_hours: event.disruption_hours,
+521: }, { attempts: 3, backoff: { type: 'exponential', delay: 2000 } });
+522: // Worker (separate process)
+523: const worker = new Worker('claim-creation', async (job) => { const { disruption_event_id, zone_id } = job.data;
+524: const activePolicies = await db.query(
+525: `SELECT * FROM policies WHERE zone_id = $1 AND status = 'active'`, [zone_id]
+526: );
+527: for (const policy of activePolicies.rows) { await createClaimForPolicy(policy, job.data);
+528: }
+529: }, { connection: redisConnection, concurrency: 5 });
+530: // backend/queues/claimQueue.ts
+531: import { Queue, Worker } from 'bullmq';
+532: import { redisConnection } from '../config/redis';
+533: export const claimQueue = new Queue('claim-creation', { connection: redisConnection
+534: });
+535: // Enqueue from trigger monitor
+536: await claimQueue.add('create-claims', { disruption_event_id: event.id, zone_id: zone.id,
+537: trigger_type: event.trigger_type, disruption_hours: event.disruption_hours,
+538: }, { attempts: 3, backoff: { type: 'exponential', delay: 2000 } });
+539: // Worker (separate process)
+540: const worker = new Worker('claim-creation', async (job) => { const { disruption_event_id, zone_id } = job.data;
+541: const activePolicies = await db.query(
+542: `SELECT * FROM policies WHERE zone_id = $1 AND status = 'active'`, [zone_id]
+543: );
+544: for (const policy of activePolicies.rows) { await createClaimForPolicy(policy, job.data);
+545: }
+546: }, { connection: redisConnection, concurrency: 5 });
+547: Failure handling: BullMQ retries failed jobs up to 3 times with exponential backoff. Failed jobs move to a dead-letter queue and trigger a Slack alert to the on-call engineer. This ensures no claim is silently dropped during an external API outage.
+548: ML Service Architecture
+549: The ML service is a stateless Flask application that loads pre-trained scikit-learn models from disk and serves them over a lightweight REST API. It has no database access — all features are passed in the request body by the Backend.
+550: /predict/premium
+551: Returns the zone_multiplier for the premium formula. The Backend provides zone and city identifiers; the service looks up the pre-computed feature vector for that zone from a local JSON cache (populated at service startup).
+552: // Request
+553: { "zone_id": 4, "city_id": 2 }// Response{ "zone_multiplier": 1.35, "model_version": "premium_v1.2" }{ "zone_id": 4, "city_id": 2 }// Response{ "zone_multiplier": 1.35, "model_version": "premium_v1.2" }
+554: { "zone_id": 4, "city_id": 2 }
+555: // Response
+556: { "zone_multiplier": 1.35, "model_version": "premium_v1.2" }
+557: { "zone_id": 4, "city_id": 2 }
+558: // Response
+559: { "zone_multiplier": 1.35, "model_version": "premium_v1.2" }
+560: /predict/fraud
+561: Scores a claim for anomalous behaviour using the Isolation Forest model. Returns a fraud_score between 0.0 (clean) and 1.0 (highly suspicious). Claims with a score above 0.65 are automatically routed to manual review.
+562: // Request{ "claims_in_last_30d": 3, "zone_claim_rate_30d": 0.12,"payout_amount": 480, "hours_since_policy_created": 72,"worker_account_age_days": 14 }// Response{ "fraud_score": 0.34, "model_version": "fraud_v2.0" }// Request{ "claims_in_last_30d": 3, "zone_claim_rate_30d": 0.12,"payout_amount": 480, "hours_since_policy_created": 72,"worker_account_age_days": 14 }// Response{ "fraud_score": 0.34, "model_version": "fraud_v2.0" }
+563: // Request
+564: { "claims_in_last_30d": 3, "zone_claim_rate_30d": 0.12,
+565: "payout_amount": 480, "hours_since_policy_created": 72,
+566: "worker_account_age_days": 14 }
+567: // Response
+568: { "fraud_score": 0.34, "model_version": "fraud_v2.0" }
+569: // Request
+570: { "claims_in_last_30d": 3, "zone_claim_rate_30d": 0.12,
+571: "payout_amount": 480, "hours_since_policy_created": 72,
+572: "worker_account_age_days": 14 }
+573: // Response
+574: { "fraud_score": 0.34, "model_version": "fraud_v2.0" }
+575: Fallback Behaviour
+576: The Backend enforces a 500 ms timeout on all ML service calls. If the service is unavailable or times out, the Backend applies safe defaults: zone_multiplier = 1.1 for premium calls, and fraud_score = 0.0 (auto-approve) for fraud calls. This ensures a payment outage never blocks a worker from receiving their payout.
+577: Model Versioning
+578: Models are stored as versioned .pkl files (e.g. premium_model_v1.2.pkl). The active version is controlled by a MODEL_VERSION environment variable. Promoting a new model requires only an environment variable change and a container restart — no code deployment needed.
+579: Security & Data Considerations
+580: PII Handling
+581: full_name and phone_number are treated as sensitive. They are never written to application logs.
+582: Database access is restricted by role: the Backend service uses a limited-privilege DB user with INSERT/UPDATE/SELECT only — no DROP or TRUNCATE.
+583: All inter-service communication is over HTTPS/TLS in production. Docker Compose internal networking is used in development.
+584: API Key Management
+585: All external API keys (OpenWeatherMap, AQICN, Razorpay) are stored in environment variables only.
+586: .env files are excluded from source control via .gitignore. Docker Compose injects variables at runtime.
+587: Separate .env files are maintained for development (sandbox keys) and production (live keys).
+588: Webhook Security
+589: Razorpay payout webhooks: the X-Razorpay-Signature header is validated using HMAC-SHA256 against the webhook secret before any database write is performed.
+590: Curfew/strike webhooks: payloads must include a valid HMAC-SHA256 signature generated with a pre-shared secret. Invalid or unsigned payloads are rejected with HTTP 401 and logged for review.
+591: Sandbox Mode
+592: For the hackathon, the platform operates exclusively in Razorpay Sandbox mode. All payment and payout transactions are simulated; no real money is moved. Switching to production requires only replacing the Razorpay API keys in the environment configuration.

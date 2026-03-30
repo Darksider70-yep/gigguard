@@ -136,13 +136,12 @@ async function updateWorkerHexId(workerId: string, hexId: bigint): Promise<void>
  * 
  * @param lat Latitude coordinate
  * @param lng Longitude coordinate
- * @returns H3 cell ID as BigInt
+ * @returns H3 cell ID as BigInt (decimal form for PostgreSQL BIGINT)
  */
 function convertToH3HexId(lat: number, lng: number): bigint {
-  // h3-js v4 uses latLngToCell (not geoToH3 like v3)
-  // It returns a BigInt directly
+  // h3-js v4 returns a hexadecimal string cell ID. Convert to decimal BigInt for DB writes.
   const hexId = latLngToCell(lat, lng, H3_RESOLUTION);
-  return hexId;
+  return BigInt(`0x${hexId}`);
 }
 
 /**

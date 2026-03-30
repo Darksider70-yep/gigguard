@@ -122,6 +122,7 @@ export default function BuyPolicyQuotePage() {
               premium_paid: selectedTier.premium,
               coverage_amount: selectedTier.coverage,
               recommended_arm: quote.recommended_arm,
+              selected_arm: selectedTier.arm,
               context_key: quote.context_key,
               arm_accepted: selectedTier.arm === quote.recommended_arm,
             });

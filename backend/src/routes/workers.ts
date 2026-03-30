@@ -1,10 +1,26 @@
 import { randomUUID } from 'crypto';
 import { Router, Response } from 'express';
+import { latLngToCell } from 'h3-js';
 import { config } from '../config';
 import { query } from '../db';
 import { AuthenticatedRequest, issueInsurerToken, issueWorkerToken, requireWorker } from '../middleware/auth';
 
 const router = Router();
+
+const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  mumbai: { lat: 19.1136, lng: 72.8697 },
+  delhi: { lat: 28.6139, lng: 77.209 },
+  chennai: { lat: 13.0827, lng: 80.2707 },
+  bangalore: { lat: 12.9716, lng: 77.5946 },
+  bengaluru: { lat: 12.9716, lng: 77.5946 },
+  hyderabad: { lat: 17.385, lng: 78.4867 },
+};
+
+function estimateHomeHexId(city: string): string {
+  const coords = CITY_COORDINATES[city.toLowerCase()] ?? CITY_COORDINATES.mumbai;
+  const hex = latLngToCell(coords.lat, coords.lng, 8);
+  return BigInt(`0x${hex}`).toString();
+}
 
 interface InsurerProfileRow {
   id: string;
@@ -62,6 +78,8 @@ router.post('/register', async (req, res: Response) => {
     const platform = String(req.body?.platform || '').toLowerCase();
     const city = String(req.body?.city || '').trim();
 
+    const homeHexId = estimateHomeHexId(city);
+
     if (!name || !phoneNumber || !city || !['zomato', 'swiggy'].includes(platform)) {
       return res.status(400).json({ message: 'Invalid worker payload' });
     }
@@ -71,10 +89,10 @@ router.post('/register', async (req, res: Response) => {
     const result = await query(
       `INSERT INTO workers (
         id, name, phone_number, platform, city, zone, avg_daily_earning, zone_multiplier,
-        history_multiplier, upi_vpa, experience_tier, created_at
+        history_multiplier, upi_vpa, experience_tier, home_hex_id, created_at
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,COALESCE($8,1.0),COALESCE($9,1.0),$10,$11,NOW()
-      ) RETURNING id, name, platform, city, zone, avg_daily_earning, created_at`,
+        $1,$2,$3,$4,$5,$6,$7,COALESCE($8,1.0),COALESCE($9,1.0),$10,$11,$12,NOW()
+      ) RETURNING id, name, platform, city, zone, home_hex_id::text, avg_daily_earning, created_at`,
       [
         workerId,
         name,
@@ -87,6 +105,7 @@ router.post('/register', async (req, res: Response) => {
         Number(req.body?.history_multiplier || 1),
         req.body?.upi_vpa || null,
         req.body?.experience_tier || null,
+        homeHexId,
       ]
     );
 
@@ -133,10 +152,10 @@ router.post('/login', async (req, res: Response) => {
       const insert = await query(
         `INSERT INTO workers (
           id, name, phone_number, platform, city, zone, avg_daily_earning,
-          zone_multiplier, history_multiplier, created_at
-        ) VALUES ($1,$2,$3,'zomato','mumbai','Andheri West',900,1.1,1.0,NOW())
-        RETURNING id, name, platform, city, zone, avg_daily_earning, zone_multiplier, created_at`,
-        [id, 'GigGuard Worker', phoneNumber]
+          zone_multiplier, history_multiplier, home_hex_id, created_at
+        ) VALUES ($1,$2,$3,'zomato','mumbai','Andheri West',900,1.1,1.0,$4,NOW())
+        RETURNING id, name, platform, city, zone, home_hex_id::text, avg_daily_earning, zone_multiplier, created_at`,
+        [id, 'GigGuard Worker', phoneNumber, estimateHomeHexId('mumbai')]
       );
       worker = insert.rows[0];
     }

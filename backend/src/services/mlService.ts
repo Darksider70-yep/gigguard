@@ -153,13 +153,15 @@ class MLService {
     contextKey: string,
     arm: number,
     reward: number
-  ): void {
-    this.post('/bandit-update', {
+  ): Promise<boolean> {
+    return this.post<{ success: boolean }>('/bandit-update', {
       worker_id: workerId,
       context_key: contextKey,
       arm,
       reward,
-    }).catch(() => {});
+    })
+      .then((result) => Boolean(result?.success))
+      .catch(() => false);
   }
 
   async getShadowComparison(): Promise<Record<string, unknown> | null> {
@@ -215,8 +217,8 @@ export function banditUpdate(
   contextKey: string,
   arm: number,
   reward: number
-): void {
-  mlService.updateBandit(workerId, contextKey, arm, reward);
+): Promise<boolean> {
+  return mlService.updateBandit(workerId, contextKey, arm, reward);
 }
 
 export async function getShadowComparison(): Promise<Record<string, unknown> | null> {

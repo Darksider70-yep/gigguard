@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { z } from 'zod';
 import { query, withTransaction } from '../db';
-import { authenticateWorker } from '../middleware/auth';
+import { authenticateWorker, decodeAuthToken } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { mlService } from '../services/mlService';
 import { weatherService } from '../services/weatherService';
@@ -76,9 +76,51 @@ const purchasePolicySchema = z.object({
   premium_paid: z.number(),
   coverage_amount: z.number(),
   recommended_arm: z.number().int().min(0).max(3).optional(),
+  selected_arm: z.number().int().min(0).max(3).optional(),
   context_key: z.string().optional(),
   arm_accepted: z.boolean().optional(),
 });
+
+const banditUpdateSchema = z.object({
+  context_key: z.string().min(1),
+  arm: z.number().int().min(0).max(3),
+  reward: z.number().min(0).max(1),
+  token: z.string().optional(),
+  worker_id: z.string().optional(),
+});
+
+const sessionExitSchema = z.object({
+  context_key: z.string().min(1),
+  arm: z.number().int().min(0).max(3),
+  token: z.string().optional(),
+  worker_id: z.string().optional(),
+});
+
+function resolveWorkerId(
+  req: express.Request,
+  tokenFromBody?: string,
+  workerIdFromBody?: string
+): string | null {
+  const authHeader = req.headers.authorization;
+  const bearerToken =
+    authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.slice('Bearer '.length)
+      : null;
+
+  const token = bearerToken || tokenFromBody;
+  if (token) {
+    const payload = decodeAuthToken(token);
+    if (payload?.role === 'worker') {
+      return payload.sub;
+    }
+  }
+
+  if (workerIdFromBody && workerIdFromBody.trim().length > 0) {
+    return workerIdFromBody.trim();
+  }
+
+  return null;
+}
 
 router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (req, res) => {
   const worker = req.worker!;
@@ -138,8 +180,9 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
     return result.rows[0];
   });
 
-  if (body.context_key && body.recommended_arm !== undefined) {
-    mlService.updateBandit(worker.id, body.context_key, body.recommended_arm, 1.0);
+  const selectedArm = body.selected_arm ?? body.recommended_arm;
+  if (body.context_key && selectedArm !== undefined) {
+    void mlService.updateBandit(worker.id, body.context_key, selectedArm, 1.0);
   }
 
   res.status(201).json({
@@ -155,6 +198,43 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
     },
     message: "Policy active. We'll monitor your zone 24/7.",
   });
+});
+
+router.post('/bandit-update', validateBody(banditUpdateSchema), async (req, res) => {
+  const body = req.body as z.infer<typeof banditUpdateSchema>;
+  const workerId = resolveWorkerId(req, body.token, body.worker_id);
+
+  if (!workerId) {
+    return res.status(401).json({ code: 'UNAUTHORIZED', message: 'Worker identity is required' });
+  }
+
+  await mlService.updateBandit(workerId, body.context_key, body.arm, body.reward);
+
+  return res.json({ success: true });
+});
+
+router.post('/session-exit', express.text({ type: 'text/plain' }), async (req, res) => {
+  let payload: unknown = req.body;
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      payload = {};
+    }
+  }
+
+  const parsed = sessionExitSchema.safeParse(payload);
+  if (!parsed.success) {
+    return res.status(204).send();
+  }
+
+  const workerId = resolveWorkerId(req, parsed.data.token, parsed.data.worker_id);
+  if (!workerId) {
+    return res.status(204).send();
+  }
+
+  await mlService.updateBandit(workerId, parsed.data.context_key, parsed.data.arm, 0.0);
+  return res.status(204).send();
 });
 
 router.get('/active', authenticateWorker, async (req, res) => {

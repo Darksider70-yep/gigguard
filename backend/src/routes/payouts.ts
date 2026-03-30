@@ -32,7 +32,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     await withTransaction(async (client) => {
       const { rows } = await client.query(
         `UPDATE payouts
-         SET status = 'paid', completed_at = NOW()
+         SET status = 'paid', processed_at = NOW()
          WHERE razorpay_payout_id = $1
          RETURNING claim_id`,
         [payoutId]

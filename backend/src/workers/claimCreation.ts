@@ -27,7 +27,7 @@ export async function processClaimCreationJob(
 
   for (const workerId of worker_ids) {
     try {
-      const created = await withTransaction(async (client) => {
+      const upsertResult = await withTransaction(async (client) => {
         const { weekStart } = premiumService.getWeekBounds();
         const { rows: policies } = await client.query(
           `SELECT p.id, w.avg_daily_earning
@@ -41,27 +41,73 @@ export async function processClaimCreationJob(
         );
 
         if (policies.length === 0) {
-          return false;
+          return { claimId: null, claimCreated: false, claimUpdated: false };
         }
         const policy = policies[0];
-
-        const { rows: existing } = await client.query(
-          `SELECT 1
-           FROM claims
-           WHERE worker_id = $1
-             AND created_at::date = NOW()::date
-             AND status != 'denied'
-           LIMIT 1`,
-          [workerId]
-        );
-        if (existing.length > 0) {
-          return false;
-        }
-
         const payout = premiumService.calculateCoverageAmount(
           Number(policy.avg_daily_earning),
           trigger_type
         );
+
+        const { rows: existing } = await client.query<{
+          id: string;
+          payout_amount: string;
+          status: string;
+        }>(
+          `SELECT id, payout_amount::text, status
+           FROM claims
+           WHERE worker_id = $1
+             AND created_at::date = NOW()::date
+             AND status != 'denied'
+           ORDER BY created_at DESC
+           LIMIT 1
+           FOR UPDATE`,
+          [workerId]
+        );
+
+        if (existing.length > 0) {
+          const existingClaim = existing[0];
+          const existingPayout = Number(existingClaim.payout_amount);
+          const shouldUpgrade = payout > existingPayout && existingClaim.status !== 'paid';
+
+          if (!shouldUpgrade) {
+            return { claimId: null, claimCreated: false, claimUpdated: false };
+          }
+
+          await client.query(
+            `UPDATE claims
+             SET disruption_event_id = $1,
+                 trigger_type = $2,
+                 trigger_value = $3,
+                 trigger_threshold = $4,
+                 disruption_hours = $5,
+                 payout_amount = $6,
+                 status = 'triggered',
+                 paid_at = NULL,
+                 fraud_score = NULL,
+                 isolation_forest_score = NULL,
+                 gnn_fraud_score = NULL,
+                 graph_flags = '[]'::jsonb,
+                 bcs_score = NULL,
+                 notes = CASE
+                   WHEN notes IS NULL OR notes = '' THEN $7
+                   ELSE notes || ' | ' || $7
+                 END
+             WHERE id = $8`,
+            [
+              disruption_event_id,
+              trigger_type,
+              trigger_value,
+              premiumService.getThreshold(trigger_type),
+              disruption_hours,
+              payout,
+              `Upgraded payout due to higher trigger on ${new Date().toISOString()}`,
+              existingClaim.id,
+            ]
+          );
+
+          return { claimId: existingClaim.id, claimCreated: false, claimUpdated: true };
+        }
 
         const { rows: claims } = await client.query(
           `INSERT INTO claims (
@@ -83,14 +129,17 @@ export async function processClaimCreationJob(
           ]
         );
 
-        return claims[0].id as string;
+        return { claimId: claims[0].id as string, claimCreated: true, claimUpdated: false };
       });
 
-      if (created) {
+      if (upsertResult.claimCreated) {
         claimsCreated += 1;
+      }
+
+      if (upsertResult.claimId && (upsertResult.claimCreated || upsertResult.claimUpdated)) {
         await claimValidationQueue.add(
           'validate-claim',
-          { claim_id: created },
+          { claim_id: upsertResult.claimId },
           { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
         );
       }

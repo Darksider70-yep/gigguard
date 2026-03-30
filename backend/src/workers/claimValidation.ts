@@ -69,13 +69,12 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
   await query(
     `UPDATE claims
      SET fraud_score=$1, isolation_forest_score=$1,
-         gnn_fraud_score=$2, graph_flags=$3, is_flagged=$4
-     WHERE id=$5`,
+         gnn_fraud_score=$2, graph_flags=$3
+     WHERE id=$4`,
     [
       fraudResult.fraud_score,
       fraudResult.gnn_fraud_score,
       JSON.stringify(fraudResult.graph_flags),
-      fraudResult.flagged,
       claim_id,
     ]
   );

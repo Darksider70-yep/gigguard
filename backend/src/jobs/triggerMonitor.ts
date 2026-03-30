@@ -22,6 +22,11 @@ const TRIGGER_CONFIGS = [
   },
 ];
 
+interface ActiveZone {
+  home_hex_id: string;
+  city: string;
+}
+
 export function startTriggerMonitor(): void {
   cron.schedule('*/30 * * * *', async () => {
     console.info('[TriggerMonitor] Poll cycle started');
@@ -35,7 +40,7 @@ export function startTriggerMonitor(): void {
 }
 
 export async function runTriggerCycle(): Promise<void> {
-  const { rows: activeHexes } = await query<{ home_hex_id: string; city: string }>(
+  const { rows: activeZones } = await query<ActiveZone>(
     `SELECT DISTINCT w.home_hex_id::text, w.city
      FROM workers w
      JOIN policies p ON p.worker_id = w.id
@@ -44,39 +49,39 @@ export async function runTriggerCycle(): Promise<void> {
        AND w.home_hex_id IS NOT NULL`
   );
 
-  if (activeHexes.length === 0) {
-    console.info('[TriggerMonitor] No active policies found');
+  if (activeZones.length === 0) {
+    console.info('[TriggerMonitor] No active policy zones found');
     return;
   }
 
-  const cityMap = new Map<string, bigint>();
-  for (const row of activeHexes) {
-    if (!cityMap.has(row.city)) {
-      cityMap.set(row.city, BigInt(row.home_hex_id));
-    }
-  }
-
-  const triggerPromises = Array.from(cityMap.entries()).map(([city, hexId]) =>
-    checkCityTriggers(city, hexId)
+  const weatherResults = await Promise.allSettled(
+    activeZones.map((zone) => checkZoneTriggers(zone))
   );
 
-  const results = await Promise.allSettled(triggerPromises);
-  results.forEach((result) => {
+  weatherResults.forEach((result) => {
     if (result.status === 'rejected') {
-      console.error('[TriggerMonitor] City check failed:', result.reason);
+      console.error('[TriggerMonitor] Zone weather check failed:', result.reason);
     }
   });
 
-  const cities = [...new Set(activeHexes.map((r) => r.city))];
-  for (const city of cities) {
-    await checkAQITrigger(city, activeHexes).catch((err) => {
+  const zoneMapByCity = new Map<string, string[]>();
+  for (const zone of activeZones) {
+    const list = zoneMapByCity.get(zone.city) ?? [];
+    if (!list.includes(zone.home_hex_id)) {
+      list.push(zone.home_hex_id);
+    }
+    zoneMapByCity.set(zone.city, list);
+  }
+
+  for (const [city, zoneHexIds] of zoneMapByCity.entries()) {
+    await checkAQITrigger(city, zoneHexIds).catch((err) => {
       console.error(`[TriggerMonitor] AQI check failed for ${city}:`, err);
     });
   }
 }
 
-async function checkCityTriggers(city: string, representativeHex: bigint): Promise<void> {
-  const [lat, lng] = cellToLatLng(representativeHex.toString(16));
+async function checkZoneTriggers(zone: ActiveZone): Promise<void> {
+  const [lat, lng] = cellToLatLng(BigInt(zone.home_hex_id).toString(16));
   const conditions = await weatherService.getCurrentConditions(lat, lng);
 
   for (const trigger of TRIGGER_CONFIGS) {
@@ -87,35 +92,39 @@ async function checkCityTriggers(city: string, representativeHex: bigint): Promi
 
     await processTrigger({
       triggerType: trigger.type,
-      city,
+      city: zone.city,
       lat,
       lng,
       value,
+      zoneHexId: zone.home_hex_id,
     });
   }
 }
 
-async function checkAQITrigger(
-  city: string,
-  activeHexes: Array<{ home_hex_id: string; city: string }>
-): Promise<void> {
+async function checkAQITrigger(city: string, zoneHexIds: string[]): Promise<void> {
   const aqi = await weatherService.getAQI(city);
   if (aqi === null || aqi <= 300) {
     return;
   }
 
-  const cityHex = activeHexes.find((row) => row.city === city);
-  if (!cityHex) {
-    return;
-  }
+  const results = await Promise.allSettled(
+    zoneHexIds.map(async (zoneHexId) => {
+      const [lat, lng] = cellToLatLng(BigInt(zoneHexId).toString(16));
+      return processTrigger({
+        triggerType: 'severe_aqi',
+        city,
+        lat,
+        lng,
+        value: aqi,
+        zoneHexId,
+      });
+    })
+  );
 
-  const [lat, lng] = cellToLatLng(BigInt(cityHex.home_hex_id).toString(16));
-  await processTrigger({
-    triggerType: 'severe_aqi',
-    city,
-    lat,
-    lng,
-    value: aqi,
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.error(`[TriggerMonitor] AQI zone trigger failed for ${city}:`, result.reason);
+    }
   });
 }
 
@@ -125,28 +134,35 @@ async function processTrigger(params: {
   lat: number;
   lng: number;
   value: number;
+  zoneHexId?: string;
 }): Promise<{
   eventId: string;
   workerIds: string[];
   ringHexes: string[];
   eventHex: string;
+  zoneKey: string;
 } | null> {
-  const { triggerType, city, lat, lng, value } = params;
+  const { triggerType, city, lat, lng, value, zoneHexId } = params;
 
   const eventHex = latLngToCell(lat, lng, 8);
+  const zoneKey = zoneHexId ? BigInt(zoneHexId).toString() : BigInt(`0x${eventHex}`).toString();
   const ringHexes = gridDisk(eventHex, 1);
 
   const { rows: existing } = await query<{ id: string }>(
     `SELECT id
      FROM disruption_events
-     WHERE city=$1 AND trigger_type=$2
+     WHERE city=$1
+       AND zone=$2
+       AND trigger_type=$3
        AND event_start > NOW() - INTERVAL '6 hours'
        AND event_end IS NULL
      LIMIT 1`,
-    [city, triggerType]
+    [city, zoneKey, triggerType]
   );
   if (existing.length > 0) {
-    console.info(`[TriggerMonitor] Duplicate suppressed: ${triggerType} in ${city}`);
+    console.info(
+      `[TriggerMonitor] Duplicate suppressed: ${triggerType} in ${city} zone ${zoneKey}`
+    );
     return null;
   }
 
@@ -162,7 +178,9 @@ async function processTrigger(params: {
   );
 
   if (affectedWorkers.length === 0) {
-    console.info(`[TriggerMonitor] ${triggerType} in ${city} - no affected workers`);
+    console.info(
+      `[TriggerMonitor] ${triggerType} in ${city} zone ${zoneKey} - no affected workers`
+    );
     return null;
   }
 
@@ -172,14 +190,15 @@ async function processTrigger(params: {
 
   const { rows: events } = await query<{ id: string }>(
     `INSERT INTO disruption_events (
-       trigger_type, city, trigger_value, trigger_threshold,
+       trigger_type, city, zone, trigger_value, trigger_threshold,
        severity, disruption_hours, affected_hex_ids,
        affected_workers_count, status
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active')
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active')
      RETURNING id`,
     [
       triggerType,
       city,
+      zoneKey,
       value,
       threshold,
       severity,
@@ -193,7 +212,7 @@ async function processTrigger(params: {
   const workerIds = affectedWorkers.map((w) => w.id);
 
   console.info(
-    `[TriggerMonitor] ${triggerType} in ${city} - ` +
+    `[TriggerMonitor] ${triggerType} in ${city} zone ${zoneKey} - ` +
       `${value} (threshold ${threshold}) - ` +
       `${workerIds.length} workers affected`
   );
@@ -215,7 +234,7 @@ async function processTrigger(params: {
     }
   );
 
-  return { eventId, workerIds, ringHexes, eventHex };
+  return { eventId, workerIds, ringHexes, eventHex, zoneKey };
 }
 
 // Backward-compatible simulation entrypoint used by /triggers/simulate.

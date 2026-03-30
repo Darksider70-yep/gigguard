@@ -1,0 +1,287 @@
+001: GigGuard
+002: Weekly Premium Model
+003: Version 1.1 · March 2026
+004: Design Philosophy
+005: The GigGuard premium model is engineered from the ground up to serve the unique financial realities of a gig-economy delivery worker. Our core philosophy rejects the traditional, rigid structures of insurance in favour of a flexible, transparent, and highly aligned approach.
+006: Why Weekly?
+007: Gig workers live in a world of weekly, not monthly, finance. They track weekly earnings, pay for weekly expenses (like fuel), and manage their cash flow over a seven-day cycle. A monthly premium is a large, daunting commitment. A small weekly premium is a manageable operational expense, akin to topping up a fuel tank. This cadence provides unparalleled flexibility, allowing a worker to be covered during high-risk periods (like a monsoon-heavy week in Mumbai) and opt out during calmer periods, directly controlling their expenses.
+008: Why Parametric Pricing?
+009: Our pricing is a direct reflection of risk, calculated dynamically. Instead of a flat rate, our AI- driven model assesses the objective risk of a worker’s specific zone, the immediate weather forecast, and their personal history. This means a worker in a historically safe, dry zone pays less than one in a flood-prone area. Workers can understand why their premium might be slightly higher one week — a cyclone is forecast — and trust that it will decrease when the risk subsides.
+010: Why Income Replacement?
+011: We do not offer abstract, fixed-sum payouts. Our coverage is explicitly designed for income loss replacement. The payout is calculated based on the worker’s own stated average daily earnings and the duration of the disruption. If an event stops you from working for half a day, we replace the income you would have lost. This direct link between the premium paid and the real-world financial protection offered is the cornerstone of our product’s value proposition.
+012: The Formula
+013: The weekly premium is calculated using a multi-factor formula that balances a baseline cost with dynamic, risk-adjusted multipliers.
+014: weekly_premium = base_rate × zone_multiplier × weather_multiplier × history_multiplier
+015: Component
+016: Range
+017: Description
+018: base_rate
+019: ₹35 (fixed)
+020: Fixed cost covering minimum operational expenses: API costs, server hosting, transaction fees. Represents the absolute floor price under ideal conditions.
+021: zone_multiplier
+022: 0.80 – 1.40
+023: AI-computed long-term risk for the worker’s specific geographic zone, trained on historical weather and disruption data. Flood-prone coastal zones approach 1.40; dry inland zones fall below 1.0.
+024: weather_multiplier
+025: 0.90 – 1.30
+026: Short-term forward-looking adjustment based on the 7-day OpenWeatherMap forecast. Elevated when multiple days of >10mm rain or a heatwave are predicted; reduced to 0.90 during clear, calm forecasts.
+027: history_multiplier
+028: 0.85 – 1.25
+029: Personalises the premium based on claims history. New workers start at 1.0. Three consecutive claim-free months reduces the multiplier by 0.05 (floor: 0.85). More than 3 claims per month raises it (ceiling: 1.25).
+030: Coverage Amount Calculation
+031: coverage_amount = avg_daily_earning × (disruption_hours / 8) × 0.8
+032: The 80% replacement rate is standard insurance practice. It creates a co-participation in the loss that reduces moral hazard (the temptation not to work even if safe to do so) and keeps premiums affordable for everyone.
+033: A hard weekly cap of ₹800 per worker limits catastrophic exposure during multi-day events such as week-long floods. This cap is the primary risk control that makes the financial model sustainable at scale.
+034: Trigger type
+035: Disruption hours
+036: Example payout (₹800/day worker)
+037: Heavy Rainfall
+038: 4 hours
+039: ₹800 ÷ 8 × 4 × 0.8 = ₹320
+040: Severe AQI
+041: 5 hours
+042: ₹800 ÷ 8 × 5 × 0.8 = ₹400
+043: Extreme Heat
+044: 4 hours
+045: ₹800 ÷ 8 × 4 × 0.8 = ₹320
+046: Flood / Red Alert
+047: 8 hours
+048: ₹800 ÷ 8 × 8 × 0.8 = ₹640 (capped at ₹640 here)
+049: Curfew / Strike
+050: 8 hours
+051: ₹800 ÷ 8 × 8 × 0.8 = ₹640 (capped at ₹640 here)
+052: Worked Examples
+053: Persona 1: Ramesh Kumar (Delhi)
+054: Input
+055: Value
+056: Average daily earning
+057: ₹750
+058: Zone
+059: Connaught Place → zone_multiplier = 1.30
+060: Forecast
+061: Impending heatwave → weather_multiplier = 1.20
+062: History
+063: Good record → history_multiplier = 0.90
+064: Premium: ₹35 × 1.30 × 1.20 × 0.90 = ₹49.14 → ₹49/week Payout (Extreme Heat): ₹750 ÷ 8 × 4 × 0.80 = ₹300Weekly earning (6 days): ₹4,500 | Max coverage ratio: ₹800 / ₹4,500 = 17.8%Premium: ₹35 × 1.30 × 1.20 × 0.90 = ₹49.14 → ₹49/week Payout (Extreme Heat): ₹750 ÷ 8 × 4 × 0.80 = ₹300Weekly earning (6 days): ₹4,500 | Max coverage ratio: ₹800 / ₹4,500 = 17.8%
+065: Premium: ₹35 × 1.30 × 1.20 × 0.90 = ₹49.14 → ₹49/week Payout (Extreme Heat): ₹750 ÷ 8 × 4 × 0.80 = ₹300
+066: Weekly earning (6 days): ₹4,500 | Max coverage ratio: ₹800 / ₹4,500 = 17.8%
+067: Premium: ₹35 × 1.30 × 1.20 × 0.90 = ₹49.14 → ₹49/week Payout (Extreme Heat): ₹750 ÷ 8 × 4 × 0.80 = ₹300
+068: Weekly earning (6 days): ₹4,500 | Max coverage ratio: ₹800 / ₹4,500 = 17.8%
+069: Persona 2: Sameer Shaikh (Mumbai)
+070: Input
+071: Value
+072: Average daily earning
+073: ₹600
+074: Zone
+075: Andheri → zone_multiplier = 1.40
+076: Forecast
+077: Active monsoon week → weather_multiplier = 1.30
+078: History
+079: New worker → history_multiplier = 1.00
+080: Premium: ₹35 × 1.40 × 1.30 × 1.00 = ₹63.70 → ₹64/week Payout (Heavy Rainfall): ₹600 ÷ 8 × 4 × 0.80 = ₹240
+081: Weekly earning (6 days): ₹3,600 | Max coverage ratio:
+082: ₹800
+083: /
+084: ₹3,600
+085: =
+086: 22.2%
+087: Persona 3: Priya Murthy (Chennai)
+088: Input
+089: Value
+090: Average daily earning
+091: ₹900
+092: Zone
+093: T. Nagar → zone_multiplier = 1.10
+094: Forecast
+095: Clear, calm week → weather_multiplier = 1.00
+096: History
+097: Excellent record → history_multiplier = 0.85
+098: Premium: ₹35 × 1.10 × 1.00 × 0.85 = ₹32.72 → ₹33/week Payout (Extreme Heat): ₹900 ÷ 8 × 4 × 0.80 = ₹360
+099: Weekly earning (6 days): ₹5,400 | Max coverage ratio:
+100: ₹800
+101: /
+102: ₹5,400
+103: =
+104: 14.8%
+105: 5. Premium Range Table
+106: The table below illustrates expected premium ranges by city and zone risk tier, assuming neutral weather and history multipliers (both = 1.0).
+107: City
+108: Zone type
+109: Risk
+110: zone_mult
+111: Premium range
+112: Weekly cap
+113: Mumbai
+114: Flood prone
+115: High
+116: 1.30–1.40
+117: ₹50–₹58
+118: ₹800
+119: Mumbai
+120: Inland
+121: Medium
+122: 1.10–1.20
+123: ₹42–₹46
+124: ₹800
+125: Delhi
+126: High AQI zone
+127: High
+128: 1.25–1.35
+129: ₹48–₹52
+130: ₹800
+131: Delhi
+132: Outer green zone
+133: Low
+134: 0.90–1.00
+135: ₹35–₹38
+136: ₹800
+137: Chennai
+138: Coastal / heat prone
+139: Medium
+140: 1.10–1.20
+141: ₹40–₹44
+142: ₹800
+143: Chennai
+144: Inland
+145: Low-Med
+146: 1.00–1.10
+147: ₹37–₹40
+148: ₹800
+149: Bangalore
+150: Low-lying area
+151: Medium
+152: 1.10–1.20
+153: ₹38–₹42
+154: ₹800
+155: Bangalore
+156: Elevated area
+157: Low
+158: 0.90–1.00
+159: ₹32–₹35
+160: ₹800
+161: Hyderabad
+162: Old city
+163: Medium
+164: 1.00–1.15
+165: ₹35–₹40
+166: ₹800
+167: Hyderabad
+168: HITEC City
+169: Low
+170: 0.85–0.95
+171: ₹30–₹33
+172: ₹800
+173: Business Viability
+174: Target Loss Ratio: 65%
+175: Our goal is to maintain a loss ratio where for every ₹100 collected in premiums, a maximum of
+176: ₹65 is paid out in claims. The remaining 35% is allocated to operational costs, transaction fees, and a sustainable profit margin. The dynamic multipliers are the primary instrument for maintaining this ratio across the annual cycle.
+177: Break-Even Analysis
+178: Fixed monthly costs are estimated at ₹50,000 (servers, API subscriptions, developer salaries at hackathon scale). Variable costs — Razorpay transaction fees (approximately 2% per payment) and per-claim processing overhead — are excluded from the simplified model below and included in the full scenario model in Section 6.4.
+179: Weekly fixed cost Average premium Policies needed= ₹50,000 / 4.33 weeks = ₹11,547= ₹45 / week= ₹11,547 / ₹45 = 257 active policiesIncluding variable costs (Razorpay 2% + ₹2 per-claim overhead): Effective revenue per policy = ₹45 × 0.98 - ₹2 claim overhead = ₹42.10 Policies needed (full cost) = ₹11,547 / ₹42.10 = 274 active policiesWeekly fixed cost Average premium Policies needed= ₹50,000 / 4.33 weeks = ₹11,547= ₹45 / week= ₹11,547 / ₹45 = 257 active policiesIncluding variable costs (Razorpay 2% + ₹2 per-claim overhead): Effective revenue per policy = ₹45 × 0.98 - ₹2 claim overhead = ₹42.10 Policies needed (full cost) = ₹11,547 / ₹42.10 = 274 active policies
+180: Weekly fixed cost Average premium Policies needed
+181: = ₹50,000 / 4.33 weeks = ₹11,547
+182: = ₹45 / week
+183: = ₹11,547 / ₹45 = 257 active policies
+184: Including variable costs (Razorpay 2% + ₹2 per-claim overhead): Effective revenue per policy = ₹45 × 0.98 - ₹2 claim overhead = ₹42.10 Policies needed (full cost) = ₹11,547 / ₹42.10 = 274 active policies
+185: Weekly fixed cost Average premium Policies needed
+186: = ₹50,000 / 4.33 weeks = ₹11,547
+187: = ₹45 / week
+188: = ₹11,547 / ₹45 = 257 active policies
+189: Including variable costs (Razorpay 2% + ₹2 per-claim overhead): Effective revenue per policy = ₹45 × 0.98 - ₹2 claim overhead = ₹42.10 Policies needed (full cost) = ₹11,547 / ₹42.10 = 274 active policies
+190: This indicates the model can reach operational break-even at a small scale, demonstrating capital efficiency before requiring significant marketing investment.
+191: Annual Reserve Accumulation Model
+192: The loss ratio is not uniform throughout the year. Monsoon season (June–September) and winter smog season (November–January) generate elevated claim rates, while the remaining weeks are low-claim. The reserve model shows how surplus from quiet weeks funds the high- payout periods to balance out at the target 65% annual loss ratio.
+193: The table below models a single Mumbai market with 500 active policies, using realistic seasonality. Week types are: Low (10% claim rate), Moderate (25% claim rate), Peak (40% claim rate, monsoon or severe smog).
+194: Week type
+195: Weeks/yr
+196: Claim rate
+197: Weekly premium rev.
+198: Weekly payout
+199: Net weekly
+200: Low (dry / calm)
+201: 26
+202: 10%
+203: ₹30,000
+204: ₹12,000
+205: +₹18,000
+206: Moderate (transition)
+207: 18
+208: 25%
+209: ₹30,000
+210: ₹30,000
+211: ₹0
+212: Peak (monsoon / smog)
+213: 8
+214: 40%
+215: ₹30,000
+216: ₹48,000
+217: −₹18,000
+218: Annual total
+219: 52
+220: —
+221: ₹1,560,000
+222: ₹1,008,000
+223: +₹552,000
+224: Annual loss ratio
+225: —
+226: —
+227: —
+228: —
+229: 64.6%
+230: Assumptions: 500 active policies in Mumbai. Average premium ₹60/week (higher than city-wide average due to flood-zone concentration). Average payout ₹240 per claim (Sameer’s persona). Annual fixed + variable costs of ₹600,000 are excluded from the loss ratio but consume the ₹552,000 net surplus, leaving a narrow operating margin that grows with scale.
+231: The key insight is that the platform should build a minimum 4-week premium reserve buffer before the start of each monsoon season. With 500 policies at ₹60/week, this reserve is approximately ₹120,000 — sufficient to absorb two consecutive peak weeks without drawing down operating capital.
+232: Scenario: Mumbai Monsoon Week
+233: Assumptions: 500 active policies in Mumbai. 40% claim rate during severe rainfall.Number of claims= 500 × 0.40 = 200Average payout= ₹240 (based on Sameer’s persona) Total payouts= 200 × ₹240 = ₹48,000Total premiums= 500 × ₹60 = ₹30,000 Razorpay fees (2%) = ₹960Net loss for week= ₹48,000 − ₹30,000 + ₹960 = ₹18,960Weekly loss ratio= 160%Assumptions: 500 active policies in Mumbai. 40% claim rate during severe rainfall.Number of claims= 500 × 0.40 = 200Average payout= ₹240 (based on Sameer’s persona) Total payouts= 200 × ₹240 = ₹48,000Total premiums= 500 × ₹60 = ₹30,000 Razorpay fees (2%) = ₹960Net loss for week= ₹48,000 − ₹30,000 + ₹960 = ₹18,960Weekly loss ratio= 160%
+234: Assumptions: 500 active policies in Mumbai. 40% claim rate during severe rainfall.
+235: Number of claims= 500 × 0.40 = 200
+236: Average payout= ₹240 (based on Sameer’s persona) Total payouts= 200 × ₹240 = ₹48,000
+237: Total premiums= 500 × ₹60 = ₹30,000 Razorpay fees (2%) = ₹960
+238: Net loss for week= ₹48,000 − ₹30,000 + ₹960 = ₹18,960
+239: Weekly loss ratio= 160%
+240: Assumptions: 500 active policies in Mumbai. 40% claim rate during severe rainfall.
+241: Number of claims= 500 × 0.40 = 200
+242: Average payout= ₹240 (based on Sameer’s persona) Total payouts= 200 × ₹240 = ₹48,000
+243: Total premiums= 500 × ₹60 = ₹30,000 Razorpay fees (2%) = ₹960
+244: Net loss for week= ₹48,000 − ₹30,000 + ₹960 = ₹18,960
+245: Weekly loss ratio= 160%
+246: This loss is expected and acceptable. It is funded by the reserve accumulated during the preceding low-claim weeks. A single peak week consuming ₹18,960 from a ₹120,000 reserve leaves ample buffer for the remaining monsoon season. Over 52 weeks, the annual loss ratio returns to approximately 65%, as modelled in Section 6.3.
+247: ML Model Details
+248: Zone Multiplier Model
+249: Model type: scikit-learn Linear Regression.
+250: Target metric: Mean Absolute Error (MAE) < ₹3.00. The model’s contribution to the final
+251: premium must be off by no more than a few rupees from the ideal risk price.
+252: Retraining schedule: weekly, automated. Latest claims data is appended to the training set (recent data weighted 2×). If the new model’s MAE is lower than the current production model, it is auto-promoted.
+253: Feature Set
+254: Feature
+255: Type
+256: Source
+257: Example
+258: zone_id
+259: Categorical
+260: Internal
+261: MUM-AND-W
+262: city
+263: Categorical
+264: Internal
+265: Mumbai
+266: historical_rain_days_per_year
+267: Numeric
+268: Weather API
+269: 45
+270: historical_aqi_gt300_days_per_year
+271: Numeric
+272: AQI API
+273: 25
+274: historical_heat_gt44_days_per_year
+275: Numeric
+276: Weather API
+277: 10
+278: is_coastal
+279: Boolean
+280: Internal
+281: true
+282: avg_elevation_metres
+283: Numeric
+284: Topographical
+285: 14
+286: Training Data
+287: A synthetic dataset of 10,000+ entries is generated from approximately 50–100 defined zones across the five cities. Historical API data populates the features. Target risk scores are hand- crafted from known ground truths (Mumbai monsoon zones score high; elevated Bangalore zones score low). The training pipeline is fully scripted and reproducible from the repository.
