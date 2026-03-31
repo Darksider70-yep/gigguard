@@ -1,4 +1,4 @@
-export interface WorkerProfile {
+﻿export interface WorkerProfile {
   id: string;
   name: string;
   platform: 'zomato' | 'swiggy';
@@ -38,6 +38,7 @@ export interface PremiumQuoteResponse {
     weather_multiplier: number;
     history_multiplier: number;
     raw_premium: number;
+    premium?: number;
   };
   rl_premium: number | null;
   coverage: {
@@ -179,6 +180,7 @@ export interface ZoneRiskMatrixResponse {
     city: string;
     zone_multiplier: number;
     risk_level: 'High' | 'Medium' | 'Low';
+    worker_count?: number;
   }>;
 }
 
@@ -224,6 +226,48 @@ export interface ShadowComparisonResponse {
   avg_delta: number;
 }
 
+export interface InsurerWorkersResponse {
+  workers: WorkerProfile[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface InsurerPayoutsResponse {
+  payouts: Array<{
+    id: string;
+    amount: number;
+    status: string;
+    upi_vpa: string | null;
+    razorpay_payout_id: string | null;
+    created_at: string;
+    processed_at: string | null;
+    worker_id: string;
+    worker_name: string;
+    city: string;
+    zone: string;
+    trigger_type: string;
+    claim_id: string;
+  }>;
+  total: number;
+  total_amount: number;
+  page: number;
+  limit: number;
+}
+
+export interface Phase2ChecklistResponse {
+  phase2_complete: boolean;
+  features: {
+    h3_geospatial: { status: string; workers_with_h3: number; workers_precise: number };
+    contextual_bandit: { status: string; initialised: boolean };
+    rl_shadow_mode: { status: string; shadow_log_rows: number };
+    fraud_detection: { status: string; model: string; avg_fraud_score: string };
+    gnn_data_prep: { status: string; schema_tables: number };
+    payout_deduplication: { status: string; unique_constraint: boolean };
+  };
+  checked_at: string;
+}
+
 export interface LoginResponse {
   token: string;
   role: 'worker' | 'insurer';
@@ -240,3 +284,4 @@ export interface SimulateTriggerBody {
   trigger_value?: number;
   disruption_hours?: number;
 }
+

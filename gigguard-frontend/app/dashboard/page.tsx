@@ -1,71 +1,72 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import AuthGuard from '@/components/AuthGuard';
-import { api, APIError } from '@/lib/api';
+import ClaimStatusBar from '@/components/ui/ClaimStatusBar';
+import CountUp from '@/components/ui/CountUp';
+import PremiumFormula from '@/components/ui/PremiumFormula';
+import TriggerBadge from '@/components/ui/TriggerBadge';
+import { APIError, api } from '@/lib/api';
 import { ActivePolicyResponse, ClaimsResponse, PolicyHistoryResponse, PremiumQuoteResponse, WorkerProfile } from '@/lib/types';
-import { Calendar, MapPin, Shield, TrendingUp } from 'lucide-react';
 
-function formatInr(value: number): string {
-  return `INR ${Math.round(value).toLocaleString('en-IN')}`;
-}
+const WEATHER_ICON: Record<string, string> = {
+  heavy_rainfall: '???',
+  extreme_heat: '???',
+  severe_aqi: '??',
+  default: '??',
+};
 
-function statusStep(status: string): number {
-  if (status === 'triggered') return 1;
-  if (status === 'validating') return 2;
-  if (status === 'approved') return 3;
-  if (status === 'paid') return 4;
-  return 0;
-}
-
-function riskLabel(multiplier: number): string {
-  if (multiplier > 1.2) return 'High risk zone';
-  if (multiplier >= 1.0) return 'Medium risk zone';
-  return 'Low risk zone';
-}
-
-function SkeletonBlock({ className }: { className: string }) {
-  return <div className={`animate-pulse rounded bg-slate-200 ${className}`} />;
-}
+type Tab = 'dashboard' | 'policies' | 'claims';
 
 export default function DashboardPage() {
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [activePolicy, setActivePolicy] = useState<ActivePolicyResponse | null>(null);
   const [claims, setClaims] = useState<ClaimsResponse | null>(null);
   const [history, setHistory] = useState<PolicyHistoryResponse | null>(null);
-  const [premiumQuote, setPremiumQuote] = useState<PremiumQuoteResponse | null>(null);
+  const [quote, setQuote] = useState<PremiumQuoteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
+  const [clock, setClock] = useState(new Date());
+  const [tab, setTab] = useState<Tab>('dashboard');
   const [showFormula, setShowFormula] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
 
     const load = async () => {
       try {
-        setLoading(true);
-        const [me, activePolicyData, claimsData, historyData, quoteData] = await Promise.all([
+        const [me, policyData, claimData, historyData, premiumData] = await Promise.all([
           api.getMe(),
           api.getActivePolicy(),
-          api.getClaims(1),
+          api.getClaims(20),
           api.getPolicyHistory(1, 10),
           api.getPremiumQuote(),
         ]);
 
-        if (!active) return;
+        if (!active) {
+          return;
+        }
 
         setWorker(me);
-        setActivePolicy(activePolicyData);
-        setClaims(claimsData);
+        setActivePolicy(policyData);
+        setClaims(claimData);
         setHistory(historyData);
-        setPremiumQuote(quoteData);
+        setQuote(premiumData);
+        setError(null);
       } catch (err) {
-        if (!active) return;
+        if (!active) {
+          return;
+        }
         if (err instanceof APIError && err.status === 0) {
-          setError('Check your connection.');
+          setError('Network unavailable. Check backend and retry.');
         } else {
-          setError('Something went wrong. Please try again.');
+          setError('Failed to load dashboard data.');
         }
       } finally {
         if (active) {
@@ -74,152 +75,241 @@ export default function DashboardPage() {
       }
     };
 
-    load();
+    void load();
 
     return () => {
       active = false;
     };
   }, []);
 
-  useEffect(() => {
-    const message = sessionStorage.getItem('gigguard_flash');
-    if (message) {
-      setFlash(message);
-      sessionStorage.removeItem('gigguard_flash');
-      const timer = setTimeout(() => setFlash(null), 3000);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, []);
+  const weeklyEarnings = useMemo(() => Math.round((worker?.avg_daily_earning ?? 0) * 6), [worker]);
+  const coverageAmount = Number(activePolicy?.policy?.coverage_amount ?? 0);
+  const coveragePct = weeklyEarnings > 0 ? Math.min(100, Math.round((coverageAmount / weeklyEarnings) * 100)) : 0;
+  const riskPosition = Math.min(100, Math.round(((worker?.zone_multiplier ?? 1) / 1.6) * 100));
+  const weatherIcon = activePolicy?.active_claim?.trigger_type
+    ? WEATHER_ICON[activePolicy.active_claim.trigger_type] ?? WEATHER_ICON.default
+    : WEATHER_ICON.default;
 
-  const weeklyEarnings = useMemo(() => {
-    if (!worker) return 0;
-    return Number(worker.avg_daily_earning || 0) * 6;
-  }, [worker]);
-
-  const coverageAmount = Number(activePolicy?.policy?.coverage_amount || 0);
-  const coveragePercentage = weeklyEarnings > 0 ? ((coverageAmount / weeklyEarnings) * 100).toFixed(1) : '0.0';
-
-  const riskScore = Math.min(1, Number(worker?.zone_multiplier || 1) / 1.5);
-  const mostRecentClaim = claims?.claims?.[0] || null;
-  const memberSince = worker?.created_at ? new Date(worker.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '-';
+  const monthTotal = Math.round(claims?.stats.total_paid_out ?? 0);
+  const claimsPaid = (claims?.claims ?? []).filter((claim) => claim.status === 'paid').length;
+  const memberSince = worker?.created_at
+    ? new Date(worker.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+    : '-';
 
   return (
     <AuthGuard allowedRoles={['worker']}>
-      <div className="space-y-6">
-        {loading ? (
-          <div className="space-y-4">
-            <SkeletonBlock className="h-8 w-64" />
-            <SkeletonBlock className="h-24 w-full" />
-            <SkeletonBlock className="h-36 w-full" />
-            <SkeletonBlock className="h-36 w-full" />
-          </div>
-        ) : error ? (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-700">{error}</div>
-        ) : (
-          <>
-            {flash ? <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-700">{flash}</div> : null}
-
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-                <p className="text-slate-600">Welcome back{worker?.name ? `, ${worker.name.split(' ')[0]}` : ''}.</p>
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-                <MapPin className="h-4 w-4" />
-                {worker?.zone || 'Unknown'}, {worker?.city || 'Unknown'}
+      {loading ? (
+        <div className="space-y-3">
+          <div className="skeleton h-20 rounded-xl" />
+          <div className="skeleton h-36 rounded-xl" />
+          <div className="skeleton h-80 rounded-xl" />
+        </div>
+      ) : error ? (
+        <div className="surface-card border-rose-500/40 p-4 text-rose-300">{error}</div>
+      ) : (
+        <div className="space-y-5">
+          <section className="surface-card animate-fade-in-up delay-0 flex items-center justify-between p-5">
+            <div>
+              <h1 className="text-3xl font-semibold">Good evening, {worker?.name ?? 'Worker'} ??</h1>
+              <div className="mt-2 flex items-center gap-2 text-sm">
+                <span className="status-pill bg-amber-500/20 text-amber-300">{worker?.platform ?? '-'}</span>
+                <span className="text-secondary">{worker?.zone ?? '-'}, {worker?.city ?? '-'}</span>
               </div>
             </div>
+            <div className="text-right">
+              <p className="font-mono-data text-2xl">{clock.toLocaleTimeString('en-IN')}</p>
+              <p className="text-sm text-secondary">{weatherIcon} Weather synced for your zone</p>
+              <p className="mt-1 inline-flex items-center gap-2 text-xs text-emerald-300"><span className="live-dot" />Your zone is being monitored</p>
+            </div>
+          </section>
 
-            {activePolicy?.active_claim ? (
-              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
-                <p className="font-semibold text-amber-900">
-                  {activePolicy.active_claim.trigger_type} detected. {activePolicy.active_claim.trigger_value ?? '-'} trigger value. Your claim is being processed.
-                </p>
-                <div className="mt-3 grid grid-cols-4 gap-2 text-xs text-slate-700">
-                  {['Triggered', 'Validating', 'Approved', 'Paid'].map((label, index) => {
-                    const filled = statusStep(activePolicy.active_claim?.claim_status || '') >= index + 1;
-                    return (
-                      <div key={label} className={`rounded px-2 py-1 text-center ${filled ? 'bg-amber-200 font-semibold' : 'bg-slate-100'}`}>
-                        {label}
-                      </div>
-                    );
-                  })}
+          {activePolicy?.active_claim ? (
+            <section className="surface-card data-flash animate-fade-in-up delay-100 border-amber-500/40 bg-amber-500/8 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-amber-200">Active claim in progress</p>
+                  <h2 className="mt-2 text-2xl font-semibold">{activePolicy.active_claim.trigger_type.replaceAll('_', ' ')}</h2>
+                  <p className="mt-2 font-mono-data text-amber-200">
+                    Trigger value: {activePolicy.active_claim.trigger_value ?? '-'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-secondary">Estimated payout</p>
+                  <p className="font-mono-data text-3xl text-amber-300">?{Math.round(activePolicy.active_claim.payout_amount)}</p>
                 </div>
               </div>
-            ) : null}
+              <div className="mt-4">
+                <ClaimStatusBar status={activePolicy.active_claim.claim_status} />
+              </div>
+            </section>
+          ) : null}
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <div className="space-y-4 lg:col-span-2">
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="text-lg font-semibold text-slate-900">Active Policy</h2>
-                  {activePolicy?.has_active_policy && activePolicy.policy ? (
-                    <div className="mt-3 space-y-2 text-sm text-slate-700">
-                      <p>Week: {activePolicy.policy.week_start} to {activePolicy.policy.week_end}</p>
-                      <p>Premium: {formatInr(activePolicy.policy.premium_paid)}</p>
-                      <p>Coverage: {formatInr(activePolicy.policy.coverage_amount)}</p>
-                      <p>Zone: {activePolicy.policy.zone}, {activePolicy.policy.city}</p>
-                      <button
-                        type="button"
-                        onClick={() => setShowFormula((prev) => !prev)}
-                        className="mt-2 text-sm font-semibold text-sky-700"
+          <div className="grid grid-cols-5 gap-5">
+            <section className="surface-card animate-fade-in-up delay-200 col-span-3 p-5">
+              <h3 className="text-lg font-semibold">Active policy</h3>
+              {activePolicy?.has_active_policy && activePolicy.policy ? (
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+                    <p className="text-sm text-secondary">Coverage vs weekly earnings</p>
+                    <div className="mt-4 grid place-items-center">
+                      <div
+                        style={{
+                          width: 170,
+                          height: 170,
+                          borderRadius: '50%',
+                          background: `conic-gradient(var(--accent-saffron) ${coveragePct * 3.6}deg, rgba(51,65,85,0.7) ${coveragePct * 3.6}deg)`,
+                        }}
+                        className="grid place-items-center"
                       >
-                        {showFormula ? 'Hide premium calculation' : 'Show premium calculation'}
-                      </button>
-                      {showFormula && premiumQuote ? (
-                        <div className="rounded bg-slate-50 p-3 text-xs font-mono text-slate-700">
-                          base {premiumQuote.formula_breakdown.base_rate} x zone {premiumQuote.formula_breakdown.zone_multiplier} x weather {premiumQuote.formula_breakdown.weather_multiplier} x history {premiumQuote.formula_breakdown.history_multiplier} = {premiumQuote.formula_breakdown.raw_premium.toFixed(2)}
+                        <div className="grid h-[120px] w-[120px] place-items-center rounded-full bg-[var(--bg-surface)] border border-slate-700">
+                          <div className="text-center">
+                            <p className="font-mono-data text-2xl text-amber-300">{coveragePct}%</p>
+                            <p className="text-xs text-secondary">covered</p>
+                          </div>
                         </div>
-                      ) : null}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="mt-3 text-sm text-slate-600">No active policy this week.</p>
-                  )}
-                </div>
+                  </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="text-lg font-semibold text-slate-900">Recent Claim</h2>
-                  {mostRecentClaim ? (
-                    <div className="mt-3 text-sm text-slate-700">
-                      <p>{mostRecentClaim.trigger_type} in {mostRecentClaim.zone}</p>
-                      <p>Status: {mostRecentClaim.status}</p>
-                      <p>Payout: {formatInr(mostRecentClaim.payout_amount)}</p>
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4 text-sm">
+                    <div className="grid grid-cols-2 gap-2 text-secondary">
+                      <p>Week</p>
+                      <p className="text-right font-mono-data text-white">{activePolicy.policy.week_start} ? {activePolicy.policy.week_end}</p>
+                      <p>Premium</p>
+                      <p className="text-right font-mono-data text-white">?{Math.round(activePolicy.policy.premium_paid)}</p>
+                      <p>Coverage</p>
+                      <p className="text-right font-mono-data text-white">?{Math.round(activePolicy.policy.coverage_amount)}</p>
+                      <p>Status</p>
+                      <p className="text-right">
+                        <span className="status-pill badge-paid">{activePolicy.policy.status}</span>
+                      </p>
                     </div>
-                  ) : (
-                    <p className="mt-3 text-sm text-slate-600">No claims yet.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h3 className="font-semibold text-slate-900">Earnings at Risk</h3>
-                  <p className="mt-3 text-sm text-slate-700">Weekly earnings: {formatInr(weeklyEarnings)}</p>
-                  <p className="text-sm text-slate-700">Coverage: {formatInr(coverageAmount)}</p>
-                  <p className="text-sm text-slate-700">{coveragePercentage}% covered</p>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h3 className="font-semibold text-slate-900">Risk Profile</h3>
-                  <p className="mt-3 text-sm text-slate-700">ML risk score: {riskScore.toFixed(2)}</p>
-                  <p className="text-sm text-slate-700">Zone multiplier: {(worker?.zone_multiplier || 1).toFixed(2)}x</p>
-                  <p className="text-sm text-slate-700">{riskLabel(worker?.zone_multiplier || 1)}</p>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h3 className="font-semibold text-slate-900">Quick Stats</h3>
-                  <div className="mt-3 space-y-2 text-sm text-slate-700">
-                    <p className="flex items-center gap-2"><Shield className="h-4 w-4" /> Total paid out: {formatInr(Number(claims?.stats.total_paid_out || 0))}</p>
-                    <p className="flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Claims this month: {claims?.stats.claims_this_month || 0}</p>
-                    <p className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Policies purchased: {history?.total || 0}</p>
-                    <p>Member since: {memberSince}</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowFormula((prev) => !prev)}
+                      className="mt-4 text-xs text-amber-300 hover:text-amber-200"
+                    >
+                      {showFormula ? 'Hide premium calculation' : 'Show premium calculation'}
+                    </button>
+                    {showFormula && quote ? (
+                      <div className="mt-3">
+                        <PremiumFormula
+                          baseRate={quote.formula_breakdown.base_rate}
+                          zoneMultiplier={quote.formula_breakdown.zone_multiplier}
+                          weatherMultiplier={quote.formula_breakdown.weather_multiplier}
+                          historyMultiplier={quote.formula_breakdown.history_multiplier}
+                          finalPremium={quote.premium}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
+              ) : (
+                <p className="mt-3 text-sm text-secondary">No active policy found for this week.</p>
+              )}
+            </section>
+
+            <section className="surface-card animate-fade-in-up delay-300 col-span-2 p-5">
+              <h3 className="text-lg font-semibold">Risk profile</h3>
+              <div className="mt-4 space-y-4">
+                <div>
+                  <div className="mb-1 flex justify-between text-xs text-secondary">
+                    <span>Low risk</span>
+                    <span>High risk</span>
+                  </div>
+                  <div className="relative h-4 rounded-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500">
+                    <span
+                      className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-slate-950 bg-white"
+                      style={{ left: `calc(${riskPosition}% - 8px)` }}
+                    />
+                  </div>
+                </div>
+                <p className="font-mono-data text-2xl">×{(worker?.zone_multiplier ?? 1).toFixed(2)}</p>
+                <p className="text-sm text-secondary">
+                  {(worker?.zone_multiplier ?? 1) > 1.2
+                    ? 'High risk zone'
+                    : (worker?.zone_multiplier ?? 1) >= 1
+                      ? 'Medium risk zone'
+                      : 'Low risk zone'}
+                </p>
+                {activePolicy?.active_claim ? <TriggerBadge triggerType={activePolicy.active_claim.trigger_type} /> : null}
               </div>
+            </section>
+          </div>
+
+          <section className="surface-card animate-fade-in-up delay-400 p-3">
+            <div className="flex gap-2 text-sm">
+              <button
+                type="button"
+                onClick={() => setTab('dashboard')}
+                className={`rounded-lg px-4 py-2 ${tab === 'dashboard' ? 'bg-amber-500/20 text-amber-300' : 'text-secondary'}`}
+              >
+                Dashboard
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab('policies')}
+                className={`rounded-lg px-4 py-2 ${tab === 'policies' ? 'bg-amber-500/20 text-amber-300' : 'text-secondary'}`}
+              >
+                My Policies
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab('claims')}
+                className={`rounded-lg px-4 py-2 ${tab === 'claims' ? 'bg-amber-500/20 text-amber-300' : 'text-secondary'}`}
+              >
+                Claims History
+              </button>
             </div>
-          </>
-        )}
-      </div>
+          </section>
+
+          {tab === 'dashboard' ? (
+            <section className="grid grid-cols-4 gap-4">
+              <div className="surface-card p-4">
+                <p className="text-xs text-secondary">Total Payouts Received</p>
+                <p className="mt-2 font-mono-data text-2xl text-amber-300">?<CountUp value={monthTotal} /></p>
+              </div>
+              <div className="surface-card p-4">
+                <p className="text-xs text-secondary">Policies Purchased</p>
+                <p className="mt-2 font-mono-data text-2xl"><CountUp value={history?.total ?? 0} /></p>
+              </div>
+              <div className="surface-card p-4">
+                <p className="text-xs text-secondary">Claims Paid</p>
+                <p className="mt-2 font-mono-data text-2xl"><CountUp value={claimsPaid} /></p>
+              </div>
+              <div className="surface-card p-4">
+                <p className="text-xs text-secondary">Member Since</p>
+                <p className="mt-2 font-mono-data text-2xl">{memberSince}</p>
+              </div>
+            </section>
+          ) : null}
+
+          {tab === 'policies' ? (
+            <section className="space-y-3">
+              {(history?.policies ?? []).map((policy) => (
+                <div key={policy.id} className="surface-card card-interactive p-4">
+                  <p className="font-mono-data text-xs text-amber-300">{policy.id}</p>
+                  <p className="mt-1 text-sm text-secondary">{policy.week_start} ? {policy.week_end}</p>
+                  <p className="mt-1 font-mono-data">?{Math.round(policy.premium_paid)} premium • ?{Math.round(policy.coverage_amount)} coverage</p>
+                </div>
+              ))}
+            </section>
+          ) : null}
+
+          {tab === 'claims' ? (
+            <section className="surface-card p-4 text-sm text-secondary">
+              <p>
+                View complete claims timeline and anti-spoofing review details on{' '}
+                <Link href="/claims" className="text-amber-300 hover:text-amber-200">
+                  /claims
+                </Link>
+                .
+              </p>
+            </section>
+          ) : null}
+        </div>
+      )}
     </AuthGuard>
   );
 }
+

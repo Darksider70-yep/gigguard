@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response, Router } from 'express';
+﻿import { NextFunction, Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { authenticateInsurer } from '../middleware/auth';
 import { query } from '../db';
@@ -100,6 +100,13 @@ router.get('/dashboard', authenticateInsurer, asyncRoute(async (_req, res) => {
       event.total_payout != null ? Math.round(Number(event.total_payout)) : event.total_payout,
   }));
 
+  const normalizedZones = zones.rows.map((zone: any) => ({
+    ...zone,
+    zone_multiplier:
+      zone.zone_multiplier != null ? Number(zone.zone_multiplier) : zone.zone_multiplier,
+    worker_count: zone.worker_count != null ? Number(zone.worker_count) : undefined,
+  }));
+
   res.json({
     stats: {
       total_workers: parseInt((workers.rows[0] as any).count, 10),
@@ -114,7 +121,7 @@ router.get('/dashboard', authenticateInsurer, asyncRoute(async (_req, res) => {
       average_premium: parseInt(avgPremium[0]?.avg ?? '52', 10),
     },
     disruption_events: normalizedEvents,
-    zone_risk_matrix: zones.rows,
+    zone_risk_matrix: normalizedZones,
   });
 }));
 
@@ -253,19 +260,164 @@ router.post('/claims/:id/deny', authenticateInsurer, asyncRoute(async (req, res)
   res.json({ success: true });
 }));
 
+router.get('/workers', authenticateInsurer, asyncRoute(async (req, res) => {
+  const page = Math.max(parseInt(String(req.query.page ?? '1'), 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 100);
+  const offset = (page - 1) * limit;
+
+  const city = String(req.query.city ?? '').trim();
+  const platform = String(req.query.platform ?? '').trim();
+  const search = String(req.query.search ?? '').trim().toLowerCase();
+  const searchLike = `%${search}%`;
+
+  const sql = `
+    SELECT
+      w.id::text,
+      w.name,
+      w.platform,
+      w.city,
+      w.zone,
+      w.home_hex_id::text,
+      COALESCE(w.hex_is_centroid_fallback, false) as hex_is_centroid_fallback,
+      w.avg_daily_earning::text,
+      w.zone_multiplier::text,
+      w.history_multiplier::text,
+      w.experience_tier,
+      w.upi_vpa,
+      w.created_at
+    FROM workers w
+    WHERE ($1 = '' OR LOWER(w.city) = LOWER($1))
+      AND ($2 = '' OR LOWER(w.platform) = LOWER($2))
+      AND (
+        $3 = ''
+        OR LOWER(w.name) LIKE $4
+        OR LOWER(COALESCE(w.zone, '')) LIKE $4
+        OR LOWER(w.city) LIKE $4
+      )
+    ORDER BY w.created_at DESC
+    LIMIT $5 OFFSET $6
+  `;
+
+  const countSql = `
+    SELECT COUNT(*)::text as count
+    FROM workers w
+    WHERE ($1 = '' OR LOWER(w.city) = LOWER($1))
+      AND ($2 = '' OR LOWER(w.platform) = LOWER($2))
+      AND (
+        $3 = ''
+        OR LOWER(w.name) LIKE $4
+        OR LOWER(COALESCE(w.zone, '')) LIKE $4
+        OR LOWER(w.city) LIKE $4
+      )
+  `;
+
+  const [workersResult, countResult] = await Promise.all([
+    query(sql, [city, platform, search, searchLike, limit, offset]),
+    query<{ count: string }>(countSql, [city, platform, search, searchLike]),
+  ]);
+
+  const workers = workersResult.rows.map((row: any) => ({
+    ...row,
+    avg_daily_earning: Number(row.avg_daily_earning ?? 0),
+    zone_multiplier: Number(row.zone_multiplier ?? 1),
+    history_multiplier: Number(row.history_multiplier ?? 1),
+  }));
+
+  return res.json({
+    workers,
+    total: parseInt(countResult.rows[0]?.count ?? '0', 10),
+    page,
+    limit,
+  });
+}));
+
+router.get('/payouts', authenticateInsurer, asyncRoute(async (req, res) => {
+  const month = String(req.query.month ?? '').trim() || new Date().toISOString().slice(0, 7);
+  const page = Math.max(parseInt(String(req.query.page ?? '1'), 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 100);
+  const offset = (page - 1) * limit;
+
+  const sql = `
+    SELECT
+      p.id::text,
+      p.amount::text,
+      p.status,
+      p.upi_vpa,
+      p.razorpay_payout_id,
+      p.created_at,
+      p.processed_at,
+      p.worker_id::text,
+      w.name as worker_name,
+      w.city,
+      w.zone,
+      COALESCE(c.trigger_type, '') as trigger_type,
+      COALESCE(c.id::text, '') as claim_id
+    FROM payouts p
+    JOIN workers w ON w.id = p.worker_id
+    LEFT JOIN claims c ON c.id = p.claim_id
+    WHERE date_trunc('month', p.created_at) = date_trunc('month', to_date($1, 'YYYY-MM'))
+    ORDER BY p.created_at DESC
+    LIMIT $2 OFFSET $3
+  `;
+
+  const countSql = `
+    SELECT COUNT(*)::text as count
+    FROM payouts p
+    WHERE date_trunc('month', p.created_at) = date_trunc('month', to_date($1, 'YYYY-MM'))
+  `;
+
+  const totalSql = `
+    SELECT COALESCE(SUM(p.amount), 0)::text as total_amount
+    FROM payouts p
+    WHERE date_trunc('month', p.created_at) = date_trunc('month', to_date($1, 'YYYY-MM'))
+  `;
+
+  const [payoutsResult, countResult, totalResult] = await Promise.all([
+    query(sql, [month, limit, offset]),
+    query<{ count: string }>(countSql, [month]),
+    query<{ total_amount: string }>(totalSql, [month]),
+  ]);
+
+  const payouts = payoutsResult.rows.map((row: any) => ({
+    ...row,
+    amount: Number(row.amount ?? 0),
+  }));
+
+  return res.json({
+    payouts,
+    total: parseInt(countResult.rows[0]?.count ?? '0', 10),
+    total_amount: Number(totalResult.rows[0]?.total_amount ?? 0),
+    page,
+    limit,
+  });
+}));
+
 router.get('/zone-risk-matrix', authenticateInsurer, asyncRoute(async (_req, res) => {
   const { rows } = await query(
-    `SELECT DISTINCT city, zone, zone_multiplier,
+    `SELECT w.city, w.zone, MAX(w.zone_multiplier)::numeric as zone_multiplier,
+       COUNT(DISTINCT CASE
+         WHEN p.status='active'
+          AND p.week_start = date_trunc('week', NOW())::date
+         THEN w.id
+       END)::int as worker_count,
        CASE
-         WHEN zone_multiplier > 1.2 THEN 'High'
-         WHEN zone_multiplier >= 1.0 THEN 'Medium'
+         WHEN MAX(w.zone_multiplier) > 1.2 THEN 'High'
+         WHEN MAX(w.zone_multiplier) >= 1.0 THEN 'Medium'
          ELSE 'Low'
        END as risk_level
-     FROM workers
-     WHERE home_hex_id IS NOT NULL
-     ORDER BY zone_multiplier DESC`
+     FROM workers w
+     LEFT JOIN policies p ON p.worker_id = w.id
+     WHERE w.home_hex_id IS NOT NULL
+     GROUP BY w.city, w.zone
+     ORDER BY MAX(w.zone_multiplier) DESC`
   );
-  res.json({ zones: rows });
+  const zones = rows.map((zone: any) => ({
+    ...zone,
+    zone_multiplier:
+      zone.zone_multiplier != null ? Number(zone.zone_multiplier) : zone.zone_multiplier,
+    worker_count: zone.worker_count != null ? Number(zone.worker_count) : 0,
+  }));
+  res.json({ zones });
 }));
 
 let shadowCache: { data: any; ts: number } | null = null;
@@ -401,3 +553,4 @@ router.get('/phase2-checklist', authenticateInsurer, asyncRoute(async (_req, res
 }));
 
 export default router;
+

@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useEffect, ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -22,10 +22,10 @@ export default function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="h-8 w-64 animate-pulse rounded bg-slate-200" />
-        <div className="h-28 w-full animate-pulse rounded bg-slate-200" />
-        <div className="h-28 w-full animate-pulse rounded bg-slate-200" />
+      <div className="space-y-3">
+        <div className="skeleton h-8 w-64 rounded-lg" />
+        <div className="skeleton h-28 w-full rounded-lg" />
+        <div className="skeleton h-28 w-full rounded-lg" />
       </div>
     );
   }
@@ -34,8 +34,8 @@ export default function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
     return (
       <div className="flex h-96 items-center justify-center">
         <div className="text-center">
-          <p className="text-slate-500">Access denied.</p>
-          <p className="text-sm text-slate-400">Redirecting to homepage...</p>
+          <p className="text-secondary">Access denied.</p>
+          <p className="text-xs text-muted">Redirecting to home...</p>
         </div>
       </div>
     );
@@ -43,3 +43,4 @@ export default function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
 
   return <>{children}</>;
 }
+

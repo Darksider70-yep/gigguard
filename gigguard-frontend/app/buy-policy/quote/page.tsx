@@ -1,14 +1,27 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AuthGuard from '@/components/AuthGuard';
-import { api, APIError } from '@/lib/api';
+import ConfettiOnce from '@/components/ui/ConfettiOnce';
+import CountUp from '@/components/ui/CountUp';
+import PremiumFormula from '@/components/ui/PremiumFormula';
+import TriggerBadge from '@/components/ui/TriggerBadge';
+import { APIError, api } from '@/lib/api';
 import { PremiumQuoteResponse, PurchasePolicyResponse, RazorpayOrderResponse, WorkerProfile } from '@/lib/types';
+
+interface RazorpaySuccessResponse {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
 
 declare global {
   interface Window {
-    Razorpay: any;
+    Razorpay: new (options: Record<string, unknown>) => {
+      open: () => void;
+      on: (event: string, handler: () => void) => void;
+    };
   }
 }
 
@@ -35,6 +48,16 @@ function loadRazorpayScript(): Promise<boolean> {
     script.onerror = () => resolve(false);
     document.body.appendChild(script);
   });
+}
+
+function triggerRowsFromCoverage(quote: PremiumQuoteResponse) {
+  return [
+    { key: 'heavy_rainfall', amount: quote.coverage.heavy_rainfall, desc: 'Rainfall above threshold in your zone' },
+    { key: 'extreme_heat', amount: quote.coverage.extreme_heat, desc: 'Feels-like temperature breach event' },
+    { key: 'flood_red_alert', amount: quote.coverage.flood_red_alert, desc: 'Official flood/red alert notice' },
+    { key: 'severe_aqi', amount: quote.coverage.severe_aqi, desc: 'AQI emergency crossing severe threshold' },
+    { key: 'curfew_strike', amount: quote.coverage.curfew_strike, desc: 'City curfew or strike disruption block' },
+  ] as const;
 }
 
 export default function BuyPolicyQuotePage() {
@@ -66,27 +89,27 @@ export default function BuyPolicyQuotePage() {
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (!quote) return;
-      if (isPaying) return;
+      if (!quote || isPaying) {
+        return;
+      }
       const token = localStorage.getItem('gigguard_token');
-      if (!token) return;
+      if (!token) {
+        return;
+      }
 
-      void fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/policies/bandit-update`,
-        {
-          method: 'POST',
-          keepalive: true,
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            context_key: quote.context_key,
-            arm: quote.recommended_arm,
-            reward: 0,
-          }),
-        }
-      ).catch(() => {});
+      void fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/policies/bandit-update`, {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          context_key: quote.context_key,
+          arm: quote.recommended_arm,
+          reward: 0,
+        }),
+      }).catch(() => undefined);
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -94,16 +117,21 @@ export default function BuyPolicyQuotePage() {
   }, [quote, isPaying]);
 
   const sortedTiers = useMemo(() => {
-    const ordered = [...TIERS].sort((a, b) => {
-      if (!quote) return 0;
+    const ordered = [...TIERS];
+    if (!quote) {
+      return ordered;
+    }
+
+    ordered.sort((a, b) => {
       if (a.arm === quote.recommended_arm) return -1;
       if (b.arm === quote.recommended_arm) return 1;
       return a.arm - b.arm;
     });
+
     return ordered;
   }, [quote]);
 
-  const selectedTier = TIERS.find((tier) => tier.arm === selectedArm) || TIERS[1];
+  const selectedTier = TIERS.find((tier) => tier.arm === selectedArm) ?? TIERS[1];
 
   const openCheckout = async (order: RazorpayOrderResponse) => {
     const loaded = await loadRazorpayScript();
@@ -119,7 +147,7 @@ export default function BuyPolicyQuotePage() {
         name: 'GigGuard',
         description: 'Weekly policy purchase',
         order_id: order.order_id,
-        handler: async (response: any) => {
+        handler: async (response: RazorpaySuccessResponse) => {
           try {
             const purchase = await api.purchasePolicy({
               razorpay_order_id: response.razorpay_order_id,
@@ -137,19 +165,19 @@ export default function BuyPolicyQuotePage() {
             reject(error);
           }
         },
-        theme: { color: '#0284c7' },
+        theme: { color: '#f59e0b' },
       });
 
-      razorpay.on('payment.failed', () => {
-        reject(new Error('Payment failed'));
-      });
-
+      razorpay.on('payment.failed', () => reject(new Error('Payment failed')));
       razorpay.open();
     });
   };
 
   const handlePay = async () => {
-    if (!quote || !worker) return;
+    if (!quote || !worker) {
+      return;
+    }
+
     setError(null);
     setIsPaying(true);
 
@@ -157,18 +185,21 @@ export default function BuyPolicyQuotePage() {
       const order = await api.createOrder(Math.round(selectedTier.premium) * 100);
       const purchase = await openCheckout(order);
 
-      sessionStorage.setItem('buy_policy_purchase', JSON.stringify({
-        ...purchase,
-        zone: worker.zone || quote.worker.zone,
-        city: worker.city,
-      }));
+      sessionStorage.setItem(
+        'buy_policy_purchase',
+        JSON.stringify({
+          ...purchase,
+          zone: worker.zone || quote.worker.zone,
+          city: worker.city,
+        })
+      );
 
       router.push('/buy-policy/confirmed');
     } catch (err) {
       if (err instanceof APIError && err.status === 0) {
-        setError('Check your connection.');
+        setError('Network unavailable. Check backend and retry.');
       } else {
-        setError('Something went wrong. Please try again.');
+        setError('Payment could not be completed. Try again.');
       }
     } finally {
       setIsPaying(false);
@@ -177,112 +208,93 @@ export default function BuyPolicyQuotePage() {
 
   return (
     <AuthGuard allowedRoles={['worker']}>
-      <div className="mx-auto max-w-4xl space-y-6">
-        <h1 className="text-3xl font-bold text-slate-900">Your quote</h1>
-
-        {loading ? (
-          <div className="space-y-3">
-            <div className="h-20 animate-pulse rounded bg-slate-200" />
-            <div className="h-32 animate-pulse rounded bg-slate-200" />
-            <div className="h-32 animate-pulse rounded bg-slate-200" />
-          </div>
-        ) : quote ? (
-          <>
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-sm text-slate-600">Weekly premium: INR {Math.round(quote.premium)}</p>
-              <p className="mt-1 text-sm text-slate-600">RL premium: {quote.rl_premium === null ? 'N/A' : `INR ${Math.round(quote.rl_premium)}`}</p>
-              <div className="mt-3 rounded bg-slate-50 p-3 text-xs font-mono text-slate-700">
-                base {quote.formula_breakdown.base_rate} x zone {quote.formula_breakdown.zone_multiplier} x weather {quote.formula_breakdown.weather_multiplier} x history {quote.formula_breakdown.history_multiplier} = {quote.formula_breakdown.raw_premium.toFixed(2)}
-              </div>
+      {loading ? (
+        <div className="space-y-3">
+          <div className="skeleton h-20 rounded-xl" />
+          <div className="skeleton h-[500px] rounded-xl" />
+        </div>
+      ) : quote ? (
+        <div className="space-y-6">
+          <section className="surface-card relative overflow-hidden p-6">
+            <ConfettiOnce active={!loading} />
+            <h1 className="text-3xl font-semibold">Your Quote is Ready!</h1>
+            <p className="mt-2 text-secondary">AI recommendation generated from zone risk and history context.</p>
+            <p className="mt-4 font-mono-data text-6xl text-amber-300">
+              ?<CountUp value={Math.round(quote.premium)} />
+            </p>
+            <div className="mt-4">
+              <PremiumFormula
+                baseRate={quote.formula_breakdown.base_rate}
+                zoneMultiplier={quote.formula_breakdown.zone_multiplier}
+                weatherMultiplier={quote.formula_breakdown.weather_multiplier}
+                historyMultiplier={quote.formula_breakdown.history_multiplier}
+                finalPremium={quote.premium}
+              />
             </div>
+          </section>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-slate-900">Coverage by trigger</h2>
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 text-sm">
-                <div>Heavy Rainfall: INR {quote.coverage.heavy_rainfall}</div>
-                <div>Extreme Heat: INR {quote.coverage.extreme_heat}</div>
-                <div>Flood / Red Alert: INR {quote.coverage.flood_red_alert}</div>
-                <div>Severe AQI: INR {quote.coverage.severe_aqi}</div>
-                <div>Curfew / Strike: INR {quote.coverage.curfew_strike}</div>
+          <section className="grid grid-cols-5 gap-4">
+            {triggerRowsFromCoverage(quote).map((trigger) => (
+              <div key={trigger.key} className="group [perspective:900px]">
+                <div className="relative h-40 w-full transition-transform duration-500 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)]">
+                  <div className="surface-card absolute inset-0 p-3 [backface-visibility:hidden]">
+                    <TriggerBadge triggerType={trigger.key} />
+                    <p className="mt-4 font-mono-data text-2xl text-amber-300">?{Math.round(trigger.amount)}</p>
+                    <p className="mt-2 text-xs text-secondary">Payout amount</p>
+                  </div>
+                  <div className="surface-card absolute inset-0 p-3 [transform:rotateY(180deg)] [backface-visibility:hidden]">
+                    <p className="text-sm text-secondary">What triggers this?</p>
+                    <p className="mt-3 text-sm">{trigger.desc}</p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
+          </section>
 
+          <section className="surface-card p-5">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-500/50 bg-amber-500/15 px-3 py-1 text-sm text-amber-200">
+              ? AI Recommended tier: {quote.recommended_arm}
+            </div>
             <div className="space-y-3">
-              {sortedTiers.map((tier, index) => {
+              {sortedTiers.map((tier) => {
+                const selected = selectedArm === tier.arm;
                 const recommended = tier.arm === quote.recommended_arm;
-                const isSelected = tier.arm === selectedArm;
-                const inOtherOptions = index > 0;
 
-                const card = (
+                return (
                   <label
                     key={tier.arm}
-                    className={`block cursor-pointer rounded-xl border p-4 ${recommended ? 'border-sky-500' : 'border-slate-200'} ${isSelected ? 'bg-sky-50' : 'bg-white'}`}
+                    className={`block rounded-xl border p-4 transition ${
+                      selected ? 'border-amber-400 bg-amber-500/10' : 'border-slate-700 bg-slate-900/50'
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-900">Tier {tier.arm}</p>
-                        <p className="text-sm text-slate-600">Coverage INR {tier.coverage}</p>
-                        {recommended ? (
-                          <span className="mt-2 inline-block rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-700">
-                            Recommended for you ⭐
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="text-xl font-bold text-slate-900">INR {tier.premium}</p>
-                    </div>
                     <input
-                      className="mt-3"
                       type="radio"
-                      checked={isSelected}
+                      className="mr-2"
+                      checked={selected}
                       onChange={() => setSelectedArm(tier.arm)}
                     />
+                    <span className="font-semibold">Tier {tier.arm}</span>
+                    {recommended ? <span className="ml-2 text-xs text-amber-300">Recommended for you</span> : null}
+                    <span className="float-right font-mono-data">?{tier.premium} • ?{tier.coverage}</span>
                   </label>
                 );
-
-                if (!inOtherOptions) {
-                  return card;
-                }
-
-                return null;
               })}
             </div>
 
-            <details className="rounded-xl border border-slate-200 bg-white p-4">
-              <summary className="cursor-pointer text-sm font-semibold text-slate-700">Other options</summary>
-              <div className="mt-3 space-y-3">
-                {sortedTiers
-                  .filter((tier) => tier.arm !== quote.recommended_arm)
-                  .map((tier) => {
-                    const isSelected = tier.arm === selectedArm;
-                    return (
-                      <label key={tier.arm} className={`block cursor-pointer rounded-lg border p-4 ${isSelected ? 'border-sky-500 bg-sky-50' : 'border-slate-200 bg-white'}`}>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-semibold text-slate-900">Tier {tier.arm}</p>
-                            <p className="text-sm text-slate-600">Coverage INR {tier.coverage}</p>
-                          </div>
-                          <p className="text-lg font-bold text-slate-900">INR {tier.premium}</p>
-                        </div>
-                        <input className="mt-3" type="radio" checked={isSelected} onChange={() => setSelectedArm(tier.arm)} />
-                      </label>
-                    );
-                  })}
-              </div>
-            </details>
-
-            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+            {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
 
             <button
               type="button"
               onClick={handlePay}
               disabled={isPaying}
-              className="w-full rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-400"
+              className="btn-saffron mt-5 w-full px-4 py-3 text-lg disabled:opacity-60"
             >
-              {isPaying ? 'Processing payment...' : `Pay via UPI - INR ${selectedTier.premium}`}
+              {isPaying ? 'Processing payment...' : `Pay via Razorpay • ?${selectedTier.premium}`}
             </button>
-          </>
-        ) : null}
-      </div>
+          </section>
+        </div>
+      ) : null}
     </AuthGuard>
   );
 }
+

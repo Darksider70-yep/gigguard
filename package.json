@@ -9,10 +9,7 @@
     "test:ci:fast": "npm run test:unit",
     "test:ci:gated": "npm run test:integration",
     "test:watch": "jest --config jest.config.js --watch",
-    "test:coverage": "jest --config jest.config.js --coverage",
-    "demo:reset": "INSURER_JWT=$(bash scripts/demo/get_demo_jwts.sh | grep INSURER_JWT | cut -d\"'\" -f2) bash scripts/demo/reset_demo.sh",
-    "demo:run": "bash scripts/demo/run_demo.sh",
-    "demo:setup": "npm run demo:reset && bash scripts/demo/get_demo_jwts.sh"
+    "test:coverage": "jest --config jest.config.js --coverage"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

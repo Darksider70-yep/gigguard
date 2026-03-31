@@ -355,7 +355,7 @@ pip install -r ml-service/requirements.txt
 This is the recommended way to run the entire stack.
 ```bash
 # From the root directory
-docker-compose up --build
+docker compose up --build
 ```
 
 If your project is inside OneDrive on Windows and Docker BuildKit fails with `invalid file request ...`, run Compose with the classic builder:
@@ -366,18 +366,21 @@ docker compose build --no-cache
 docker compose up
 ```
 
+To make this permanent on Windows (so plain `docker compose up --build` works every time), run once and reopen terminal:
+```powershell
+setx COMPOSE_DOCKER_CLI_BUILD 0
+setx DOCKER_BUILDKIT 0
+```
+
 **5. Access URLs:**
 - **Frontend App:** [http://localhost:3000](http://localhost:3000)
 - **Backend API:** [http://localhost:4000](http://localhost:4000)
 - **ML Service:** [http://localhost:5001](http://localhost:5001)
 
-**6. Reset demo state (between demo runs):**
-```bash
-npm run demo:reset
-```
-This truncates claims, payouts, and disruption_events,
-re-runs the seed script, and warms up all services.
-Safe to run at any time - does not affect worker or policy data.
+**6. Data initialization (automatic with Docker):**
+When you run `docker compose up --build`, the `db-seed` service automatically
+reapplies baseline seeded data (`007_seed_demo_data.sql`) so disruption events
+and flagged claims are visible in the insurer dashboard by default.
 
 ---
 ## 9. Documentation

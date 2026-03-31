@@ -2,9 +2,11 @@
 
 Run from repo root unless specified.
 
+> Demo helper scripts were removed. Use Docker Compose directly (`docker compose up --build`).
+
 ```bash
 # 1. Start infra services
-docker-compose up -d db redis
+docker compose up -d db redis
 
 # 2. Run DB migrations
 cd backend && npm run migrate && cd ..
