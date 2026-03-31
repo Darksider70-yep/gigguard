@@ -353,20 +353,23 @@ async function processTrigger(params: {
 
   const { rows: events } = await query<{ id: string }>(
     `INSERT INTO disruption_events (
-       trigger_type, city, zone, trigger_value, trigger_threshold,
+       trigger_type, city, zone, latitude, longitude, trigger_value, trigger_threshold,
        severity, disruption_hours, affected_hex_ids,
-       affected_workers_count, status
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active')
+       affected_worker_count, affected_workers_count, total_payout, total_payout_amount, status
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,0,'active')
      RETURNING id`,
     [
       triggerType,
       city,
       zoneKey,
+      lat,
+      lng,
       value,
       threshold,
       severity,
       disruptionHours,
       ringBigints,
+      affectedWorkers.length,
       affectedWorkers.length,
     ]
   );

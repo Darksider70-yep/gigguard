@@ -12,9 +12,9 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v jq >/dev/null 2>&1; then
-  echo "Missing dependency: jq"
-  exit 1
+HAS_JQ=0
+if command -v jq >/dev/null 2>&1; then
+  HAS_JQ=1
 fi
 
 if [ -z "${INSURER_JWT:-}" ]; then
@@ -23,9 +23,15 @@ if [ -z "${INSURER_JWT:-}" ]; then
 fi
 
 echo "Resetting GigGuard demo state..."
-curl -sf -X POST \
+RESET_BODY=$(curl -sf -X POST \
   -H "Authorization: Bearer $INSURER_JWT" \
-  "$BACKEND/admin/demo-reset" | jq '.'
+  "$BACKEND/admin/demo-reset")
+
+if [ "$HAS_JQ" -eq 1 ]; then
+  echo "$RESET_BODY" | jq '.'
+else
+  echo "$RESET_BODY"
+fi
 
 echo "Demo state reset complete"
 echo "  Workers: preserved"

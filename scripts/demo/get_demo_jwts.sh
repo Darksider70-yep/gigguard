@@ -6,28 +6,49 @@ set -euo pipefail
 
 BACKEND="http://localhost:4000"
 
-for cmd in curl jq; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "Missing dependency: $cmd"
-    exit 1
+if ! command -v curl >/dev/null 2>&1; then
+  echo "Missing dependency: curl"
+  exit 1
+fi
+
+HAS_JQ=0
+if command -v jq >/dev/null 2>&1; then
+  HAS_JQ=1
+fi
+
+extract_token() {
+  if [ "$HAS_JQ" -eq 1 ]; then
+    jq -r '.token // empty'
+    return
   fi
-done
+  sed -n 's/.*"token":"\([^"]*\)".*/\1/p'
+}
+
+get_worker_jwt() {
+  for phone in "$@"; do
+    token=$(curl -sf -X POST \
+      -H "Content-Type: application/json" \
+      -d "{\"phone_number\":\"$phone\"}" \
+      "$BACKEND/workers/login" | extract_token)
+    if [ -n "$token" ]; then
+      echo "$token"
+      return 0
+    fi
+  done
+  return 1
+}
 
 echo "Getting demo JWTs..."
 
 INSURER_JWT=$(curl -sf -X POST \
   -H "Content-Type: application/json" \
-  "$BACKEND/auth/insurer-demo-token" | jq -r '.token // empty')
+  "$BACKEND/auth/insurer-demo-token" | extract_token)
 
-SAMEER_JWT=$(curl -sf -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"phone_number":"+919000000001"}' \
-  "$BACKEND/workers/login" | jq -r '.token // empty')
+# Sameer demo worker for trigger flow: Andheri West, Mumbai
+SAMEER_JWT=$(get_worker_jwt "9000000001" "+919000000001")
 
-PRIYA_JWT=$(curl -sf -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"phone_number":"+919000000013"}' \
-  "$BACKEND/workers/login" | jq -r '.token // empty')
+# Chennai demo worker for premium quote flow (T Nagar)
+PRIYA_JWT=$(get_worker_jwt "9000000005" "+919000000005")
 
 if [ -z "$INSURER_JWT" ]; then
   echo "Failed to get INSURER_JWT. Ensure IS_DEMO_MODE=true in backend."

@@ -32,9 +32,24 @@ router.post('/admin/demo-reset', authenticateInsurer, async (_req, res, next) =>
       await client.query('TRUNCATE disruption_events CASCADE');
       await client.query('TRUNCATE rl_shadow_log CASCADE');
       await client.query(
-        `UPDATE policies
-         SET status = 'active'
-         WHERE week_start = date_trunc('week', NOW())::date`
+        `WITH latest_week AS (
+           SELECT MAX(week_start) AS week_start
+           FROM policies
+         ),
+         current_week AS (
+           SELECT
+             date_trunc('week', NOW())::date AS week_start,
+             (date_trunc('week', NOW())::date + INTERVAL '6 days')::date AS week_end
+         )
+         UPDATE policies p
+         SET status = 'active',
+             active = TRUE,
+             week_start = cw.week_start,
+             week_end = cw.week_end,
+             updated_at = NOW()
+         FROM latest_week lw
+         CROSS JOIN current_week cw
+         WHERE p.week_start = lw.week_start`
       );
     });
 

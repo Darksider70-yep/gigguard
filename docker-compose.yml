@@ -45,6 +45,7 @@ services:
       AQICN_API_KEY: ${AQICN_API_KEY}
       USE_MOCK_APIS: ${USE_MOCK_APIS:-false}
       FLASK_ENV: ${FLASK_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ML_SERVICE_PORT: 5001
       SAC_MODEL_PATH: /app/models/sac_premium_v1.zip
       IF_MODEL_PATH: /app/models/isolation_forest.pkl
