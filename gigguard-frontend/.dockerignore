@@ -1,4 +1,5 @@
 node_modules
 .next
+.next-build
 npm-debug.log
 .env

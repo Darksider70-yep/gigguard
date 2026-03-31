@@ -122,8 +122,9 @@ export async function processPayoutCreationJob(
 
   await query(
     `UPDATE payouts
-     SET razorpay_payout_id=$1, status=$2,
-         processed_at = CASE WHEN $2='paid' THEN NOW() ELSE NULL END
+     SET razorpay_payout_id=$1,
+         status=$2::varchar,
+         processed_at = CASE WHEN $2::varchar='paid' THEN NOW() ELSE NULL END
      WHERE id=$3`,
     [
       result.payout_id,
