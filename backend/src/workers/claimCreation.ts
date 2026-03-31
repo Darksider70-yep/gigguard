@@ -3,6 +3,7 @@ import { query, withTransaction } from '../db';
 import { premiumService } from '../services/premiumService';
 import { claimValidationQueue, redisConnection } from '../queues';
 import { config } from '../config';
+import { logger } from '../lib/logger';
 
 export interface ClaimCreationJob {
   disruption_event_id: string;
@@ -41,7 +42,13 @@ export async function processClaimCreationJob(
         );
 
         if (policies.length === 0) {
-          return { claimId: null, claimCreated: false, claimUpdated: false };
+          return {
+            claimId: null,
+            claimCreated: false,
+            claimUpdated: false,
+            payoutAmount: 0,
+            disruptionHours: disruption_hours,
+          };
         }
         const policy = policies[0];
         const payout = premiumService.calculateCoverageAmount(
@@ -71,7 +78,16 @@ export async function processClaimCreationJob(
           const shouldUpgrade = payout > existingPayout && existingClaim.status !== 'paid';
 
           if (!shouldUpgrade) {
-            return { claimId: null, claimCreated: false, claimUpdated: false };
+            logger.info('ClaimCreation', 'one_claim_per_day_enforced', {
+              worker_id: workerId,
+            });
+            return {
+              claimId: null,
+              claimCreated: false,
+              claimUpdated: false,
+              payoutAmount: existingPayout,
+              disruptionHours: disruption_hours,
+            };
           }
 
           const { rows: payoutLocks } = await client.query<{ status: string }>(
@@ -83,11 +99,17 @@ export async function processClaimCreationJob(
             [existingClaim.id]
           );
           if (payoutLocks.length > 0) {
-            console.info(
-              `[ClaimCreation] Higher trigger arrived for worker ${workerId} ` +
-                `but payout is already ${payoutLocks[0].status}. Upgrade blocked.`
-            );
-            return { claimId: null, claimCreated: false, claimUpdated: false };
+            logger.warn('ClaimCreation', 'upgrade_blocked_payout_processing', {
+              worker_id: workerId,
+              payout_status: payoutLocks[0].status,
+            });
+            return {
+              claimId: null,
+              claimCreated: false,
+              claimUpdated: false,
+              payoutAmount: existingPayout,
+              disruptionHours: disruption_hours,
+            };
           }
 
           await client.query(
@@ -122,7 +144,13 @@ export async function processClaimCreationJob(
             ]
           );
 
-          return { claimId: existingClaim.id, claimCreated: false, claimUpdated: true };
+          return {
+            claimId: existingClaim.id,
+            claimCreated: false,
+            claimUpdated: true,
+            payoutAmount: payout,
+            disruptionHours: disruption_hours,
+          };
         }
 
         const { rows: claims } = await client.query(
@@ -145,7 +173,13 @@ export async function processClaimCreationJob(
           ]
         );
 
-        return { claimId: claims[0].id as string, claimCreated: true, claimUpdated: false };
+        return {
+          claimId: claims[0].id as string,
+          claimCreated: true,
+          claimUpdated: false,
+          payoutAmount: payout,
+          disruptionHours: disruption_hours,
+        };
       });
 
       if (upsertResult.claimCreated) {
@@ -153,6 +187,14 @@ export async function processClaimCreationJob(
       }
 
       if (upsertResult.claimId && (upsertResult.claimCreated || upsertResult.claimUpdated)) {
+        logger.info('ClaimCreation', 'claim_created', {
+          claim_id: upsertResult.claimId,
+          worker_id: workerId,
+          trigger_type,
+          payout_amount: upsertResult.payoutAmount,
+          disruption_hours: upsertResult.disruptionHours,
+          upgraded: upsertResult.claimUpdated,
+        });
         await claimValidationQueue.add(
           'validate-claim',
           { claim_id: upsertResult.claimId },
@@ -160,7 +202,10 @@ export async function processClaimCreationJob(
         );
       }
     } catch (err) {
-      console.error(`Failed to create claim for worker ${workerId}:`, err);
+      logger.error('ClaimCreation', 'claim_creation_failed', {
+        worker_id: workerId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

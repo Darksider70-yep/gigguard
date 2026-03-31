@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from 'pg';
 import { config } from '../config';
+import { logger } from '../lib/logger';
 
 const pool = new Pool({
   connectionString: config.DATABASE_URL,
@@ -9,7 +10,9 @@ const pool = new Pool({
 });
 
 pool.on('error', (err: Error) => {
-  console.error('Unexpected DB pool error:', err);
+  logger.error('DB', 'pool_error', {
+    error: err.message,
+  });
 });
 
 export async function query<T = any>(
@@ -20,7 +23,7 @@ export async function query<T = any>(
   const result = await pool.query(text, params);
   const duration = Date.now() - start;
   if (duration > 1000) {
-    console.warn('Slow query detected', { text, duration });
+    logger.warn('DB', 'slow_query', { text, duration });
   }
   return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
 }

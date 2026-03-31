@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import { query, withTransaction } from '../db';
 import { razorpayService } from '../services/razorpayService';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -10,13 +11,13 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
 
   if (!signature || !rawBody) {
-    console.warn('Invalid Razorpay webhook request: missing signature or body');
+    logger.warn('PayoutWebhook', 'invalid_request_missing_signature_or_body');
     return res.status(401).json({ code: 'INVALID_SIGNATURE' });
   }
 
   const valid = razorpayService.verifyWebhookSignature(rawBody, signature);
   if (!valid) {
-    console.warn('Invalid Razorpay webhook signature received');
+    logger.warn('PayoutWebhook', 'invalid_signature');
     return res.status(401).json({ code: 'INVALID_SIGNATURE' });
   }
 

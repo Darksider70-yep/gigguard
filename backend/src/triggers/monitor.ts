@@ -11,6 +11,7 @@
 import { pool } from '../db';
 import { latLngToCell, gridDisk } from 'h3-js';
 import { randomUUID } from 'crypto';
+import { logger } from '../lib/logger';
 
 // --- Type Definitions ---
 
@@ -64,8 +65,12 @@ const K_RING_SIZE = 1;   // k=1 ring covers ~2 km radius (7 hexagons total)
 export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
   const { lat, lng, trigger_type, city, metadata } = event;
 
-  console.info(`\n[TRIGGER] Processing ${trigger_type} event in ${city}`);
-  console.info(`  Location: (${lat.toFixed(6)}, ${lng.toFixed(6)})`);
+  logger.info('LegacyTriggerMonitor', 'processing', {
+    trigger_type,
+    city,
+    lat,
+    lng,
+  });
 
   try {
     // --- Step 1: Convert event location to H3 hexagon ---
@@ -75,7 +80,7 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
     // Resolution 8 provides a good balance of precision (~750m) and query performance
     //
     const eventHexId = latLngToCell(lat, lng, H3_RESOLUTION);
-    console.info(`  Event Hex ID: ${eventHexId}`);
+    logger.debug('LegacyTriggerMonitor', 'event_hex_computed', { event_hex_id: eventHexId });
 
     // --- Step 2: Get the k-ring around the event hex ---
     // 
@@ -92,8 +97,10 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
     // Convert h3-js hex strings to BigInt for database storage
     // h3-js returns hexadecimal strings, so we parse with radix 16
     const affectedHexIds = affectedHexStrings.map(h => BigInt('0x' + h));
-    console.info(`  Affected hex ring (k=${K_RING_SIZE}): ${affectedHexIds.length} hexagons`);
-    console.info(`  Hex IDs: ${affectedHexIds.join(', ')}`);
+    logger.debug('LegacyTriggerMonitor', 'ring_computed', {
+      ring_size: K_RING_SIZE,
+      hex_count: affectedHexIds.length,
+    });
 
     // --- Step 3: Query workers in the affected hexagons ---
     // 
@@ -109,10 +116,12 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
       [affectedHexIds]
     );
 
-    console.info(`  Found ${affectedWorkers.length} workers in affected area`);
+    logger.info('LegacyTriggerMonitor', 'workers_found', { count: affectedWorkers.length });
 
     if (affectedWorkers.length > 0) {
-      console.info(`  Worker IDs: ${affectedWorkers.map(w => w.id.substring(0, 8)).join(', ')}...`);
+      logger.debug('LegacyTriggerMonitor', 'worker_sample', {
+        worker_ids: affectedWorkers.map((w) => w.id.substring(0, 8)),
+      });
     }
 
     const affectedWorkerIds = affectedWorkers.map(w => w.id);
@@ -123,7 +132,7 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
     // a disruption event. This keeps the database clean of zero-impact events.
     //
     if (affectedWorkerIds.length === 0) {
-      console.info(`  ⚠ No workers in affected area. Skipping disruption event creation.\n`);
+      logger.warn('LegacyTriggerMonitor', 'no_workers_in_affected_area', { city, trigger_type });
       return [];
     }
 
@@ -169,9 +178,13 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
         ]
       );
 
-      console.info(`  Created disruption_event: ${insertResult.rows[0].id}`);
+      logger.info('LegacyTriggerMonitor', 'disruption_event_created', {
+        disruption_event_id: insertResult.rows[0].id,
+      });
     } catch (dbError) {
-      console.error(`  Error creating disruption_event:`, dbError);
+      logger.error('LegacyTriggerMonitor', 'disruption_event_create_failed', {
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+      });
       // Re-throw to signal upstream that something went wrong
       throw dbError;
     }
@@ -185,11 +198,15 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
     // 4. Initiate payments via Razorpay
     // 5. Update claim records with payment status
     //
-    console.info(`  Passing ${affectedWorkerIds.length} worker IDs to payout service\n`);
+    logger.info('LegacyTriggerMonitor', 'dispatch_to_payout', {
+      worker_count: affectedWorkerIds.length,
+    });
     return affectedWorkerIds;
 
   } catch (error) {
-    console.error(`  ✗ Error processing trigger:`, error);
+    logger.error('LegacyTriggerMonitor', 'processing_failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 }

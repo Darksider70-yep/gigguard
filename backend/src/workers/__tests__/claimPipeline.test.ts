@@ -29,6 +29,15 @@ jest.mock('../../services/razorpayService', () => ({
   },
 }));
 
+jest.mock('../../lib/logger', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
 import { query, withTransaction } from '../../db';
 import { claimValidationQueue, payoutQueue } from '../../queues';
 import { mlService } from '../../services/mlService';
@@ -37,6 +46,7 @@ import { processClaimCreationJob } from '../claimCreation';
 import { processClaimValidationJob } from '../claimValidation';
 import { processPayoutCreationJob } from '../payoutCreation';
 import { config } from '../../config';
+import { logger } from '../../lib/logger';
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
 const mockWithTransaction = withTransaction as jest.MockedFunction<typeof withTransaction>;
@@ -44,6 +54,7 @@ const mockClaimValidationQueue = claimValidationQueue as jest.Mocked<typeof clai
 const mockPayoutQueue = payoutQueue as jest.Mocked<typeof payoutQueue>;
 const mockMlService = mlService as jest.Mocked<typeof mlService>;
 const mockRazorpayService = razorpayService as jest.Mocked<typeof razorpayService>;
+const mockLogger = logger as jest.Mocked<typeof logger>;
 
 describe('Claim pipeline workers', () => {
   beforeEach(() => {
@@ -511,7 +522,6 @@ describe('Claim pipeline workers', () => {
     });
 
     test('logs error and returns if worker has no upi_vpa', async () => {
-      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
       mockQuery.mockImplementation(async (sql: string) => {
         if (sql.includes('FROM claims c') && sql.includes("c.status='approved'")) {
           return {
@@ -531,9 +541,8 @@ describe('Claim pipeline workers', () => {
 
       await processPayoutCreationJob({ claim_id: 'claim-1' });
 
-      expect(errorSpy).toHaveBeenCalled();
+      expect(mockLogger.error).toHaveBeenCalled();
       expect(mockRazorpayService.createPayout).not.toHaveBeenCalled();
-      errorSpy.mockRestore();
     });
 
     test('skips duplicate payout when existing payout is processing', async () => {

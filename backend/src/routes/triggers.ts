@@ -2,6 +2,8 @@ import { Router, Response } from 'express';
 import { AuthenticatedRequest, requireInsurer } from '../middleware/auth';
 import { processTriggerEvent } from '../jobs/triggerMonitor';
 import { query } from '../db';
+import { premiumService } from '../services/premiumService';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -54,7 +56,9 @@ router.get('/live-events', async (req, res: Response) => {
       })),
     });
   } catch (err) {
-    console.error('[Triggers] live-events failed:', err);
+    logger.error('Triggers', 'live_events_failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return res.status(500).json({ message: 'Failed to fetch live events' });
   }
 });
@@ -66,26 +70,55 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
 
     const lat = Number(req.body?.lat ?? coords.lat);
     const lng = Number(req.body?.lng ?? coords.lng);
-    const triggerType = String(req.body?.trigger_type || 'heavy_rainfall');
-    const triggerValue = Number(req.body?.trigger_value || 0);
-    const disruptionHours = Number(req.body?.disruption_hours || 4);
+    const triggerType = String(req.body?.trigger_type ?? req.body?.triggerType ?? 'heavy_rainfall');
+    const triggerValue = Number(req.body?.trigger_value ?? req.body?.value ?? 0);
+    const disruptionHours = Number(
+      req.body?.disruption_hours ?? premiumService.getDisruptionHours(triggerType)
+    );
+    const zone = String(req.body?.zone || '');
 
     const result = await processTriggerEvent({
       trigger_type: triggerType,
       city,
-      zone: String(req.body?.zone || ''),
+      zone,
       lat,
       lng,
       trigger_value: triggerValue,
       disruption_hours: disruptionHours,
     });
 
+    let totalPayout = 0;
+    if (result.worker_ids.length > 0) {
+      const { rows } = await query<{ avg_daily_earning: string }>(
+        `SELECT avg_daily_earning::text
+         FROM workers
+         WHERE id = ANY($1::uuid[])`,
+        [result.worker_ids]
+      );
+
+      totalPayout = rows.reduce((sum, row) => {
+        const earning = Number(row.avg_daily_earning || 0);
+        return sum + premiumService.calculateCoverageAmount(earning, triggerType);
+      }, 0);
+    }
+
     return res.status(200).json({
-      success: true,
-      message: 'Event simulated. Trigger monitor processed affected workers.',
-      event: result,
+      event_id: result.event_id,
+      trigger_type: triggerType,
+      city,
+      zone,
+      value: triggerValue,
+      affected_workers: result.affected_worker_count,
+      total_payout: totalPayout,
+      hex_ring_size: result.affected_hex_ids.length,
+      event_hex: result.event_hex,
+      status: 'processing',
+      message: `Trigger fired. ${result.affected_worker_count} workers will receive claims via BullMQ.`,
     });
-  } catch {
+  } catch (err) {
+    logger.error('Triggers', 'simulate_failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return res.status(500).json({ message: 'Failed to simulate trigger event' });
   }
 });

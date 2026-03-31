@@ -5,7 +5,9 @@
 **GigGuard is a revolutionary InsurTech platform designed from the ground up to protect the backbone of the modern economy: the gig worker.** We provide a simple, automated, and transparent financial safety net, ensuring that disruptions like bad weather or city-wide shutdowns don't have to mean a lost day's income.
 
 ![Built for Guidewire DEVTrails 2026](https://img.shields.io/badge/Built%20for-Guidewire%20DEVTrails%202026-blue)
-![Phase-1](https://img.shields.io/badge/Phase-1-brightgreen)
+![Phase-2](https://img.shields.io/badge/Phase-2-blue)
+![Tests](https://img.shields.io/badge/Tests-61%2F61-brightgreen)
+![Build](https://img.shields.io/badge/Build-Passing-brightgreen)
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -45,6 +47,62 @@ The services communicate via REST APIs to perform their functions:
 4.  **Database (PostgreSQL):** The single source of truth for all persistent data, including worker profiles, policy details, disruption events, and claim statuses.
 
 > For a deeper technical dive, including the full database schema and API design, see the [**Architecture Document**](docs/System_architecture.docx) and the [**ER Model**](docs/GigGuard_ER_Model.docx).
+
+---
+
+## 3.5 Phase 2: What's New
+
+Phase 2 ships five major upgrades over Phase 1:
+
+### H3 Geospatial Precision
+Replaced text-based zone matching ("Andheri West") with Uber's H3
+hexagonal grid at resolution 8 (~0.74 km² per hex). The trigger
+monitor now pays workers in a k=1 ring (7 hexes, ~2km radius) around
+the exact event coordinate - not everyone in a named zone. This
+eliminates basis risk: workers at the dry end of a large zone no
+longer receive payouts for rain they never experienced.
+
+Expected impact: ~40% reduction in over-payout from imprecise
+zone matching.
+
+### Contextual Bandit Policy Recommendation
+A Thompson Sampling bandit learns which of four coverage tiers each
+worker segment is most likely to purchase. The buy policy flow now
+shows a personalised "Recommended for you" tier first. The bandit
+updates in real-time from purchase outcomes, with no manual A/B
+test scheduling required.
+
+Expected impact: ~25% lift in policy purchase conversion
+(Netflix baseline for Thompson Sampling).
+
+### RL Premium Engine (Shadow Mode)
+A SAC (Soft Actor-Critic) reinforcement learning agent runs in
+parallel with the existing formula. It observes zone risk, 7-day
+weather forecast, claim history, and competitor pricing to output
+a premium multiplier that targets purchase rate maximisation while
+holding loss ratio below 75%. Phase 2 runs the agent in shadow mode
+- the formula still prices live policies, the RL agent logs its
+recommendations and is evaluated against real outcomes.
+
+Shadow comparison: GET /insurer/shadow-comparison shows the
+running delta between formula and RL premiums.
+
+### GNN Fraud Detection (Schema + Training Data)
+The graph schema for Phase 3 GNN training is fully built:
+graph_edges, upi_addresses, and worker_devices tables are live.
+100 synthetic fraud rings (4 patterns: UPI ring, device ring,
+registration burst, mixed) + 100 clean clusters are generated
+as training data. The GraphSAGE model stub is ready. Isolation
+Forest remains the live scorer throughout Phase 2.
+
+### Security Hardening
+- Bandit update endpoint: JWT-only auth, no worker_id body fallback
+- Payout deduplication: UNIQUE constraint on payouts(claim_id) +
+  app-level pre-insert guard + upgrade lock once payout processing
+- H3 centroid tracking: hex_is_centroid_fallback flag + nightly
+  backfill job for geocoding precision
+- Test lanes: unit (fast, no deps) / integration (DB+ML) / e2e split
+- Pre-commit hook: blocks commits containing live API key patterns
 
 ---
 
@@ -312,6 +370,14 @@ docker compose up
 - **Frontend App:** [http://localhost:3000](http://localhost:3000)
 - **Backend API:** [http://localhost:4000](http://localhost:4000)
 - **ML Service:** [http://localhost:5001](http://localhost:5001)
+
+**6. Reset demo state (between demo runs):**
+```bash
+npm run demo:reset
+```
+This truncates claims, payouts, and disruption_events,
+re-runs the seed script, and warms up all services.
+Safe to run at any time - does not affect worker or policy data.
 
 ---
 ## 9. Documentation

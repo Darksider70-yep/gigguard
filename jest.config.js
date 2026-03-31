@@ -17,6 +17,7 @@ module.exports = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/backend/dist/',
+    '/backend/src/__tests__/integration/',
     '/backend/tests/integration/',
     '/tests/e2e/full-claim-flow.test.ts',
     '/tests/integration/fraud-scorer.test.ts',

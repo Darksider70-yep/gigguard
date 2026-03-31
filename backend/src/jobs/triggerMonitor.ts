@@ -1,9 +1,11 @@
 import cron from 'node-cron';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { query } from '../db';
-import { weatherService } from '../services/weatherService';
-import { premiumService } from '../services/premiumService';
+import { logger } from '../lib/logger';
 import { claimCreationQueue } from '../queues';
+import { premiumService } from '../services/premiumService';
+import { weatherBudget, weatherService } from '../services/weatherService';
+import { processTriggerSync } from '../workers/syncFallback';
 
 const TRIGGER_CONFIGS = [
   {
@@ -22,21 +24,140 @@ const TRIGGER_CONFIGS = [
   },
 ];
 
+const CITY_CLUSTER_SEEDS: Record<string, Array<{ id: string; lat: number; lng: number }>> = {
+  mumbai: [
+    { id: 'coastal', lat: 18.95, lng: 72.83 },
+    { id: 'inland', lat: 19.16, lng: 72.93 },
+  ],
+  delhi: [
+    { id: 'central', lat: 28.61, lng: 77.21 },
+    { id: 'outer', lat: 28.71, lng: 77.29 },
+  ],
+  chennai: [
+    { id: 'coastal', lat: 13.05, lng: 80.28 },
+    { id: 'inland', lat: 13.12, lng: 80.2 },
+  ],
+  bangalore: [{ id: 'city', lat: 12.97, lng: 77.59 }],
+  hyderabad: [{ id: 'city', lat: 17.39, lng: 78.49 }],
+};
+
 interface ActiveZone {
   home_hex_id: string;
   city: string;
 }
 
+interface ZonePoint extends ActiveZone {
+  lat: number;
+  lng: number;
+}
+
+interface ZoneCluster {
+  city: string;
+  cluster_id: string;
+  lat: number;
+  lng: number;
+  zones: ZonePoint[];
+}
+
+function normalizeCity(city: string): string {
+  return city.trim().toLowerCase();
+}
+
+function distanceSquared(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const dLat = a.lat - b.lat;
+  const dLng = a.lng - b.lng;
+  return dLat * dLat + dLng * dLng;
+}
+
+function buildClusters(zones: ZonePoint[]): ZoneCluster[] {
+  const byCity = new Map<string, ZonePoint[]>();
+  for (const zone of zones) {
+    const city = normalizeCity(zone.city);
+    const list = byCity.get(city) ?? [];
+    list.push(zone);
+    byCity.set(city, list);
+  }
+
+  const clusters: ZoneCluster[] = [];
+
+  for (const [city, cityZones] of byCity.entries()) {
+    const seeds = CITY_CLUSTER_SEEDS[city];
+
+    if (!seeds || seeds.length === 0) {
+      clusters.push({
+        city,
+        cluster_id: 'default',
+        lat: cityZones[0].lat,
+        lng: cityZones[0].lng,
+        zones: cityZones,
+      });
+      continue;
+    }
+
+    const assigned = new Map<string, ZonePoint[]>();
+    for (const seed of seeds) {
+      assigned.set(seed.id, []);
+    }
+
+    for (const zone of cityZones) {
+      let nearest = seeds[0];
+      let nearestDistance = distanceSquared(zone, seeds[0]);
+      for (let i = 1; i < seeds.length; i += 1) {
+        const candidate = seeds[i];
+        const candidateDistance = distanceSquared(zone, candidate);
+        if (candidateDistance < nearestDistance) {
+          nearest = candidate;
+          nearestDistance = candidateDistance;
+        }
+      }
+      assigned.get(nearest.id)!.push(zone);
+    }
+
+    for (const seed of seeds) {
+      const clusterZones = assigned.get(seed.id) ?? [];
+      if (clusterZones.length === 0) {
+        continue;
+      }
+      clusters.push({
+        city,
+        cluster_id: seed.id,
+        lat: seed.lat,
+        lng: seed.lng,
+        zones: clusterZones,
+      });
+    }
+  }
+
+  return clusters;
+}
+
 export function startTriggerMonitor(): void {
   cron.schedule('*/30 * * * *', async () => {
-    console.info('[TriggerMonitor] Poll cycle started');
     try {
       await runTriggerCycle();
     } catch (err) {
-      console.error('[TriggerMonitor] Cycle failed:', err);
+      logger.error('TriggerMonitor', 'cycle_failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   });
-  console.info('[TriggerMonitor] Scheduled - every 30 minutes');
+
+  logger.info('TriggerMonitor', 'scheduled', { cron: '*/30 * * * *' });
+}
+
+async function getWeatherForZoneCluster(cluster: ZoneCluster): Promise<any | null> {
+  if (!weatherBudget.canMakeOWMCall()) {
+    const budget = weatherBudget.getStatus();
+    logger.warn('TriggerMonitor', 'owm_budget_exhausted_skip', {
+      city: cluster.city,
+      cluster_id: cluster.cluster_id,
+      owm_calls_today: budget.owm_calls_today,
+      limit: budget.owm_daily_limit,
+    });
+    return null;
+  }
+
+  return weatherService.getCurrentConditions(cluster.lat, cluster.lng);
 }
 
 export async function runTriggerCycle(): Promise<void> {
@@ -50,53 +171,83 @@ export async function runTriggerCycle(): Promise<void> {
   );
 
   if (activeZones.length === 0) {
-    console.info('[TriggerMonitor] No active policy zones found');
+    logger.info('TriggerMonitor', 'no_active_policy_zones');
     return;
   }
 
-  const weatherResults = await Promise.allSettled(
-    activeZones.map((zone) => checkZoneTriggers(zone))
-  );
-
-  weatherResults.forEach((result) => {
-    if (result.status === 'rejected') {
-      console.error('[TriggerMonitor] Zone weather check failed:', result.reason);
-    }
+  const zonePoints: ZonePoint[] = activeZones.map((zone) => {
+    const [lat, lng] = cellToLatLng(BigInt(zone.home_hex_id).toString(16));
+    return {
+      ...zone,
+      lat,
+      lng,
+    };
   });
+
+  const clusters = buildClusters(zonePoints);
+  logger.info('TriggerMonitor', 'cycle_started', {
+    zones_checked: activeZones.length,
+    clusters_checked: clusters.length,
+  });
+
+  const budgetStatus = weatherBudget.getStatus();
+  if (budgetStatus.owm_pct_used >= 80) {
+    logger.warn('TriggerMonitor', 'api_budget_low', {
+      owm_calls_today: budgetStatus.owm_calls_today,
+      limit: budgetStatus.owm_daily_limit,
+    });
+  }
+
+  for (const cluster of clusters) {
+    let conditions: any | null = null;
+    try {
+      conditions = await getWeatherForZoneCluster(cluster);
+    } catch (err) {
+      logger.error('TriggerMonitor', 'cluster_weather_fetch_failed', {
+        city: cluster.city,
+        cluster_id: cluster.cluster_id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
+    if (!conditions) {
+      continue;
+    }
+
+    for (const zone of cluster.zones) {
+      for (const trigger of TRIGGER_CONFIGS) {
+        const value = trigger.check(conditions);
+        if (value === null) {
+          continue;
+        }
+        await processTrigger({
+          triggerType: trigger.type,
+          city: normalizeCity(zone.city),
+          lat: zone.lat,
+          lng: zone.lng,
+          value,
+          zoneHexId: zone.home_hex_id,
+        });
+      }
+    }
+  }
 
   const zoneMapByCity = new Map<string, string[]>();
   for (const zone of activeZones) {
-    const list = zoneMapByCity.get(zone.city) ?? [];
+    const city = normalizeCity(zone.city);
+    const list = zoneMapByCity.get(city) ?? [];
     if (!list.includes(zone.home_hex_id)) {
       list.push(zone.home_hex_id);
     }
-    zoneMapByCity.set(zone.city, list);
+    zoneMapByCity.set(city, list);
   }
 
   for (const [city, zoneHexIds] of zoneMapByCity.entries()) {
     await checkAQITrigger(city, zoneHexIds).catch((err) => {
-      console.error(`[TriggerMonitor] AQI check failed for ${city}:`, err);
-    });
-  }
-}
-
-async function checkZoneTriggers(zone: ActiveZone): Promise<void> {
-  const [lat, lng] = cellToLatLng(BigInt(zone.home_hex_id).toString(16));
-  const conditions = await weatherService.getCurrentConditions(lat, lng);
-
-  for (const trigger of TRIGGER_CONFIGS) {
-    const value = trigger.check(conditions);
-    if (value === null) {
-      continue;
-    }
-
-    await processTrigger({
-      triggerType: trigger.type,
-      city: zone.city,
-      lat,
-      lng,
-      value,
-      zoneHexId: zone.home_hex_id,
+      logger.error('TriggerMonitor', 'aqi_check_failed', {
+        city,
+        error: err instanceof Error ? err.message : String(err),
+      });
     });
   }
 }
@@ -123,7 +274,10 @@ async function checkAQITrigger(city: string, zoneHexIds: string[]): Promise<void
 
   results.forEach((result) => {
     if (result.status === 'rejected') {
-      console.error(`[TriggerMonitor] AQI zone trigger failed for ${city}:`, result.reason);
+      logger.error('TriggerMonitor', 'aqi_zone_trigger_failed', {
+        city,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
     }
   });
 }
@@ -160,9 +314,11 @@ async function processTrigger(params: {
     [city, zoneKey, triggerType]
   );
   if (existing.length > 0) {
-    console.info(
-      `[TriggerMonitor] Duplicate suppressed: ${triggerType} in ${city} zone ${zoneKey}`
-    );
+    logger.warn('TriggerMonitor', 'duplicate_suppressed', {
+      trigger_type: triggerType,
+      city,
+      zone: zoneKey,
+    });
     return null;
   }
 
@@ -178,9 +334,6 @@ async function processTrigger(params: {
   );
 
   if (affectedWorkers.length === 0) {
-    console.info(
-      `[TriggerMonitor] ${triggerType} in ${city} zone ${zoneKey} - no affected workers`
-    );
     return null;
   }
 
@@ -190,9 +343,12 @@ async function processTrigger(params: {
 
   const centroidWorkers = affectedWorkers.filter((worker) => worker.hex_is_centroid_fallback);
   if (centroidWorkers.length > 0) {
-    console.warn(
-      `[TriggerMonitor] ${centroidWorkers.length} affected workers use centroid fallback hexes in ${city} zone ${zoneKey}.`
-    );
+    logger.warn('TriggerMonitor', 'centroid_workers_in_trigger_ring', {
+      trigger_type: triggerType,
+      city,
+      zone: zoneKey,
+      centroid_worker_count: centroidWorkers.length,
+    });
   }
 
   const { rows: events } = await query<{ id: string }>(
@@ -218,33 +374,44 @@ async function processTrigger(params: {
   const eventId = events[0].id;
   const workerIds = affectedWorkers.map((w) => w.id);
 
-  console.info(
-    `[TriggerMonitor] ${triggerType} in ${city} zone ${zoneKey} - ` +
-      `${value} (threshold ${threshold}) - ` +
-      `${workerIds.length} workers affected`
-  );
+  logger.info('TriggerMonitor', 'trigger_fired', {
+    trigger_type: triggerType,
+    city,
+    zone: zoneKey,
+    value,
+    threshold,
+    affected_workers: workerIds.length,
+    event_hex: eventHex,
+    ring_hexes: ringHexes.length,
+  });
 
-  await claimCreationQueue.add(
-    'create-claims',
-    {
-      disruption_event_id: eventId,
-      trigger_type: triggerType,
-      disruption_hours: disruptionHours,
-      trigger_value: value,
-      worker_ids: workerIds,
-    },
-    {
+  const jobData = {
+    disruption_event_id: eventId,
+    trigger_type: triggerType,
+    disruption_hours: disruptionHours,
+    trigger_value: value,
+    worker_ids: workerIds,
+  };
+
+  try {
+    await claimCreationQueue.add('create-claims', jobData, {
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
       removeOnComplete: { count: 1000 },
       removeOnFail: { count: 500 },
-    }
-  );
+    });
+  } catch (redisErr) {
+    logger.error('TriggerMonitor', 'claim_enqueue_failed_sync_fallback', {
+      error: redisErr instanceof Error ? redisErr.message : String(redisErr),
+      event_id: eventId,
+      worker_count: workerIds.length,
+    });
+    await processTriggerSync(jobData);
+  }
 
   return { eventId, workerIds, ringHexes, eventHex, zoneKey };
 }
 
-// Backward-compatible simulation entrypoint used by /triggers/simulate.
 export async function processTriggerEvent(input: {
   trigger_type: string;
   city: string;
@@ -262,7 +429,7 @@ export async function processTriggerEvent(input: {
 }> {
   const result = await processTrigger({
     triggerType: input.trigger_type,
-    city: input.city,
+    city: normalizeCity(input.city),
     lat: input.lat,
     lng: input.lng,
     value: input.trigger_value ?? premiumService.getThreshold(input.trigger_type),

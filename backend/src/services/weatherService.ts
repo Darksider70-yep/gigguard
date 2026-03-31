@@ -1,5 +1,7 @@
 import { cellToLatLng } from 'h3-js';
 import { config } from '../config';
+import { logger } from '../lib/logger';
+import { GRACEFUL_DEFAULTS } from './gracefulDefaults';
 
 export interface WeatherData {
   weather_multiplier: number;
@@ -9,10 +11,78 @@ export interface WeatherData {
   aqi: number | null;
 }
 
+class WeatherBudgetTracker {
+  private owmCallsToday = 0;
+  private lastResetUtcDate = this.getUtcDateKey();
+  private readonly OWM_DAILY_LIMIT = 900;
+
+  private getUtcDateKey(): string {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  private resetIfNewDay(): void {
+    const today = this.getUtcDateKey();
+    if (today !== this.lastResetUtcDate) {
+      this.owmCallsToday = 0;
+      this.lastResetUtcDate = today;
+    }
+  }
+
+  canMakeOWMCall(): boolean {
+    this.resetIfNewDay();
+    return this.owmCallsToday < this.OWM_DAILY_LIMIT;
+  }
+
+  recordOWMCall(): void {
+    this.resetIfNewDay();
+    this.owmCallsToday += 1;
+    if (this.owmCallsToday >= Math.floor(this.OWM_DAILY_LIMIT * 0.8)) {
+      logger.warn('WeatherBudget', 'api_budget_low', {
+        owm_calls_today: this.owmCallsToday,
+        owm_daily_limit: this.OWM_DAILY_LIMIT,
+      });
+    }
+  }
+
+  getStatus(): {
+    owm_calls_today: number;
+    owm_daily_limit: number;
+    owm_remaining: number;
+    owm_pct_used: number;
+  } {
+    this.resetIfNewDay();
+    return {
+      owm_calls_today: this.owmCallsToday,
+      owm_daily_limit: this.OWM_DAILY_LIMIT,
+      owm_remaining: Math.max(this.OWM_DAILY_LIMIT - this.owmCallsToday, 0),
+      owm_pct_used: Math.round((this.owmCallsToday / this.OWM_DAILY_LIMIT) * 100),
+    };
+  }
+}
+
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 class WeatherService {
   async getWeatherMultiplier(lat: number, lng: number): Promise<number> {
     if (config.USE_MOCK_APIS) {
       return 1.2;
+    }
+
+    if (!weatherBudget.canMakeOWMCall()) {
+      logger.warn('WeatherService', 'owm_budget_exhausted', {
+        endpoint: 'forecast',
+        lat,
+        lng,
+      });
+      return GRACEFUL_DEFAULTS.WEATHER_MULTIPLIER;
     }
 
     try {
@@ -20,15 +90,18 @@ class WeatherService {
         `${config.OPENWEATHERMAP_BASE_URL}/forecast` +
         `?lat=${lat}&lon=${lng}` +
         `&appid=${config.OPENWEATHERMAP_API_KEY}&units=metric`;
-      const res = await fetch(url);
+      weatherBudget.recordOWMCall();
+      const res = await fetchWithTimeout(url, GRACEFUL_DEFAULTS.OWM_TIMEOUT_MS);
       if (!res.ok) {
         throw new Error(`OWM returned ${res.status}`);
       }
       const data = await res.json();
       return this.computeWeatherMultiplier(Array.isArray(data.list) ? data.list : []);
     } catch (err) {
-      console.warn('Weather API failed, using default multiplier:', err);
-      return 1.0;
+      logger.warn('WeatherService', 'owm_forecast_failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return GRACEFUL_DEFAULTS.WEATHER_MULTIPLIER;
     }
   }
 
@@ -76,27 +149,45 @@ class WeatherService {
       };
     }
 
+    if (!weatherBudget.canMakeOWMCall()) {
+      logger.warn('WeatherService', 'owm_budget_exhausted', {
+        endpoint: 'current',
+        lat,
+        lng,
+      });
+      return {
+        weather_multiplier: GRACEFUL_DEFAULTS.WEATHER_MULTIPLIER,
+        rain_1h: null,
+        feels_like: null,
+        temp: null,
+        aqi: null,
+      };
+    }
+
     try {
       const url =
         `${config.OPENWEATHERMAP_BASE_URL}/weather` +
         `?lat=${lat}&lon=${lng}` +
         `&appid=${config.OPENWEATHERMAP_API_KEY}&units=metric`;
-      const res = await fetch(url);
+      weatherBudget.recordOWMCall();
+      const res = await fetchWithTimeout(url, GRACEFUL_DEFAULTS.OWM_TIMEOUT_MS);
       if (!res.ok) {
         throw new Error(`OWM current returned ${res.status}`);
       }
       const data = await res.json();
       return {
-        weather_multiplier: 1.0,
+        weather_multiplier: GRACEFUL_DEFAULTS.WEATHER_MULTIPLIER,
         rain_1h: data?.rain?.['1h'] ?? null,
         feels_like: data?.main?.feels_like ?? null,
         temp: data?.main?.temp ?? null,
         aqi: null,
       };
     } catch (err) {
-      console.warn('Weather API current conditions failed:', err);
+      logger.warn('WeatherService', 'owm_current_failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
       return {
-        weather_multiplier: 1.0,
+        weather_multiplier: GRACEFUL_DEFAULTS.WEATHER_MULTIPLIER,
         rain_1h: null,
         feels_like: null,
         temp: null,
@@ -112,7 +203,7 @@ class WeatherService {
 
     try {
       const url = `${config.AQICN_BASE_URL}/${encodeURIComponent(city)}/?token=${config.AQICN_API_KEY}`;
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url, GRACEFUL_DEFAULTS.AQICN_TIMEOUT_MS);
       if (!res.ok) {
         throw new Error(`AQICN returned ${res.status}`);
       }
@@ -122,7 +213,10 @@ class WeatherService {
       }
       return data.data?.iaqi?.pm25?.v ?? null;
     } catch (err) {
-      console.warn('AQI API failed:', err);
+      logger.warn('WeatherService', 'aqicn_failed', {
+        city,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return null;
     }
   }
@@ -145,6 +239,7 @@ function parseHexId(hexId: string | number | bigint): string {
 }
 
 export const weatherService = new WeatherService();
+export const weatherBudget = new WeatherBudgetTracker();
 
 // Backward-compatible helper used by older routes/tests.
 export async function getWeatherContext(homeHexId?: string | number | bigint): Promise<{

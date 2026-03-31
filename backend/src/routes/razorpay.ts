@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticateWorker } from '../middleware/auth';
 import { razorpayService } from '../services/razorpayService';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -20,7 +21,9 @@ router.post('/create-order', authenticateWorker, async (req, res) => {
     const order = await razorpayService.createOrder(amount);
     return res.json(order);
   } catch (err) {
-    console.error('[Razorpay] create-order failed:', err);
+    logger.error('Razorpay', 'create_order_failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return res.status(502).json({
       code: 'RAZORPAY_ERROR',
       message: 'Unable to create order. Check Razorpay credentials/configuration.',

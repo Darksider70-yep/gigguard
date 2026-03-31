@@ -3,6 +3,7 @@ import { query } from '../db';
 import { razorpayService } from '../services/razorpayService';
 import { redisConnection } from '../queues';
 import { config } from '../config';
+import { logger } from '../lib/logger';
 
 export interface PayoutCreationJob {
   claim_id: string;
@@ -33,7 +34,7 @@ export async function processPayoutCreationJob(
   );
 
   if (rows.length === 0) {
-    console.warn(`Claim ${claim_id} not approved or not found`);
+    logger.warn('PayoutCreation', 'claim_not_approved_or_missing', { claim_id });
     return;
   }
 
@@ -41,9 +42,10 @@ export async function processPayoutCreationJob(
   const finalAmount = overrideAmount ?? Math.round(Number(payout_amount));
 
   if (!upi_vpa) {
-    console.error(
-      `Worker ${worker_id} has no UPI VPA - cannot payout claim ${claim_id}`
-    );
+    logger.error('PayoutCreation', 'no_upi_vpa', {
+      worker_id,
+      claim_id,
+    });
     return;
   }
 
@@ -60,10 +62,11 @@ export async function processPayoutCreationJob(
   if (existingPayoutRows.length > 0) {
     const existing = existingPayoutRows[0];
     if (existing.status === 'processing' || existing.status === 'paid') {
-      console.warn(
-        `[PayoutCreation] Skipping duplicate payout for claim ${claim_id}. ` +
-          `Existing payout ${existing.id} is ${existing.status}.`
-      );
+      logger.info('PayoutCreation', 'duplicate_skipped', {
+        claim_id,
+        existing_payout_id: existing.id,
+        existing_status: existing.status,
+      });
       return {
         skipped: true,
         reason: 'duplicate',
@@ -132,6 +135,14 @@ export async function processPayoutCreationJob(
       payoutId,
     ]
   );
+
+  logger.info('PayoutCreation', 'payout_initiated', {
+    claim_id,
+    worker_id,
+    amount: finalAmount,
+    upi_vpa,
+    razorpay_payout_id: result.payout_id,
+  });
 
   if (config.USE_MOCK_PAYOUT) {
     await query(

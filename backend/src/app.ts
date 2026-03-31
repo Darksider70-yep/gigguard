@@ -7,12 +7,14 @@ import insurerRouter from './routes/insurer';
 import razorpayRouter from './routes/razorpay';
 import triggersRouter from './routes/triggers';
 import healthRouter from './routes/health';
+import adminRouter from './routes/admin';
 import { startTriggerMonitor } from './jobs/triggerMonitor';
 import { startPolicyExpiryJob } from './jobs/policyExpiryJob';
 import { startHexBackfillJob } from './jobs/hexBackfillJob';
 import { claimCreationWorker } from './workers/claimCreation';
 import { claimValidationWorker } from './workers/claimValidation';
 import { payoutCreationWorker } from './workers/payoutCreation';
+import { logger } from './lib/logger';
 
 let backgroundStarted = false;
 
@@ -54,12 +56,17 @@ export function createApp() {
   app.use('/insurer', insurerRouter);
   app.use('/razorpay', razorpayRouter);
   app.use('/triggers', triggersRouter);
+  app.use(adminRouter);
 
   // Legacy compatibility paths from Phase 1.
   app.use('/api/policies', policiesRouter);
 
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error(`[API] ${req.method} ${req.originalUrl} failed:`, err);
+    logger.error('API', 'request_failed', {
+      method: req.method,
+      path: req.originalUrl,
+      error: err instanceof Error ? err.message : String(err),
+    });
     if (res.headersSent) {
       return next(err);
     }

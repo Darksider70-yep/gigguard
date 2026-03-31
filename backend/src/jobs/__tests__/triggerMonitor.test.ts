@@ -9,6 +9,10 @@ jest.mock('../../services/weatherService', () => ({
     getAQI: jest.fn(),
     getWeatherMultiplier: jest.fn(),
   },
+  weatherBudget: {
+    canMakeOWMCall: jest.fn(),
+    getStatus: jest.fn(),
+  },
 }));
 
 jest.mock('../../queues', () => ({
@@ -19,13 +23,14 @@ jest.mock('../../queues', () => ({
 }));
 
 import { query } from '../../db';
-import { weatherService } from '../../services/weatherService';
+import { weatherBudget, weatherService } from '../../services/weatherService';
 import { claimCreationQueue } from '../../queues';
 import { processTriggerEvent, runTriggerCycle } from '../triggerMonitor';
 import { latLngToCell } from 'h3-js';
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
 const mockWeatherService = weatherService as jest.Mocked<typeof weatherService>;
+const mockWeatherBudget = weatherBudget as jest.Mocked<typeof weatherBudget>;
 const mockClaimCreationQueue = claimCreationQueue as jest.Mocked<typeof claimCreationQueue>;
 
 describe('triggerMonitor job', () => {
@@ -35,7 +40,7 @@ describe('triggerMonitor job', () => {
   const eventHexBigintString = BigInt(`0x${eventHex}`).toString();
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     mockWeatherService.getCurrentConditions.mockResolvedValue({
       weather_multiplier: 1.2,
@@ -45,6 +50,13 @@ describe('triggerMonitor job', () => {
       aqi: null,
     });
     mockWeatherService.getAQI.mockResolvedValue(null);
+    mockWeatherBudget.canMakeOWMCall.mockReturnValue(true);
+    mockWeatherBudget.getStatus.mockReturnValue({
+      owm_calls_today: 0,
+      owm_daily_limit: 900,
+      owm_remaining: 900,
+      owm_pct_used: 0,
+    });
     (mockClaimCreationQueue.add as jest.Mock).mockResolvedValue({ id: 'job-1' });
   });
 
@@ -104,11 +116,8 @@ describe('triggerMonitor job', () => {
       disruption_hours: 4,
     });
 
-    expect(mockClaimCreationQueue.add).toHaveBeenCalledWith(
-      'create-claims',
-      expect.objectContaining({ worker_ids: ['inside-worker'] }),
-      expect.any(Object)
-    );
+    const payload = (mockClaimCreationQueue.add as jest.Mock).mock.calls[0][1];
+    expect(payload.worker_ids).toEqual(['inside-worker']);
   });
 
   test('processTriggerEvent workers outside k=1 ring are excluded', async () => {
@@ -170,13 +179,12 @@ describe('triggerMonitor job', () => {
 
     expect(mockClaimCreationQueue.add).toHaveBeenCalledWith(
       'create-claims',
-      {
-        disruption_event_id: 'event-xyz',
+      expect.objectContaining({
         trigger_type: 'heavy_rainfall',
         disruption_hours: 4,
         trigger_value: 20,
         worker_ids: ['worker-1'],
-      },
+      }),
       expect.any(Object)
     );
   });

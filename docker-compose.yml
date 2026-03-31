@@ -1,137 +1,136 @@
+version: '3.9'
+
 services:
   db:
     image: postgres:15-alpine
-    container_name: gigguard-postgres
-    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
       POSTGRES_DB: gigguard
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      POSTGRES_USER: gigguard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gigguard_dev}
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
+      test: ['CMD-SHELL', 'pg_isready -U gigguard -d gigguard']
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    container_name: gigguard-redis
-    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - '6379:6379'
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
       retries: 5
+    restart: unless-stopped
 
   ml-service:
     build:
       context: ./ml-service
       dockerfile: Dockerfile
-    container_name: gigguard-ml
-    restart: unless-stopped
-    env_file:
-      - ./.env
+    ports:
+      - '5001:5001'
     environment:
-      FLASK_ENV: production
+      DATABASE_URL: postgresql://gigguard:${POSTGRES_PASSWORD:-gigguard_dev}@db:5432/gigguard
+      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY}
+      AQICN_API_KEY: ${AQICN_API_KEY}
+      USE_MOCK_APIS: ${USE_MOCK_APIS:-false}
+      FLASK_ENV: ${FLASK_ENV:-production}
       ML_SERVICE_PORT: 5001
-      DATABASE_URL: postgresql://postgres:password@db:5432/gigguard
       SAC_MODEL_PATH: /app/models/sac_premium_v1.zip
       IF_MODEL_PATH: /app/models/isolation_forest.pkl
-      LOG_LEVEL: INFO
-      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY:-}
-      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
-      AQICN_API_KEY: ${AQICN_API_KEY:-}
-      USE_MOCK_APIS: ${USE_MOCK_APIS:-false}
-    ports:
-      - "5001:5001"
     volumes:
-      - ./ml-service/models:/app/models
-      - ./ml-service/data:/app/data
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=3).read()"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      - ml_models:/app/models
+      - ml_data:/app/data
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "python -c \"import json,sys,urllib.request; d=json.loads(urllib.request.urlopen('http://localhost:5001/health', timeout=3).read().decode()); sys.exit(0 if d.get('status')=='ok' else 1)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: gigguard-backend
-    restart: unless-stopped
-    env_file:
-      - ./.env
+    ports:
+      - '4000:4000'
     environment:
-      PORT: 4000
-      NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:password@db:5432/gigguard
-      ML_SERVICE_URL: http://ml-service:5001
-      ML_SERVICE_TIMEOUT_MS: ${ML_SERVICE_TIMEOUT_MS:-500}
-      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY:-}
-      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
-      OPENWEATHERMAP_BASE_URL: ${OPENWEATHERMAP_BASE_URL:-https://api.openweathermap.org/data/2.5}
-      AQICN_API_KEY: ${AQICN_API_KEY:-}
-      AQICN_BASE_URL: ${AQICN_BASE_URL:-https://api.waqi.info/feed}
-      JWT_SECRET: ${JWT_SECRET:-change_me_backend_jwt_secret}
-      INSURER_LOGIN_SECRET: ${INSURER_LOGIN_SECRET:-change_me_insurer_secret}
+      DATABASE_URL: postgresql://gigguard:${POSTGRES_PASSWORD:-gigguard_dev}@db:5432/gigguard
       REDIS_URL: redis://redis:6379
+      ML_SERVICE_URL: http://ml-service:5001
+      ML_SERVICE_TIMEOUT_MS: 500
+      JWT_SECRET: ${JWT_SECRET}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
+      RAZORPAY_ACCOUNT_NUMBER: ${RAZORPAY_ACCOUNT_NUMBER}
       USE_MOCK_APIS: ${USE_MOCK_APIS:-false}
       USE_MOCK_PAYOUT: ${USE_MOCK_PAYOUT:-true}
-      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-rzp_test_xxxx}
-      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-change_me_razorpay_secret}
-      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-change_me_razorpay_webhook_secret}
-      RAZORPAY_ACCOUNT_NUMBER: ${RAZORPAY_ACCOUNT_NUMBER:-1234567890}
-    ports:
-      - "4000:4000"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>{if(!r.ok) process.exit(1)}).catch(()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      IS_DEMO_MODE: ${IS_DEMO_MODE:-false}
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 4000
     depends_on:
       db:
         condition: service_healthy
-      ml-service:
-        condition: service_healthy
       redis:
         condition: service_healthy
+      ml-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "node -e \"fetch('http://localhost:4000/health').then(async r=>{if(!r.ok) process.exit(1); const d=await r.json(); process.exit(d.status==='ok'?0:1)}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./gigguard-frontend
       dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
-        NEXT_PUBLIC_RAZORPAY_KEY_ID: ${NEXT_PUBLIC_RAZORPAY_KEY_ID:-rzp_test_xxxx}
-    container_name: gigguard-frontend
-    restart: unless-stopped
+    ports:
+      - '3000:3000'
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
-      NEXT_PUBLIC_RAZORPAY_KEY_ID: ${NEXT_PUBLIC_RAZORPAY_KEY_ID:-rzp_test_xxxx}
-    ports:
-      - "3000:3000"
-    healthcheck:
-      test: ["CMD", "node", "-e", "const h=process.env.HOSTNAME||'localhost'; fetch('http://'+h+':3000').then(r=>{if(!r.ok) process.exit(1)}).catch(()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      NEXT_PUBLIC_RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "node -e \"fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  ml_models:
+  ml_data:

@@ -3,6 +3,8 @@ import { query } from '../db';
 import { mlService } from '../services/mlService';
 import { payoutQueue, redisConnection } from '../queues';
 import { config } from '../config';
+import { logger } from '../lib/logger';
+import { processPayoutCreationJob } from './payoutCreation';
 
 export interface ClaimValidationJob {
   claim_id: string;
@@ -25,7 +27,7 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
   );
 
   if (rows.length === 0) {
-    console.warn(`Claim ${claim_id} not found in validation worker`);
+    logger.warn('ClaimValidation', 'claim_not_found', { claim_id });
     return;
   }
 
@@ -79,6 +81,21 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
     ]
   );
 
+  logger.info('ClaimValidation', 'fraud_scored', {
+    claim_id,
+    fraud_score: fraudResult.fraud_score,
+    tier: fraudResult.tier,
+    flagged: fraudResult.flagged,
+    scorer: fraudResult.scorer,
+  });
+
+  if (fraudResult.scorer === 'fallback_default') {
+    logger.warn('ClaimValidation', 'ml_fallback', {
+      claim_id,
+      reason: 'timeout_or_unavailable',
+    });
+  }
+
   if (fraudResult.tier === 3) {
     const bcsScore = Math.round((1 - fraudResult.fraud_score) * 100);
     await query(
@@ -87,7 +104,11 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
        WHERE id=$2`,
       [bcsScore, claim_id]
     );
-    console.info(`Claim ${claim_id} held for review. BCS: ${bcsScore}`);
+    logger.warn('ClaimValidation', 'held_for_review', {
+      claim_id,
+      bcs_score: bcsScore,
+      graph_flags: fraudResult.graph_flags,
+    });
     return;
   }
 
@@ -98,11 +119,24 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
     [claim_id]
   );
 
-  await payoutQueue.add(
-    'create-payout',
-    { claim_id },
-    { attempts: 3, backoff: { type: 'exponential', delay: 10000 } }
-  );
+  logger.info('ClaimValidation', 'auto_approved', {
+    claim_id,
+    fraud_score: fraudResult.fraud_score,
+  });
+
+  try {
+    await payoutQueue.add(
+      'create-payout',
+      { claim_id },
+      { attempts: 3, backoff: { type: 'exponential', delay: 10000 } }
+    );
+  } catch (err) {
+    logger.warn('ClaimValidation', 'payout_enqueue_failed_sync_fallback', {
+      claim_id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    await processPayoutCreationJob({ claim_id });
+  }
 }
 
 export const claimValidationWorker =

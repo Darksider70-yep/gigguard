@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { Client } from '@googlemaps/google-maps-services-js';
 import { latLngToCell } from 'h3-js';
 import { query } from '../db';
+import { logger } from '../lib/logger';
 
 const H3_RESOLUTION = 8;
 const BATCH_SIZE = 50;
@@ -43,7 +44,7 @@ async function geocodeZone(zone: string, city: string): Promise<{ lat: number; l
 
 export async function backfillCentroidWorkers(): Promise<void> {
   if (!mapsApiKey) {
-    console.warn('[HexBackfill] GOOGLE_MAPS_API_KEY missing. Skipping centroid worker backfill.');
+    logger.warn('HexBackfill', 'google_maps_key_missing_skip');
     return;
   }
 
@@ -83,11 +84,17 @@ export async function backfillCentroidWorkers(): Promise<void> {
       );
       updated += 1;
     } catch (err) {
-      console.warn(`[HexBackfill] Failed for worker ${worker.id}:`, err);
+      logger.warn('HexBackfill', 'worker_backfill_failed', {
+        worker_id: worker.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
-  console.info(`[HexBackfill] Backfilled ${updated}/${rows.length} centroid worker hex IDs`);
+  logger.info('HexBackfill', 'batch_completed', {
+    updated,
+    batch_size: rows.length,
+  });
 }
 
 export function startHexBackfillJob(): void {
@@ -95,8 +102,10 @@ export function startHexBackfillJob(): void {
     try {
       await backfillCentroidWorkers();
     } catch (err) {
-      console.error('[HexBackfill] Scheduled run failed:', err);
+      logger.error('HexBackfill', 'scheduled_run_failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   });
-  console.info('[HexBackfill] Scheduled - daily at 03:15');
+  logger.info('HexBackfill', 'scheduled', { cron: '15 3 * * *' });
 }
