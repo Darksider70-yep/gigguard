@@ -11,7 +11,7 @@ function monthKey(date: Date): string {
 }
 
 function formatInr(value: number): string {
-  return `?${Math.round(value).toLocaleString('en-IN')}`;
+  return `\u20B9${Math.round(value).toLocaleString('en-IN')}`;
 }
 
 export default function InsurerPayoutsPage() {
@@ -89,7 +89,7 @@ export default function InsurerPayoutsPage() {
               className="rounded border border-slate-700 px-3 py-1 text-sm text-secondary"
               onClick={() => setMonthCursor((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
             >
-              ?
+              {'<'}
             </button>
             <span className="font-mono-data text-sm">{monthKey(monthCursor)}</span>
             <button
@@ -97,7 +97,7 @@ export default function InsurerPayoutsPage() {
               className="rounded border border-slate-700 px-3 py-1 text-sm text-secondary"
               onClick={() => setMonthCursor((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
             >
-              ?
+              {'>'}
             </button>
           </div>
         </div>

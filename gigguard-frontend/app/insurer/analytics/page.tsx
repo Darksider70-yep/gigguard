@@ -11,6 +11,7 @@ interface AnalyticsBundle {
   dashboard: InsurerDashboardResponse;
   shadow: ShadowComparisonResponse;
 }
+const INR = '\u20B9';
 
 function statusText(lossRatioPct: number): string {
   if (lossRatioPct < 65) return 'On target';
@@ -82,7 +83,7 @@ export default function InsurerAnalyticsPage() {
                     <div
                       className="rounded-t bg-amber-400/80 transition hover:bg-amber-300"
                       style={{ height: `${Math.round((value / maxDistribution) * 100)}%` }}
-                      title={`?${value}`}
+                      title={`${INR}${value}`}
                     />
                     <p className="mt-2 text-center text-xs text-secondary">D{index + 1}</p>
                   </div>
@@ -94,13 +95,13 @@ export default function InsurerAnalyticsPage() {
               <h3 className="text-lg font-semibold">Shadow comparison</h3>
               <div className="mt-4 space-y-2 text-sm text-secondary">
                 <p>
-                  Formula premium: <span className="font-mono-data text-white">?{Math.round(data.shadow.mean_formula_premium)}</span>
+                  Formula premium: <span className="font-mono-data text-white">{`${INR}${Math.round(data.shadow.mean_formula_premium)}`}</span>
                 </p>
                 <p>
-                  RL premium: <span className="font-mono-data text-white">?{Math.round(data.shadow.mean_rl_premium)}</span>
+                  RL premium: <span className="font-mono-data text-white">{`${INR}${Math.round(data.shadow.mean_rl_premium)}`}</span>
                 </p>
                 <p>
-                  Delta: <span className="font-mono-data text-amber-300">?{Math.round(data.shadow.avg_delta)} avg</span>
+                  Delta: <span className="font-mono-data text-amber-300">{`${INR}${Math.round(data.shadow.avg_delta)} avg`}</span>
                 </p>
                 <p>
                   RL Premium Engine Status:{' '}

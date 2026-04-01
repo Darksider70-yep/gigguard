@@ -31,6 +31,8 @@ const TIERS = [
   { arm: 2, premium: 65, coverage: 640 },
   { arm: 3, premium: 89, coverage: 890 },
 ];
+const INR = '\u20B9';
+const STAR = '\u2B50';
 
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -220,7 +222,7 @@ export default function BuyPolicyQuotePage() {
             <h1 className="text-3xl font-semibold">Your Quote is Ready!</h1>
             <p className="mt-2 text-secondary">AI recommendation generated from zone risk and history context.</p>
             <p className="mt-4 font-mono-data text-6xl text-amber-300">
-              ?<CountUp value={Math.round(quote.premium)} />
+              {INR}<CountUp value={Math.round(quote.premium)} />
             </p>
             <div className="mt-4">
               <PremiumFormula
@@ -239,7 +241,7 @@ export default function BuyPolicyQuotePage() {
                 <div className="relative h-40 w-full transition-transform duration-500 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)]">
                   <div className="surface-card absolute inset-0 p-3 [backface-visibility:hidden]">
                     <TriggerBadge triggerType={trigger.key} />
-                    <p className="mt-4 font-mono-data text-2xl text-amber-300">?{Math.round(trigger.amount)}</p>
+                    <p className="mt-4 font-mono-data text-2xl text-amber-300">{`${INR}${Math.round(trigger.amount)}`}</p>
                     <p className="mt-2 text-xs text-secondary">Payout amount</p>
                   </div>
                   <div className="surface-card absolute inset-0 p-3 [transform:rotateY(180deg)] [backface-visibility:hidden]">
@@ -253,7 +255,7 @@ export default function BuyPolicyQuotePage() {
 
           <section className="surface-card p-5">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-500/50 bg-amber-500/15 px-3 py-1 text-sm text-amber-200">
-              ? AI Recommended tier: {quote.recommended_arm}
+              {`${STAR} AI Recommended tier: ${quote.recommended_arm}`}
             </div>
             <div className="space-y-3">
               {sortedTiers.map((tier) => {
@@ -275,7 +277,7 @@ export default function BuyPolicyQuotePage() {
                     />
                     <span className="font-semibold">Tier {tier.arm}</span>
                     {recommended ? <span className="ml-2 text-xs text-amber-300">Recommended for you</span> : null}
-                    <span className="float-right font-mono-data">?{tier.premium} • ?{tier.coverage}</span>
+                    <span className="float-right font-mono-data">{`${INR}${tier.premium} • ${INR}${tier.coverage}`}</span>
                   </label>
                 );
               })}
@@ -289,7 +291,7 @@ export default function BuyPolicyQuotePage() {
               disabled={isPaying}
               className="btn-saffron mt-5 w-full px-4 py-3 text-lg disabled:opacity-60"
             >
-              {isPaying ? 'Processing payment...' : `Pay via Razorpay • ?${selectedTier.premium}`}
+              {isPaying ? 'Processing payment...' : `Pay via Razorpay • ${INR}${selectedTier.premium}`}
             </button>
           </section>
         </div>

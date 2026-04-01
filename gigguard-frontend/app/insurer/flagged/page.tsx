@@ -8,6 +8,7 @@ import { APIError, api } from '@/lib/api';
 import { AntiSpoofingAlertsResponse } from '@/lib/types';
 
 type Filter = 'all' | 'tier3' | 'tier2' | 'resolved';
+const INR = '\u20B9';
 
 export default function InsurerFlaggedPage() {
   const [alerts, setAlerts] = useState<AntiSpoofingAlertsResponse['alerts']>([]);
@@ -81,7 +82,7 @@ export default function InsurerFlaggedPage() {
         <div className="surface-card p-4"><p className="text-xs text-secondary">Tier 3 (BCS &lt; 40)</p><p className="mt-1 font-mono-data text-3xl text-rose-300">{tier3Count}</p></div>
         <div className="surface-card p-4"><p className="text-xs text-secondary">Tier 2 (BCS 40-65)</p><p className="mt-1 font-mono-data text-3xl text-amber-300">{tier2Count}</p></div>
         <div className="surface-card p-4"><p className="text-xs text-secondary">Auto-approved today</p><p className="mt-1 font-mono-data text-3xl text-emerald-300">0</p></div>
-        <div className="surface-card p-4"><p className="text-xs text-secondary">Fraud prevented</p><p className="mt-1 font-mono-data text-3xl text-amber-300">?0</p></div>
+        <div className="surface-card p-4"><p className="text-xs text-secondary">Fraud prevented</p><p className="mt-1 font-mono-data text-3xl text-amber-300">{`${INR}0`}</p></div>
       </section>
 
       <section className="surface-card mt-4 p-4">
@@ -118,7 +119,7 @@ export default function InsurerFlaggedPage() {
                   </div>
 
                   <div>
-                    <p className="font-mono-data text-2xl">?{Math.round(alert.payout_amount)}</p>
+                    <p className="font-mono-data text-2xl">{`${INR}${Math.round(alert.payout_amount)}`}</p>
                     <p className="text-xs text-secondary">{alert.trigger_type}</p>
                     <p className="text-xs text-muted">{new Date(alert.created_at).toLocaleString('en-IN')}</p>
                   </div>

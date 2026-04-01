@@ -20,6 +20,8 @@ interface PurchaseConfirmationState {
   zone?: string;
   city?: string;
 }
+const INR = '\u20B9';
+const CHECK = '\u2713';
 
 export default function BuyPolicyConfirmedPage() {
   const router = useRouter();
@@ -90,15 +92,15 @@ export default function BuyPolicyConfirmedPage() {
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
                 Week<br />
-                <span className="font-mono-data">{data.policy.week_start} ? {data.policy.week_end}</span>
+                <span className="font-mono-data">{data.policy.week_start} - {data.policy.week_end}</span>
               </div>
               <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
                 Premium<br />
-                <span className="font-mono-data">?{Math.round(data.policy.premium_paid)}</span>
+                <span className="font-mono-data">{`${INR}${Math.round(data.policy.premium_paid)}`}</span>
               </div>
               <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
                 Coverage<br />
-                <span className="font-mono-data">?{Math.round(data.policy.coverage_amount)}</span>
+                <span className="font-mono-data">{`${INR}${Math.round(data.policy.coverage_amount)}`}</span>
               </div>
               <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
                 Razorpay Ref<br />
@@ -114,7 +116,7 @@ export default function BuyPolicyConfirmedPage() {
               <button onClick={copyPolicyId} type="button" className="btn-saffron px-4 py-2 text-sm">
                 Share Policy ID
               </button>
-              {copied ? <span className="text-sm text-emerald-300">Copied ?</span> : null}
+              {copied ? <span className="text-sm text-emerald-300">{`Copied ${CHECK}`}</span> : null}
             </div>
           </section>
 

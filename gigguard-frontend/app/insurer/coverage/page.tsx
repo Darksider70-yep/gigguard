@@ -91,7 +91,7 @@ export default function InsurerCoveragePage() {
                         </td>
                         <td className="px-2 py-2 font-mono-data">{zone.worker_count ?? 0}</td>
                         <td className="px-2 py-2 text-secondary">
-                          {(zone.worker_count ?? 0) > 0 ? 'Active monitoring ?' : 'No active policies'}
+                          {(zone.worker_count ?? 0) > 0 ? 'Active monitoring' : 'No active policies'}
                         </td>
                       </tr>
                     ))}

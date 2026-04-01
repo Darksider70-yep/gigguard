@@ -6,6 +6,7 @@ import { MapPin, ShieldCheck, TrendingUp } from 'lucide-react';
 import AuthGuard from '@/components/AuthGuard';
 import { APIError, api } from '@/lib/api';
 import { PremiumQuoteResponse, WorkerProfile } from '@/lib/types';
+const INR = '\u20B9';
 
 export default function BuyPolicyStepOnePage() {
   const router = useRouter();
@@ -93,7 +94,7 @@ export default function BuyPolicyStepOnePage() {
               </div>
               <div className="mt-4 space-y-2 text-sm text-secondary">
                 <p className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-amber-300" />{worker.zone}, {worker.city}</p>
-                <p className="inline-flex items-center gap-2"><TrendingUp className="h-4 w-4 text-amber-300" />?{Math.round(worker.avg_daily_earning)} avg/day</p>
+                <p className="inline-flex items-center gap-2"><TrendingUp className="h-4 w-4 text-amber-300" />{`${INR}${Math.round(worker.avg_daily_earning)} avg/day`}</p>
                 <p className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-300" />Zone monitoring active</p>
               </div>
             </section>
@@ -103,11 +104,11 @@ export default function BuyPolicyStepOnePage() {
               <p className="mt-1 text-sm text-secondary">Coverage preview for all trigger types in your active zone.</p>
 
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">??? Heavy Rainfall <span className="font-mono-data float-right">?{quote.coverage.heavy_rainfall}</span></div>
-                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">??? Extreme Heat <span className="font-mono-data float-right">?{quote.coverage.extreme_heat}</span></div>
-                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">?? Flood Alert <span className="font-mono-data float-right">?{quote.coverage.flood_red_alert}</span></div>
-                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">?? Severe AQI <span className="font-mono-data float-right">?{quote.coverage.severe_aqi}</span></div>
-                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3 col-span-2">?? Curfew/Strike <span className="font-mono-data float-right">?{quote.coverage.curfew_strike}</span></div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">Heavy Rainfall <span className="font-mono-data float-right">{`${INR}${quote.coverage.heavy_rainfall}`}</span></div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">Extreme Heat <span className="font-mono-data float-right">{`${INR}${quote.coverage.extreme_heat}`}</span></div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">Flood Alert <span className="font-mono-data float-right">{`${INR}${quote.coverage.flood_red_alert}`}</span></div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">Severe AQI <span className="font-mono-data float-right">{`${INR}${quote.coverage.severe_aqi}`}</span></div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3 col-span-2">Curfew/Strike <span className="font-mono-data float-right">{`${INR}${quote.coverage.curfew_strike}`}</span></div>
               </div>
 
               <div className="mt-4 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
@@ -119,7 +120,7 @@ export default function BuyPolicyStepOnePage() {
                 onClick={continueToQuote}
                 className="btn-saffron mt-5 inline-flex w-full items-center justify-center gap-2 px-5 py-3"
               >
-                Calculate My Premium ?
+                {'Calculate My Premium ->'}
               </button>
             </section>
           </div>

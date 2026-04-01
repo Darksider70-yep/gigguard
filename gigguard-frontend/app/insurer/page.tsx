@@ -25,9 +25,10 @@ interface DashboardBundle {
   alerts: AntiSpoofingAlertsResponse['alerts'];
   shadow: ShadowComparisonResponse;
 }
+const INR = '\u20B9';
 
 function formatInr(value: number): string {
-  return `Rs ${Math.round(value).toLocaleString('en-IN')}`;
+  return `\u20B9${Math.round(value).toLocaleString('en-IN')}`;
 }
 
 function formatTime(value: string): string {
@@ -224,7 +225,7 @@ export default function InsurerPage() {
           <section className="grid grid-cols-7 gap-3">
             <StatCard label="Total Workers" value={stats.total_workers} href="/insurer/workers" accent="default" subtitle="Tracked workers" />
             <StatCard label="Active Policies" value={stats.active_policies} href="/insurer/policies" accent="green" subtitle="Weekly active" />
-            <StatCard label="Payouts This Month" value={stats.payouts_this_month} prefix="Rs " href="/insurer/payouts" accent="saffron" />
+            <StatCard label="Payouts This Month" value={stats.payouts_this_month} prefix={INR} href="/insurer/payouts" accent="saffron" />
             <StatCard label="Flagged Claims" value={stats.flagged_claims} href="/insurer/flagged" accent="red" subtitle="Needs review" />
             <StatCard label="Loss Ratio" value={Math.round(stats.loss_ratio * 100)} suffix="%" href="/insurer/analytics" accent="blue" />
             <StatCard
@@ -235,7 +236,7 @@ export default function InsurerPage() {
               accent="default"
               subtitle={`${stats.coverage_area.cities} cities`}
             />
-            <StatCard label="Average Premium" value={stats.average_premium} prefix="Rs " href="/insurer/analytics" accent="saffron" />
+            <StatCard label="Average Premium" value={stats.average_premium} prefix={INR} href="/insurer/analytics" accent="saffron" />
           </section>
 
           <section className="grid grid-cols-5 gap-5">

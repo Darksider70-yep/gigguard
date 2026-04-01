@@ -13,6 +13,7 @@ interface WorkerSlideOverProps {
 }
 
 type TabKey = 'overview' | 'policies' | 'claims' | 'risk';
+const INR = '\u20B9';
 
 export default function WorkerSlideOver({
   open,
@@ -72,7 +73,7 @@ export default function WorkerSlideOver({
               </p>
               <p>
                 Daily Earning:{' '}
-                <span className="font-mono-data text-white">?{Math.round(worker?.avg_daily_earning ?? 0)}</span>
+                <span className="font-mono-data text-white">{`${INR}${Math.round(worker?.avg_daily_earning ?? 0)}`}</span>
               </p>
               <p>
                 Zone Multiplier:{' '}
@@ -97,7 +98,7 @@ export default function WorkerSlideOver({
                     {policy.week_start} ? {policy.week_end}
                   </p>
                   <p className="font-mono-data">
-                    ?{Math.round(policy.premium_paid)} / ?{Math.round(policy.coverage_amount)}
+                    {`${INR}${Math.round(policy.premium_paid)} / ${INR}${Math.round(policy.coverage_amount)}`}
                   </p>
                 </div>
               ))}
@@ -112,7 +113,7 @@ export default function WorkerSlideOver({
                   <p>
                     {claim.trigger_type} • {claim.status}
                   </p>
-                  <p className="font-mono-data">?{Math.round(claim.payout_amount)}</p>
+                  <p className="font-mono-data">{`${INR}${Math.round(claim.payout_amount)}`}</p>
                 </div>
               ))}
             </div>

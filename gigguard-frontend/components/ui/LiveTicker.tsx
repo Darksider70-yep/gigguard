@@ -31,7 +31,7 @@ export default function LiveTicker({ events }: LiveTickerProps) {
           </div>
         </div>
       ) : (
-        <p className="text-sm text-emerald-300">? All zones clear</p>
+        <p className="text-sm text-emerald-300">All zones clear</p>
       )}
     </div>
   );

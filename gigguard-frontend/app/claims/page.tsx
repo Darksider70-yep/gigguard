@@ -7,6 +7,7 @@ import RadialGauge from '@/components/ui/RadialGauge';
 import TriggerBadge from '@/components/ui/TriggerBadge';
 import { APIError, api } from '@/lib/api';
 import { ClaimItem, ClaimsResponse } from '@/lib/types';
+const INR = '\u20B9';
 
 function statusColor(status: string): string {
   if (status === 'paid') return '#10b981';
@@ -90,7 +91,7 @@ export default function ClaimsPage() {
               </div>
 
               <div>
-                <p className="font-mono-data text-2xl">?{Math.round(claim.payout_amount)}</p>
+                <p className="font-mono-data text-2xl">{`${INR}${Math.round(claim.payout_amount)}`}</p>
                 <span
                   className="status-pill mt-1 inline-block"
                   style={{ background: `${statusColor(claim.status)}26`, color: statusColor(claim.status) }}
@@ -153,7 +154,7 @@ export default function ClaimsPage() {
                             ))}
                           </ul>
                           {(claim.under_review_reason?.goodwill_bonus ?? 0) > 0 ? (
-                            <p className="mt-2 text-amber-200">+?{claim.under_review_reason?.goodwill_bonus} goodwill bonus ?</p>
+                            <p className="mt-2 text-amber-200">{`+${INR}${claim.under_review_reason?.goodwill_bonus} goodwill bonus`}</p>
                           ) : null}
                         </div>
                       </div>
@@ -185,14 +186,14 @@ export default function ClaimsPage() {
           <section className="grid grid-cols-3 gap-4">
             <div className="surface-card p-4">
               <p className="text-xs text-secondary">Total Paid Out</p>
-              <p className="mt-1 font-mono-data text-3xl text-amber-300">?<CountUp value={totalPaid} /></p>
+              <p className="mt-1 font-mono-data text-3xl text-amber-300">{INR}<CountUp value={totalPaid} /></p>
             </div>
             <div className="surface-card p-4">
               <p className="text-xs text-secondary">Claims This Month</p>
               <p className="mt-1 font-mono-data text-3xl text-blue-300"><CountUp value={monthClaims} /></p>
             </div>
             <div className="surface-card p-4">
-              <p className="text-xs text-secondary">Paid Streak ??</p>
+              <p className="text-xs text-secondary">Paid Streak</p>
               <p className="mt-1 font-mono-data text-3xl text-emerald-300"><CountUp value={streak} /></p>
             </div>
           </section>

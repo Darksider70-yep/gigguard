@@ -6,12 +6,12 @@ interface TriggerBadgeProps {
 }
 
 const TRIGGER_CONFIG: Record<string, { icon: string; label: string; color: string }> = {
-  heavy_rainfall: { icon: '???', label: 'Heavy Rainfall', color: '#3b82f6' },
-  extreme_heat: { icon: '???', label: 'Extreme Heat', color: '#f97316' },
-  flood_red_alert: { icon: '??', label: 'Flood/Red Alert', color: '#0ea5e9' },
-  flood_alert: { icon: '??', label: 'Flood/Red Alert', color: '#0ea5e9' },
-  severe_aqi: { icon: '??', label: 'Severe AQI', color: '#8b5cf6' },
-  curfew_strike: { icon: '??', label: 'Curfew/Strike', color: '#ef4444' },
+  heavy_rainfall: { icon: '\uD83C\uDF27\uFE0F', label: 'Heavy Rainfall', color: '#3b82f6' },
+  extreme_heat: { icon: '\uD83C\uDF21\uFE0F', label: 'Extreme Heat', color: '#f97316' },
+  flood_red_alert: { icon: '\uD83C\uDF0A', label: 'Flood/Red Alert', color: '#0ea5e9' },
+  flood_alert: { icon: '\uD83C\uDF0A', label: 'Flood/Red Alert', color: '#0ea5e9' },
+  severe_aqi: { icon: '\uD83D\uDE37', label: 'Severe AQI', color: '#8b5cf6' },
+  curfew_strike: { icon: '\uD83D\uDEAB', label: 'Curfew/Strike', color: '#ef4444' },
 };
 
 const SIZE_MAP: Record<NonNullable<TriggerBadgeProps['size']>, string> = {

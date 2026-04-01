@@ -11,11 +11,13 @@ import { APIError, api } from '@/lib/api';
 import { ActivePolicyResponse, ClaimsResponse, PolicyHistoryResponse, PremiumQuoteResponse, WorkerProfile } from '@/lib/types';
 
 const WEATHER_ICON: Record<string, string> = {
-  heavy_rainfall: '???',
-  extreme_heat: '???',
-  severe_aqi: '??',
-  default: '??',
+  heavy_rainfall: '\uD83C\uDF27\uFE0F',
+  extreme_heat: '\uD83C\uDF21\uFE0F',
+  severe_aqi: '\uD83D\uDE37',
+  default: '\u2600\uFE0F',
 };
+const INR = '\u20B9';
+const WAVE = '\uD83D\uDC4B';
 
 type Tab = 'dashboard' | 'policies' | 'claims';
 
@@ -110,7 +112,7 @@ export default function DashboardPage() {
         <div className="space-y-5">
           <section className="surface-card animate-fade-in-up delay-0 flex items-center justify-between p-5">
             <div>
-              <h1 className="text-3xl font-semibold">Good evening, {worker?.name ?? 'Worker'} ??</h1>
+              <h1 className="text-3xl font-semibold">{`Good evening, ${worker?.name ?? 'Worker'} ${WAVE}`}</h1>
               <div className="mt-2 flex items-center gap-2 text-sm">
                 <span className="status-pill bg-amber-500/20 text-amber-300">{worker?.platform ?? '-'}</span>
                 <span className="text-secondary">{worker?.zone ?? '-'}, {worker?.city ?? '-'}</span>
@@ -135,7 +137,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-secondary">Estimated payout</p>
-                  <p className="font-mono-data text-3xl text-amber-300">?{Math.round(activePolicy.active_claim.payout_amount)}</p>
+                  <p className="font-mono-data text-3xl text-amber-300">{`${INR}${Math.round(activePolicy.active_claim.payout_amount)}`}</p>
                 </div>
               </div>
               <div className="mt-4">
@@ -174,11 +176,11 @@ export default function DashboardPage() {
                   <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4 text-sm">
                     <div className="grid grid-cols-2 gap-2 text-secondary">
                       <p>Week</p>
-                      <p className="text-right font-mono-data text-white">{activePolicy.policy.week_start} ? {activePolicy.policy.week_end}</p>
+                      <p className="text-right font-mono-data text-white">{activePolicy.policy.week_start} - {activePolicy.policy.week_end}</p>
                       <p>Premium</p>
-                      <p className="text-right font-mono-data text-white">?{Math.round(activePolicy.policy.premium_paid)}</p>
+                      <p className="text-right font-mono-data text-white">{`${INR}${Math.round(activePolicy.policy.premium_paid)}`}</p>
                       <p>Coverage</p>
-                      <p className="text-right font-mono-data text-white">?{Math.round(activePolicy.policy.coverage_amount)}</p>
+                      <p className="text-right font-mono-data text-white">{`${INR}${Math.round(activePolicy.policy.coverage_amount)}`}</p>
                       <p>Status</p>
                       <p className="text-right">
                         <span className="status-pill badge-paid">{activePolicy.policy.status}</span>
@@ -267,7 +269,7 @@ export default function DashboardPage() {
             <section className="grid grid-cols-4 gap-4">
               <div className="surface-card p-4">
                 <p className="text-xs text-secondary">Total Payouts Received</p>
-                <p className="mt-2 font-mono-data text-2xl text-amber-300">?<CountUp value={monthTotal} /></p>
+                <p className="mt-2 font-mono-data text-2xl text-amber-300">{INR}<CountUp value={monthTotal} /></p>
               </div>
               <div className="surface-card p-4">
                 <p className="text-xs text-secondary">Policies Purchased</p>
@@ -289,8 +291,8 @@ export default function DashboardPage() {
               {(history?.policies ?? []).map((policy) => (
                 <div key={policy.id} className="surface-card card-interactive p-4">
                   <p className="font-mono-data text-xs text-amber-300">{policy.id}</p>
-                  <p className="mt-1 text-sm text-secondary">{policy.week_start} ? {policy.week_end}</p>
-                  <p className="mt-1 font-mono-data">?{Math.round(policy.premium_paid)} premium • ?{Math.round(policy.coverage_amount)} coverage</p>
+                  <p className="mt-1 text-sm text-secondary">{policy.week_start} - {policy.week_end}</p>
+                  <p className="mt-1 font-mono-data">{`${INR}${Math.round(policy.premium_paid)} premium • ${INR}${Math.round(policy.coverage_amount)} coverage`}</p>
                 </div>
               ))}
             </section>

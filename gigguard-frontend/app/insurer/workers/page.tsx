@@ -9,6 +9,7 @@ import { InsurerWorkersResponse, WorkerProfile } from '@/lib/types';
 
 const CITY_FILTERS = ['all', 'mumbai', 'delhi', 'chennai', 'bangalore', 'hyderabad'];
 const PLATFORM_FILTERS = ['all', 'zomato', 'swiggy'];
+const INR = '\u20B9';
 
 export default function InsurerWorkersPage() {
   const [data, setData] = useState<InsurerWorkersResponse | null>(null);
@@ -133,7 +134,7 @@ export default function InsurerWorkersPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3 text-secondary">{worker.city}, {worker.zone ?? '-'}</td>
-                      <td className="px-3 py-3 font-mono-data">?{Math.round(worker.avg_daily_earning)}</td>
+                      <td className="px-3 py-3 font-mono-data">{`${INR}${Math.round(worker.avg_daily_earning)}`}</td>
                       <td className="px-3 py-3">
                         <div className="h-2 w-28 rounded bg-slate-800">
                           <div

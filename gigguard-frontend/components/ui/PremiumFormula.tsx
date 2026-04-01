@@ -9,6 +9,7 @@ interface PremiumFormulaProps {
   historyMultiplier: number;
   finalPremium: number;
 }
+const INR = '\u20B9';
 
 function partVisible(visible: number, index: number): string {
   return visible >= index ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2';
@@ -41,12 +42,12 @@ export default function PremiumFormula({
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-4 font-mono-data text-base text-slate-100">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`transition duration-300 ${partVisible(visible, 1)}`}>?{Math.round(baseRate)}</span>
+        <span className={`transition duration-300 ${partVisible(visible, 1)}`}>{`${INR}${Math.round(baseRate)}`}</span>
         <span className={`transition duration-300 ${partVisible(visible, 2)}`}>× {zoneMultiplier.toFixed(2)}</span>
         <span className={`transition duration-300 ${partVisible(visible, 3)}`}>× {weatherMultiplier.toFixed(2)}</span>
         <span className={`transition duration-300 ${partVisible(visible, 4)}`}>× {historyMultiplier.toFixed(2)}</span>
         <span className={`text-amber-300 transition duration-300 ${partVisible(visible, 5)}`}>
-          = ?{Math.round(finalPremium)}
+          {`= ${INR}${Math.round(finalPremium)}`}
         </span>
       </div>
     </div>
