@@ -1,6 +1,7 @@
-﻿export interface WorkerProfile {
+export interface WorkerProfile {
   id: string;
   name: string;
+  phone_number?: string | null;
   platform: 'zomato' | 'swiggy';
   city: string;
   zone: string | null;
@@ -11,6 +12,9 @@
   history_multiplier: number;
   experience_tier?: 'new' | 'mid' | 'veteran' | null;
   upi_vpa?: string | null;
+  avatar_seed?: string | null;
+  verified?: boolean;
+  verified_at?: string | null;
   created_at: string;
 }
 
@@ -285,3 +289,36 @@ export interface SimulateTriggerBody {
   disruption_hours?: number;
 }
 
+
+export interface RegisterRequest {
+  name: string;
+  phone_number: string;
+  platform: 'zomato' | 'swiggy';
+  city: string;
+  zone: string;
+  avg_daily_earning: number;
+  upi_vpa: string;
+}
+
+export interface RegisterResponse {
+  message: string;
+  phone_number: string;
+  worker_id: string;
+}
+
+export interface OtpRequest {
+  phone_number: string;
+  otp?: string;
+}
+
+export interface OtpChallengeResponse {
+  message: string;
+  phone_number: string;
+}
+
+export interface VerifyOtpResponse {
+  token: string;
+  worker: WorkerProfile;
+}
+
+export type RegistrationStep = 'details' | 'verify' | 'complete';

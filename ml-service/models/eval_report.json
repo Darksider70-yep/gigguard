@@ -1,0 +1,26 @@
+{
+  "evaluated_at": "2026-04-01T18:57:41.337237+00:00",
+  "total_timesteps": 30000,
+  "n_eval_episodes": 500,
+  "sac": {
+    "mean_premium": 44.10458884615384,
+    "purchase_rate": 0.6859615384615384,
+    "loss_ratio": 0.05480140654371033,
+    "mean_reward": 0.5736583746274679
+  },
+  "formula": {
+    "mean_premium": 40.2915226923077,
+    "purchase_rate": 0.7248076923076924,
+    "loss_ratio": 0.059509004012743706,
+    "mean_reward": 0.6421797862486656
+  },
+  "targets": {
+    "sac_mean_premium_range": [
+      28,
+      75
+    ],
+    "sac_purchase_rate_gt": 0.55,
+    "sac_loss_ratio_lt": 0.8,
+    "sac_loss_ratio_lower_than_formula": true
+  }
+}

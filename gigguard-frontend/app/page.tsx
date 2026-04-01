@@ -1,7 +1,8 @@
-﻿'use client';
+'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Briefcase, ShoppingCart, Shield, Signal, Zap } from 'lucide-react';
+import { Briefcase, Shield, ShoppingCart, Signal, Zap } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { APIError, api } from '@/lib/api';
 import { DisruptionEventsResponse } from '@/lib/types';
@@ -68,24 +69,6 @@ export default function HomePage() {
     };
   }, []);
 
-  const handleWorkerLogin = async () => {
-    setAuthError(null);
-    const phoneNumber = window.prompt('Enter phone number');
-    if (!phoneNumber) {
-      return;
-    }
-
-    try {
-      await login('worker', { phoneNumber });
-    } catch (error) {
-      if (error instanceof APIError && error.status === 0) {
-        setAuthError('Network unavailable. Check backend connectivity.');
-        return;
-      }
-      setAuthError('Login failed. Verify phone number and retry.');
-    }
-  };
-
   const handleInsurerLogin = async () => {
     setAuthError(null);
     const secret = window.prompt('Enter insurer secret (if configured)', '') || undefined;
@@ -119,21 +102,22 @@ export default function HomePage() {
             heatwaves, and disruption shocks.
           </p>
 
-          <div className="animate-fade-in-up delay-400 mt-8 flex items-center gap-4">
-            <button
-              type="button"
-              onClick={handleWorkerLogin}
-              disabled={isLoading}
-              className="btn-saffron inline-flex items-center gap-2 px-5 py-3 disabled:opacity-60"
-            >
+          <div className="animate-fade-in-up delay-400 mt-8 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
+            <Link href="/login" className="btn-outline-saffron inline-flex items-center justify-center gap-2 px-5 py-3">
               <Shield className="h-4 w-4" />
-              Worker Login
-            </button>
+              Login as Worker
+            </Link>
+            <Link href="/register" className="btn-saffron inline-flex items-center justify-center gap-2 px-5 py-3">
+              New here? Register free
+            </Link>
+          </div>
+
+          <div className="mt-4">
             <button
               type="button"
               onClick={handleInsurerLogin}
               disabled={isLoading}
-              className="btn-outline-saffron px-5 py-3 disabled:opacity-60"
+              className="btn-outline-saffron px-5 py-3 text-sm disabled:opacity-60"
             >
               Insurer Login
             </button>
@@ -192,4 +176,3 @@ export default function HomePage() {
     </div>
   );
 }
-

@@ -1,21 +1,26 @@
-﻿import {
+import {
   ActivePolicyResponse,
   AntiSpoofingAlertsResponse,
   ClaimsResponse,
   DisruptionEventsResponse,
-  InsurerProfile,
-  InsurerPayoutsResponse,
-  InsurerWorkersResponse,
   InsurerDashboardResponse,
+  InsurerPayoutsResponse,
+  InsurerProfile,
+  InsurerWorkersResponse,
   LoginResponse,
+  OtpChallengeResponse,
+  OtpRequest,
   Phase2ChecklistResponse,
   PolicyHistoryResponse,
   PremiumQuoteResponse,
   PurchasePolicyBody,
   PurchasePolicyResponse,
   RazorpayOrderResponse,
+  RegisterRequest,
+  RegisterResponse,
   ShadowComparisonResponse,
   SimulateTriggerBody,
+  VerifyOtpResponse,
   WorkerProfile,
   ZoneRiskMatrixResponse,
 } from './types';
@@ -84,8 +89,8 @@ class GigGuardAPI {
     }
   }
 
-  loginWorker(phone_number: string): Promise<LoginResponse> {
-    return this.request<LoginResponse>('/workers/login', {
+  loginWorker(phone_number: string): Promise<OtpChallengeResponse> {
+    return this.request<OtpChallengeResponse>('/workers/login', {
       method: 'POST',
       body: JSON.stringify({ role: 'worker', phone_number }),
     });
@@ -95,6 +100,27 @@ class GigGuardAPI {
     return this.request<LoginResponse>('/workers/login', {
       method: 'POST',
       body: JSON.stringify({ role: 'insurer', secret }),
+    });
+  }
+
+  registerWorker(body: RegisterRequest) {
+    return this.request<RegisterResponse>('/workers/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  verifyOtp(body: OtpRequest) {
+    return this.request<VerifyOtpResponse>('/workers/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  resendOtp(phone_number: string) {
+    return this.request<OtpChallengeResponse>('/workers/resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone_number }),
     });
   }
 
@@ -224,15 +250,11 @@ class GigGuardAPI {
   }
 
   banditUpdate(context_key: string, arm: number, reward: number) {
-    return this.request<{ success: boolean; ml_service: 'updated' | 'unavailable' }>(
-      '/policies/bandit-update',
-      {
+    return this.request<{ success: boolean; ml_service: 'updated' | 'unavailable' }>('/policies/bandit-update', {
       method: 'POST',
       body: JSON.stringify({ context_key, arm, reward }),
-      }
-    );
+    });
   }
 }
 
 export const api = new GigGuardAPI();
-

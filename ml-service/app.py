@@ -247,7 +247,14 @@ def _register_fraud_blueprint(app: Flask) -> Blueprint:
         }
 
         claim_id = payload.get("claim_id")
+        parsed_claim_id: str | None = None
         if claim_id:
+            try:
+                parsed_claim_id = str(uuid.UUID(str(claim_id)))
+            except (TypeError, ValueError):
+                parsed_claim_id = None
+
+        if parsed_claim_id:
             with session_scope() as session:
                 session.execute(
                     text(
@@ -258,7 +265,7 @@ def _register_fraud_blueprint(app: Flask) -> Blueprint:
                         WHERE id = :claim_id
                         """
                     ),
-                    {"fraud_score": float(result["fraud_score"]), "claim_id": str(claim_id)},
+                    {"fraud_score": float(result["fraud_score"]), "claim_id": parsed_claim_id},
                 )
 
         return jsonify(response)
@@ -431,3 +438,4 @@ if __name__ == "__main__":
     app_instance = create_app()
     config = get_settings()
     app_instance.run(host="0.0.0.0", port=config.ml_service_port)
+

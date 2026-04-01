@@ -83,7 +83,7 @@ def main() -> None:
         lambda: requests.post(
             f"{ML_SERVICE_URL}/score-fraud",
             json={
-                "claim_id": "test",
+                "claim_id": "00000000-0000-0000-0000-000000000001",
                 "worker_id": "test",
                 "payout_amount": 320,
                 "claim_freq_30d": 1,
@@ -134,4 +134,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

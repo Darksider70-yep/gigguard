@@ -14,6 +14,8 @@ import numpy as np
 from gnn.feature_encoding import build_claim_features, build_worker_features
 from premium.zones import ZONES
 
+np.random.seed(42)
+
 
 @dataclass
 class ClusterBundle:
@@ -28,7 +30,7 @@ class FraudRingGenerator:
     """Fraud-ring generator with deterministic seed and mixed fraud patterns."""
 
     def __init__(self, seed: int = 42) -> None:
-        np.random.seed(42)
+        np.random.seed(seed)
         self.seed = seed
         self.rng = np.random.default_rng(seed)
         self.zone_by_city: Dict[str, List[Dict[str, Any]]] = {}
@@ -356,6 +358,9 @@ class FraudRingGenerator:
             clusters.append(self._build_ring_by_pattern("C"))
         for _ in range(pattern_counts["D"]):
             clusters.append(self._build_ring_by_pattern("D"))
+        # Pattern D carries 2x weight in the final dataset.
+        for _ in range(pattern_counts["D"]):
+            clusters.append(self._build_ring_by_pattern("D"))
         for _ in range(n_clean_clusters):
             clusters.append(self._build_clean_cluster())
 
@@ -363,16 +368,27 @@ class FraudRingGenerator:
         claims = [claim for cluster in clusters for claim in cluster.claims]
         edges = [edge for cluster in clusters for edge in cluster.edges]
         nodes, labels = self._node_payloads(workers, claims)
+        fraud_nodes_count = sum(1 for node in nodes if node.get("label") == 1)
+        fraud_ratio = fraud_nodes_count / max(len(nodes), 1)
+        total_fraud_rings = n_fraud_rings + pattern_counts["D"]
 
         dataset = {
             "metadata": {
-                "n_fraud_rings": int(n_fraud_rings),
+                "n_fraud_rings_requested": int(n_fraud_rings),
+                "n_fraud_rings_total": int(total_fraud_rings),
                 "n_clean_clusters": int(n_clean_clusters),
                 "total_nodes": len(nodes),
                 "total_edges": len(edges),
-                "fraud_ratio": round(float(n_fraud_rings / max(n_fraud_rings + n_clean_clusters, 1)), 4),
+                "fraud_ratio": round(float(fraud_ratio), 4),
                 "seed": self.seed,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
+                "pattern_distribution": {
+                    "A_upi_ring": int(pattern_counts["A"]),
+                    "B_device_ring": int(pattern_counts["B"]),
+                    "C_registration_burst": int(pattern_counts["C"]),
+                    "D_mixed_base": int(pattern_counts["D"]),
+                    "D_mixed_extra_weight": int(pattern_counts["D"]),
+                },
             },
             "nodes": nodes,
             "edges": edges,
@@ -392,4 +408,19 @@ class FraudRingGenerator:
             f"Synthetic dataset generated: workers={len(workers)}, claims={len(claims)}, "
             f"nodes={len(nodes)}, edges={len(edges)}"
         )
+
+        with open(out, "r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+
+        fraud_nodes = [node for node in loaded["nodes"] if node.get("label") == 1]
+        clean_nodes = [node for node in loaded["nodes"] if node.get("label") == 0]
+        loaded_ratio = len(fraud_nodes) / max(len(loaded["nodes"]), 1)
+
+        print(f"Total nodes: {len(loaded['nodes'])}")
+        print(f"Total edges: {len(loaded['edges'])}")
+        print(f"Fraud ratio: {loaded_ratio:.3f}  (target: 0.45-0.55)")
+        print(f"Fraud nodes: {len(fraud_nodes)} | Clean nodes: {len(clean_nodes)}")
+        assert 0.40 < loaded_ratio < 0.60, f"Unbalanced dataset: {loaded_ratio}"
+        print("[OK] GNN synthetic data generated and validated")
+
         return dataset

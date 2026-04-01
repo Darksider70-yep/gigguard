@@ -100,26 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       if (nextRole === 'worker') {
-        if (!options.phoneNumber) {
-          throw new Error('Phone number is required');
-        }
-
-        const response = await api.loginWorker(options.phoneNumber);
-        localStorage.setItem(TOKEN_KEY, response.token);
-        localStorage.setItem(ROLE_KEY, 'worker');
-        setToken(response.token);
-        setRole('worker');
-        setInsurer(null);
-        api.setToken(response.token);
-
-        if (response.worker) {
-          setWorker(response.worker);
-        } else {
-          const me = await api.getMe();
-          setWorker(me);
-        }
-
-        router.replace('/dashboard');
+        throw new APIError('Use OTP login on /login', 400, 'USE_OTP_LOGIN');
       } else {
         const response = await api.loginInsurer(options.secret);
         localStorage.setItem(TOKEN_KEY, response.token);

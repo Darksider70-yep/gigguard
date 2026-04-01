@@ -12,7 +12,7 @@ RUN apt-get update \
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --upgrade setuptools wheel \
-    && grep -Ev '^(stable-baselines3|torch|torch-geometric|pytest|pytest-flask|h3)==.*$' /app/requirements.txt > /tmp/requirements.runtime.txt \
+    && grep -Ev '^(torch-geometric|pytest|pytest-flask|h3)==.*$' /app/requirements.txt > /tmp/requirements.runtime.txt \
     && pip install --no-cache-dir --prefer-binary -r /tmp/requirements.runtime.txt
 
 COPY . /app
