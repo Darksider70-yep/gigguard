@@ -1,4 +1,4 @@
-FROM python:3.10.14-slim AS builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ RUN pip install --upgrade pip setuptools wheel && \
 RUN pip install --user --no-cache-dir --prefer-binary -r /tmp/requirements.runtime.txt
 
 # Runtime stage
-FROM python:3.10.14-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 

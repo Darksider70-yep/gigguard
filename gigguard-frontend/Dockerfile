@@ -1,4 +1,4 @@
-FROM node:20.12-alpine AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ COPY . .
 RUN npm run build
 
 # Runtime stage
-FROM node:20.12-alpine AS runtime
+FROM node:22-alpine AS runtime
 
 WORKDIR /app
 
