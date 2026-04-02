@@ -22,7 +22,7 @@ RUN pip install --upgrade pip setuptools wheel && \
     grep -Ev '^(torch-geometric|pytest|pytest-flask|h3)==.*$' requirements.txt > /tmp/requirements.runtime.txt
 
 # Install Python dependencies
-RUN pip install --user --no-cache-dir --prefer-binary -r /tmp/requirements.runtime.txt
+RUN pip install --user --no-cache-dir --prefer-binary --no-warn-script-location -r /tmp/requirements.runtime.txt
 
 # Runtime stage
 FROM python:3.11-slim
