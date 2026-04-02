@@ -1,22 +1,62 @@
-FROM python:3.10-slim
+FROM python:3.10.14-slim AS builder
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Install build dependencies
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev gcc \
+    && apt-get install -y --no-install-recommends \
+       libpq-dev \
+       gcc \
+       g++ \
+       make \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir --upgrade setuptools wheel \
-    && grep -Ev '^(torch-geometric|pytest|pytest-flask|h3)==.*$' /app/requirements.txt > /tmp/requirements.runtime.txt \
-    && pip install --no-cache-dir --prefer-binary -r /tmp/requirements.runtime.txt
+# Copy and prepare requirements
+COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel && \
+    grep -Ev '^(torch-geometric|pytest|pytest-flask|h3)==.*$' requirements.txt > /tmp/requirements.runtime.txt
 
-COPY . /app
+# Install Python dependencies
+RUN pip install --user --no-cache-dir --prefer-binary -r /tmp/requirements.runtime.txt
+
+# Runtime stage
+FROM python:3.10.14-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    ML_SERVICE_PORT=5001 \
+    PYTHONPATH=/app
+
+# Security: create non-root user
+RUN groupadd -r mluser && useradd -r -g mluser mluser
+
+# Install runtime dependencies only
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python dependencies from builder
+COPY --from=builder /root/.local /home/mluser/.local
+
+# Copy application code
+COPY --chown=mluser:mluser . /app
+
+# Set PATH to use local pip installations
+ENV PATH=/home/mluser/.local/bin:$PATH
+
+# Switch to non-root user
+USER mluser
 
 EXPOSE 5001
 
-CMD ["sh", "-c", "gunicorn --workers 2 --bind 0.0.0.0:${ML_SERVICE_PORT:-5001} \"app:create_app()\""]
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=30s \
+    CMD python -c "import json,sys,urllib.request; d=json.loads(urllib.request.urlopen('http://localhost:5001/health', timeout=3).read().decode()); sys.exit(0 if d.get('status')=='ok' else 1)" || exit 1
+
+CMD ["sh", "-c", "gunicorn --workers 2 --worker-class sync --bind 0.0.0.0:${ML_SERVICE_PORT:-5001} --timeout 120 --access-logfile - --error-logfile - \"app:create_app()\""]

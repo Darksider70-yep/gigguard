@@ -77,15 +77,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const me = await api.getMe();
           setWorker(me);
-        } catch {
-          logout(true);
+        } catch (error) {
+          // Keep user logged in even if profile fetch fails temporarily
+          console.error('Failed to fetch worker profile:', error);
+          // Don't logout - the user may still have valid auth
         }
       } else if (storedRole === 'insurer') {
         try {
           const me = await api.getInsurerMe();
           setInsurer(me);
-        } catch {
-          logout(true);
+        } catch (error) {
+          // Keep user logged in even if profile fetch fails temporarily
+          console.error('Failed to fetch insurer profile:', error);
+          // Don't logout - the user may still have valid auth
         }
       }
 

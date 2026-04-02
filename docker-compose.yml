@@ -1,6 +1,9 @@
+version: '3.9'
+
 services:
   db:
     image: postgres:15-alpine
+    container_name: gigguard-db
     environment:
       POSTGRES_DB: gigguard
       POSTGRES_USER: gigguard
@@ -18,21 +21,45 @@ services:
       retries: 10
       start_period: 10s
     restart: unless-stopped
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   redis:
     image: redis:7-alpine
+    container_name: gigguard-redis
     ports:
       - '6379:6379'
-    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --appendonly yes
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   db-seed:
     image: postgres:15-alpine
+    container_name: gigguard-db-seed
     depends_on:
       db:
         condition: service_healthy
@@ -47,11 +74,19 @@ services:
         "set -e; psql -h db -U gigguard -d gigguard -f /seed/006_phase2_schema_alignment.sql; psql -h db -U gigguard -d gigguard -f /seed/008_runtime_schema_compat.sql; psql -h db -U gigguard -d gigguard -f /seed/009_phase2_payout_idempotency_and_hex_flags.sql; psql -h db -U gigguard -d gigguard -v ON_ERROR_STOP=1 -f /seed/010_registration_fields.sql; psql -h db -U gigguard -d gigguard -f /seed/007_seed_demo_data.sql",
       ]
     restart: 'no'
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
   ml-service:
     build:
       context: ./ml-service
       dockerfile: Dockerfile
+    container_name: gigguard-ml
     ports:
       - '5001:5001'
     environment:
@@ -65,8 +100,8 @@ services:
       SAC_MODEL_PATH: /app/models/sac_premium_v1.zip
       IF_MODEL_PATH: /app/models/isolation_forest.pkl
     volumes:
-      - ./ml-service/models:/app/models
-      - ./ml-service/data:/app/data
+      - ./ml-service/models:/app/models:ro
+      - ./ml-service/data:/app/data:ro
     depends_on:
       db:
         condition: service_healthy
@@ -81,11 +116,22 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    container_name: gigguard-backend
     ports:
       - '4000:4000'
     environment:
@@ -123,6 +169,16 @@ services:
       retries: 5
       start_period: 15s
     restart: unless-stopped
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   frontend:
     build:
@@ -131,6 +187,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
         NEXT_PUBLIC_RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+    container_name: gigguard-frontend
     ports:
       - '3000:3000'
     environment:
@@ -151,6 +208,23 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  gigguard-network:
+    driver: bridge

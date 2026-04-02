@@ -1,0 +1,230 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: gigguard-db
+    environment:
+      POSTGRES_DB: gigguard
+      POSTGRES_USER: gigguard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gigguard_dev}
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../backend/db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U gigguard -d gigguard']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  redis:
+    image: redis:7-alpine
+    container_name: gigguard-redis
+    ports:
+      - '6379:6379'
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  db-seed:
+    image: postgres:15-alpine
+    container_name: gigguard-db-seed
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-gigguard_dev}
+    volumes:
+      - ../backend/db/migrations:/seed:ro
+    command:
+      [
+        'sh',
+        '-c',
+        "set -e; psql -h db -U gigguard -d gigguard -f /seed/006_phase2_schema_alignment.sql; psql -h db -U gigguard -d gigguard -f /seed/008_runtime_schema_compat.sql; psql -h db -U gigguard -d gigguard -f /seed/009_phase2_payout_idempotency_and_hex_flags.sql; psql -h db -U gigguard -d gigguard -v ON_ERROR_STOP=1 -f /seed/010_registration_fields.sql; psql -h db -U gigguard -d gigguard -f /seed/007_seed_demo_data.sql",
+      ]
+    restart: 'no'
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  ml-service:
+    build:
+      context: ../ml-service
+      dockerfile: Dockerfile
+    container_name: gigguard-ml
+    ports:
+      - '5001:5001'
+    environment:
+      DATABASE_URL: postgresql://gigguard:${POSTGRES_PASSWORD:-gigguard_dev}@db:5432/gigguard
+      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY:-}
+      AQICN_API_KEY: ${AQICN_API_KEY:-}
+      USE_MOCK_APIS: ${USE_MOCK_APIS:-false}
+      FLASK_ENV: ${FLASK_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ML_SERVICE_PORT: 5001
+      SAC_MODEL_PATH: /app/models/sac_premium_v1.zip
+      IF_MODEL_PATH: /app/models/isolation_forest.pkl
+    volumes:
+      - ../ml-service/models:/app/models:ro
+      - ../ml-service/data:/app/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "python -c \"import json,sys,urllib.request; d=json.loads(urllib.request.urlopen('http://localhost:5001/health', timeout=3).read().decode()); sys.exit(0 if d.get('status')=='ok' else 1)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: gigguard-backend
+    ports:
+      - '4000:4000'
+    environment:
+      DATABASE_URL: postgresql://gigguard:${POSTGRES_PASSWORD:-gigguard_dev}@db:5432/gigguard
+      REDIS_URL: redis://redis:6379
+      ML_SERVICE_URL: http://ml-service:5001
+      ML_SERVICE_TIMEOUT_MS: 500
+      JWT_SECRET: ${JWT_SECRET:-gigguard_dev_jwt_secret}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-dev_webhook_secret}
+      RAZORPAY_ACCOUNT_NUMBER: ${RAZORPAY_ACCOUNT_NUMBER:-000000000000}
+      USE_MOCK_APIS: ${USE_MOCK_APIS:-false}
+      USE_MOCK_PAYOUT: ${USE_MOCK_PAYOUT:-true}
+      IS_DEMO_MODE: ${IS_DEMO_MODE:-true}
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 4000
+    depends_on:
+      db:
+        condition: service_healthy
+      db-seed:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      ml-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "node -e \"fetch('http://localhost:4000/health').then(async r=>{if(!r.ok) process.exit(1); const d=await r.json(); process.exit(d.status==='ok'?0:1)}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  frontend:
+    build:
+      context: ../gigguard-frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        NEXT_PUBLIC_RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+    container_name: gigguard-frontend
+    ports:
+      - '3000:3000'
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      NEXT_PUBLIC_RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      NODE_ENV: ${NODE_ENV:-production}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "node -e \"const h=require('os').hostname(); fetch('http://'+h+':3000').then(r=>process.exit(r.status < 500 ? 0 : 1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - gigguard-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  gigguard-network:
+    driver: bridge
