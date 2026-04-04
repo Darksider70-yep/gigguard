@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import OtpInput from '@/components/ui/OtpInput';
 import RegistrationStepper from '@/components/ui/RegistrationStepper';
 import { APIError, api } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 interface RegistrationContext {
   name: string;
@@ -30,6 +31,7 @@ function formatPhone(phone: string) {
 
 export default function RegisterVerifyPage() {
   const router = useRouter();
+  const { setWorkerLogin } = useAuth();
   const [context, setContext] = useState<RegistrationContext | null>(null);
   const [otp, setOtp] = useState('');
   const [countdown, setCountdown] = useState(RESEND_SECONDS);
@@ -94,19 +96,10 @@ export default function RegisterVerifyPage() {
         otp: code,
       });
 
-      localStorage.setItem('gigguard_token', response.token);
-      localStorage.setItem('gigguard_role', 'worker');
-      api.setToken(response.token);
+      setWorkerLogin(response.token, response.worker);
 
-      sessionStorage.setItem(
-        'gigguard_registration_complete_worker',
-        JSON.stringify({
-          ...response.worker,
-          avatar_seed: response.worker.avatar_seed || context.avatar_seed,
-        })
-      );
-
-      router.push('/register/complete');
+      sessionStorage.removeItem('gigguard_registration_context');
+      router.replace('/dashboard');
     } catch (err) {
       if (err instanceof APIError && err.status === 0) {
         setError('Network unavailable. Check backend connectivity.');
