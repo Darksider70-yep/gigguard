@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import OtpInput from '@/components/ui/OtpInput';
 import PhoneInput from '@/components/ui/PhoneInput';
@@ -29,6 +29,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const verifyInFlight = useRef(false);
 
   useEffect(() => {
     if (!isLoading && role === 'worker') {
@@ -82,10 +83,11 @@ export default function LoginPage() {
   };
 
   const verifyOtp = async (code: string) => {
-    if (!phoneNumber || code.length !== 6 || busy) {
+    if (!phoneNumber || code.length !== 6 || busy || verifyInFlight.current) {
       return;
     }
 
+    verifyInFlight.current = true;
     setBusy(true);
     setError(null);
 
@@ -101,6 +103,7 @@ export default function LoginPage() {
       }
       setOtp('');
     } finally {
+      verifyInFlight.current = false;
       setBusy(false);
     }
   };

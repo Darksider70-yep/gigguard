@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import OtpInput from '@/components/ui/OtpInput';
 import RegistrationStepper from '@/components/ui/RegistrationStepper';
 import { APIError, api } from '@/lib/api';
@@ -39,6 +39,7 @@ export default function RegisterVerifyPage() {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const verifyInFlight = useRef(false);
 
   useEffect(() => {
     const raw = sessionStorage.getItem('gigguard_registration_context');
@@ -83,10 +84,11 @@ export default function RegisterVerifyPage() {
   }, [countdown]);
 
   const verifyOtp = async (code: string) => {
-    if (!context || code.length !== 6 || verifying) {
+    if (!context || code.length !== 6 || verifying || verifyInFlight.current) {
       return;
     }
 
+    verifyInFlight.current = true;
     setVerifying(true);
     setError(null);
 
@@ -110,6 +112,7 @@ export default function RegisterVerifyPage() {
       }
       setOtp('');
     } finally {
+      verifyInFlight.current = false;
       setVerifying(false);
     }
   };

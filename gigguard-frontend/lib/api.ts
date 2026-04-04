@@ -36,6 +36,11 @@ export class APIError extends Error {
   }
 }
 
+interface APIRequestOptions extends RequestInit {
+  skipAuth?: boolean;
+  skipUnauthorizedHandler?: boolean;
+}
+
 class GigGuardAPI {
   private baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -51,14 +56,22 @@ class GigGuardAPI {
     this.unauthorizedHandler = handler;
   }
 
-  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(path: string, options: APIRequestOptions = {}): Promise<T> {
+    const {
+      skipAuth = false,
+      skipUnauthorizedHandler = false,
+      headers: customHeaders,
+      ...fetchOptions
+    } = options;
+    const shouldAttachAuth = !skipAuth && Boolean(this.token);
+
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
-        ...options,
+        ...fetchOptions,
         headers: {
           'Content-Type': 'application/json',
-          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-          ...(options.headers || {}),
+          ...(shouldAttachAuth ? { Authorization: `Bearer ${this.token}` } : {}),
+          ...(customHeaders || {}),
         },
       });
 
@@ -73,7 +86,12 @@ class GigGuardAPI {
       }
 
       if (!response.ok) {
-        if (response.status === 401 && this.unauthorizedHandler) {
+        if (
+          response.status === 401 &&
+          this.unauthorizedHandler &&
+          shouldAttachAuth &&
+          !skipUnauthorizedHandler
+        ) {
           this.unauthorizedHandler();
         }
         throw new APIError(payload.message || 'Request failed', response.status, payload.code);
@@ -93,6 +111,8 @@ class GigGuardAPI {
     return this.request<OtpChallengeResponse>('/workers/login', {
       method: 'POST',
       body: JSON.stringify({ role: 'worker', phone_number }),
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
     });
   }
 
@@ -100,6 +120,8 @@ class GigGuardAPI {
     return this.request<LoginResponse>('/workers/login', {
       method: 'POST',
       body: JSON.stringify({ role: 'insurer', secret }),
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
     });
   }
 
@@ -107,6 +129,8 @@ class GigGuardAPI {
     return this.request<RegisterResponse>('/workers/register', {
       method: 'POST',
       body: JSON.stringify(body),
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
     });
   }
 
@@ -114,6 +138,8 @@ class GigGuardAPI {
     return this.request<VerifyOtpResponse>('/workers/verify-otp', {
       method: 'POST',
       body: JSON.stringify(body),
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
     });
   }
 
@@ -121,6 +147,8 @@ class GigGuardAPI {
     return this.request<OtpChallengeResponse>('/workers/resend-otp', {
       method: 'POST',
       body: JSON.stringify({ phone_number }),
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
     });
   }
 
@@ -186,7 +214,10 @@ class GigGuardAPI {
       search.set('status', status);
     }
     search.set('limit', String(limit));
-    return this.request<DisruptionEventsResponse>(`/triggers/live-events?${search.toString()}`);
+    return this.request<DisruptionEventsResponse>(`/triggers/live-events?${search.toString()}`, {
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
+    });
   }
 
   getAntiSpoofingAlerts() {

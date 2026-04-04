@@ -5,16 +5,21 @@ WORKDIR /app
 # Install build dependencies
 RUN apk add --no-cache python3 make g++
 
+# Build argument for TypeScript compiler used during container build.
+# Backend currently requires TS5 syntax support in dependencies.
+ARG TYPESCRIPT_VERSION=5.9.3
+
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm ci --no-audit
+RUN npm ci --no-audit && npm install --no-save --no-audit typescript@${TYPESCRIPT_VERSION}
 
 # Copy source files
 COPY tsconfig.json ./
 COPY src ./src
 
-# Build the application
-RUN npm run build
+# Build the application.
+# Force Node-style module resolution during Docker build to match the current runtime module target.
+RUN npx tsc --project tsconfig.json --moduleResolution node
 
 # Runtime stage
 FROM node:22-alpine AS runtime
