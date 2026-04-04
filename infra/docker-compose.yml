@@ -84,6 +84,8 @@ services:
     build:
       context: ../ml-service
       dockerfile: Dockerfile
+      args:
+        INCLUDE_RL_DEPS: ${ML_INCLUDE_RL_DEPS:-false}
     container_name: gigguard-ml
     ports:
       - '5001:5001'

@@ -1,5 +1,7 @@
 FROM python:3.11-slim AS builder
 
+ARG INCLUDE_RL_DEPS=false
+
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -19,7 +21,11 @@ RUN apt-get update \
 # Copy and prepare requirements
 COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel && \
-    grep -Ev '^(torch-geometric|pytest|pytest-flask|h3)==.*$' requirements.txt > /tmp/requirements.runtime.txt
+    grep -Ev '^(torch-geometric|pytest|pytest-flask|h3)==.*$' requirements.txt > /tmp/requirements.runtime.txt && \
+    if [ "${INCLUDE_RL_DEPS}" != "true" ]; then \
+      grep -Ev '^(torch|stable-baselines3|gymnasium|networkx|pandas|rich|tqdm)==.*$' /tmp/requirements.runtime.txt > /tmp/requirements.runtime.slim.txt && \
+      mv /tmp/requirements.runtime.slim.txt /tmp/requirements.runtime.txt; \
+    fi
 
 # Install Python dependencies
 RUN pip install --user --no-cache-dir --prefer-binary --no-warn-script-location -r /tmp/requirements.runtime.txt
