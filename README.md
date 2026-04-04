@@ -339,7 +339,120 @@ In Phase 3, all sources use mock webhooks identical in structure to the curfew/s
 
 ---
 
-## 4. Core Features
+### 3.5 Multilingual Support
+
+#### Why This Matters More Than It Sounds
+
+The GigGuard worker dashboard is currently English-only. The workers it protects are not. A Zomato delivery partner in Chennai reads Tamil. A Swiggy partner in Hyderabad reads Telugu. A Mumbai rider who completed school in a vernacular medium reads Hindi or Marathi, not English.
+
+This is not a cosmetic problem. When a ₹640 flood payout is pending and the claim status says "Under Review — Behavioral Coherence Score: 34/100. Cell tower mismatch detected. A human reviewer will contact you within 4 hours." — that sentence is incomprehensible to the worker it is trying to reassure. The result is a support call, a panicked message to their manager, or a loss of trust in the platform entirely.
+
+Insurance is a trust product. Trust requires comprehension. Comprehension requires the worker's language.
+
+#### Target Languages — Phase 3
+
+| Language | States Covered | Estimated Worker Base |
+|---|---|---|
+| **Hindi** | Delhi, parts of Mumbai | ~30% of GigGuard workers |
+| **Tamil** | Chennai | ~20% of GigGuard workers |
+| **Telugu** | Hyderabad | ~15% of GigGuard workers |
+| **Kannada** | Bangalore | ~18% of GigGuard workers |
+| **Marathi** | Mumbai | ~17% of GigGuard workers |
+
+Combined coverage: **100% of current GigGuard cities** with native-language support.
+
+#### What Gets Translated
+
+Not everything — translated badly is worse than untranslated. Phase 3 localises the surfaces that matter most to trust and comprehension:
+
+**Tier 1 — Critical (all 5 languages, Phase 3):**
+- Claim status messages: "Your claim is approved. ₹320 is being transferred to your UPI."
+- Payout notifications: push notification text in the worker's language
+- Under-review explanations: plain-language description of why a claim is being checked, written by a human for each language — not machine-translated
+- Policy purchase confirmation: policy terms summary in local language
+- Onboarding flow: registration form labels and helper text
+
+**Tier 2 — Important (Hindi + Tamil first, then others):**
+- Worker dashboard: all card labels, status badges, premium breakdown
+- Buy policy flow: coverage amounts, trigger type names, formula explanation
+- Claims history: trigger type labels, disruption reason descriptions
+
+**Tier 3 — Nice to have (post-Phase 3):**
+- Full legal policy document in regional languages
+- In-app support chat in regional languages
+- Email/SMS payout receipts in regional languages
+
+#### AI-Powered Claim Explanations
+
+The most technically interesting part of multilingual support is not translation — it is **generation**. When a claim is under review, a worker needs to understand why in plain, reassuring language. The reason is a structured object from the fraud scorer:
+
+```json
+{
+  "flags": ["cell_tower_mismatch", "platform_offline_at_event"],
+  "bcs_score": 34,
+  "tier": 3
+}
+```
+
+Translating `"cell_tower_mismatch"` to Tamil as செல் டவர் பொருந்தாமை is technically accurate and completely meaningless to a delivery worker. The Phase 3 approach generates the explanation in context using the ML service:
+
+```
+POST /ml-service/explain-claim-status
+{
+  "flags": ["cell_tower_mismatch", "platform_offline_at_event"],
+  "language": "ta",
+  "worker_name": "Priya"
+}
+→ "Priya, உங்கள் கோரிக்கை சரிபார்க்கப்படுகிறது. 
+    நீங்கள் Swiggy-ல் offline ஆக இருந்தீர்கள் என்பதை நாங்கள் 
+    கவனித்தோம். 4 மணி நேரத்தில் ஒரு மதிப்பாளர் தொடர்பு கொள்வார்."
+```
+
+This is generated once per flag combination per language and cached — not called at runtime per claim. The cache populates the first time a flag combination appears in that language.
+
+#### Technical Implementation
+
+**i18n library:** `next-intl` — Next.js native, file-based translation, no runtime overhead.
+
+**Translation file structure:**
+```
+gigguard-frontend/
+  messages/
+    en.json    (source of truth)
+    hi.json    (Hindi)
+    ta.json    (Tamil)
+    te.json    (Telugu)
+    kn.json    (Kannada)
+    mr.json    (Marathi)
+```
+
+**Language detection and selection:**
+- Registration: worker selects preferred language during onboarding (stored on `workers.preferred_language`)
+- Subsequent sessions: language loaded from worker profile via JWT claim
+- Fallback: English if translation missing for a key (never shows a raw key)
+
+**Translation workflow:**
+- English strings authored by developers in `en.json`
+- Professional human translation for Tier 1 critical strings (claim status, notifications)
+- Machine translation (Google Translate API) for Tier 2 strings, reviewed by a native speaker before shipping
+- Zero machine translation for legal or trust-critical content
+
+**Schema change (one column):**
+```sql
+ALTER TABLE workers 
+  ADD COLUMN preferred_language VARCHAR(5) DEFAULT 'en';
+-- Values: 'en', 'hi', 'ta', 'te', 'kn', 'mr'
+```
+
+**Phase 3 Implementation Plan:**
+- **Day 1:** Install `next-intl`, configure middleware, create `en.json` from existing string literals
+- **Day 2–3:** Translate Tier 1 critical strings to all 5 languages (professional translation)
+- **Day 4:** Add `preferred_language` to worker schema + JWT. Language selector in registration flow.
+- **Day 5:** Wire `next-intl` to worker dashboard, claim status messages, payout notifications
+- **Day 6:** Build `POST /ml-service/explain-claim-status` with cached language-aware explanations
+- **Day 7:** Integration tests — verify every Tier 1 string has a translation in all 5 languages. Fail build if any key is missing.
+
+---
 
 Our platform is built on three pillars: automated triggers, fair pricing, and robust security.
 
@@ -537,6 +650,7 @@ Beyond the core engine, we have a strategic plan to implement advanced features 
 | **Causal Inference Validation**     | Netflix / Spotify  | Uses causal inference to determine if a worker would have been offline anyway, ensuring we only pay for income loss *caused* by the disruption event. |
 | **Smart Contract Execution**        | AXA Fizzy          | Encodes the policy terms on a public blockchain (like Polygon) to create a mathematically guaranteed, tamper-proof insurance contract, offering ultimate transparency. |
 | **Pandemic / Health Emergency Trigger** | *Novel — GigGuard* | Monitors MoHFW containment zone declarations and WHO alerts to trigger income protection when government-mandated health restrictions prevent delivery work. Includes correlated-loss safeguards. |
+| **Multilingual Support** | *Novel — GigGuard* | Full localisation of the worker-facing app in Hindi, Tamil, Telugu, Kannada, and Marathi — the five languages covering 80%+ of GigGuard's target worker base. Policy terms, payout notifications, claim status updates, and the onboarding flow all rendered in the worker's preferred language. AI-powered claim status explanations in plain regional language, not legal English. |
 
 > For technical details, schema changes, and implementation timelines for each innovation, see the [**Innovation Plan Document**](docs/GigGuard_Innovation_Plan.docx).
 
@@ -769,6 +883,7 @@ Detailed specifications for rain, AQI, heat, flood, and curfew triggers with thr
 | 🔍 GNN Fraud | ✅ Ready (training) | Not live yet | Deploy live, replace Isolation Forest |
 | 🛡️ Security | ✅ Live | Prevents fraud + tampering | Strengthen with GNN |
 | 🦠 Pandemic Trigger | 🔜 Phase 3 | Covers health emergency income loss | Build + deploy in Phase 3 |
+| 🌐 Multilingual Support | 🔜 Phase 3 | Hindi, Tamil, Telugu, Kannada, Marathi | Localise all worker-facing flows |
 
 ---
 
