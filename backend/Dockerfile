@@ -7,7 +7,7 @@ RUN apk add --no-cache python3 make g++
 
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --no-audit
 
 # Copy source files
 COPY tsconfig.json ./
@@ -33,7 +33,7 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci --omit=dev && \
+RUN npm ci --omit=dev --no-audit && \
     npm cache clean --force
 
 # Copy built application from build stage

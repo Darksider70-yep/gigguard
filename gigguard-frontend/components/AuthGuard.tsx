@@ -14,12 +14,18 @@ export default function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
-    if (!role || !allowedRoles.includes(role)) {
-      router.replace('/');
+    // Don't redirect while loading - wait for auth hydration to complete
+    if (isLoading) {
+      return;
     }
-  }, [role, router, allowedRoles, isLoading]);
 
+    // If auth is loaded and user doesn't have the required role, redirect to login
+    if (!role || !allowedRoles.includes(role)) {
+      router.replace('/login');
+    }
+  }, [role, isLoading, router, allowedRoles]);
+
+  // Show loading skeleton while auth is hydrating
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -30,12 +36,13 @@ export default function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
     );
   }
 
+  // If auth is loaded but user doesn't have access, deny access  
   if (!role || !allowedRoles.includes(role)) {
     return (
       <div className="flex h-96 items-center justify-center">
         <div className="text-center">
           <p className="text-secondary">Access denied.</p>
-          <p className="text-xs text-muted">Redirecting to home...</p>
+          <p className="text-xs text-muted">You don't have permission to access this page.</p>
         </div>
       </div>
     );

@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Briefcase, Shield, ShoppingCart, Signal, Zap } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { APIError, api } from '@/lib/api';
+import { api } from '@/lib/api';
 import { DisruptionEventsResponse } from '@/lib/types';
 import CountUp from '@/components/ui/CountUp';
 import LiveTicker from '@/components/ui/LiveTicker';
@@ -37,9 +38,19 @@ const HOW_IT_WORKS = [
 ];
 
 export default function HomePage() {
-  const { login, isLoading } = useAuth();
+  const router = useRouter();
+  const { role, isLoading } = useAuth();
   const [events, setEvents] = useState<DisruptionEventsResponse['events']>([]);
-  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoading && role) {
+      if (role === 'worker') {
+        router.replace('/dashboard');
+      } else if (role === 'insurer') {
+        router.replace('/insurer');
+      }
+    }
+  }, [role, isLoading, router]);
 
   useEffect(() => {
     let active = true;
@@ -69,19 +80,8 @@ export default function HomePage() {
     };
   }, []);
 
-  const handleInsurerLogin = async () => {
-    setAuthError(null);
-    const secret = window.prompt('Enter insurer secret (if configured)', '') || undefined;
-
-    try {
-      await login('insurer', { secret });
-    } catch (error) {
-      if (error instanceof APIError && error.status === 0) {
-        setAuthError('Network unavailable. Check backend connectivity.');
-        return;
-      }
-      setAuthError('Insurer login failed. Check secret and retry.');
-    }
+  const handleInsurerLogin = () => {
+    window.location.href = '/insurer-login';
   };
 
   return (
@@ -122,8 +122,6 @@ export default function HomePage() {
               Insurer Login
             </button>
           </div>
-
-          {authError ? <p className="mt-4 text-sm text-rose-300">{authError}</p> : null}
         </div>
 
         <div className="relative z-10">
@@ -134,7 +132,7 @@ export default function HomePage() {
       <section className="surface-card animate-fade-in-up delay-100 grid grid-cols-3 divide-x divide-slate-800 px-4 py-5">
         <div className="px-4">
           <p className="font-mono-data text-3xl font-semibold text-amber-300">
-            <CountUp value={23} suffix="M+" />
+            <CountUp value={150000} />
           </p>
           <p className="text-sm text-secondary">gig workers in India</p>
         </div>

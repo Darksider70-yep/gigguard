@@ -16,6 +16,7 @@ import {
   ShadowComparisonResponse,
   SimulateTriggerBody,
   ZoneRiskMatrixResponse,
+  InsurerPayoutsResponse,
 } from '@/lib/types';
 
 interface DashboardBundle {
@@ -24,6 +25,7 @@ interface DashboardBundle {
   zones: ZoneRiskMatrixResponse['zones'];
   alerts: AntiSpoofingAlertsResponse['alerts'];
   shadow: ShadowComparisonResponse;
+  payouts: InsurerPayoutsResponse;
 }
 const INR = '\u20B9';
 
@@ -55,12 +57,16 @@ export default function InsurerPage() {
   const [eventsFlash, setEventsFlash] = useState(false);
 
   const fetchBundle = async (): Promise<DashboardBundle> => {
-    const [dashboard, events, zones, alerts, shadow] = await Promise.all([
+    const currentDate = new Date();
+    const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+    const [dashboard, events, zones, alerts, shadow, payouts] = await Promise.all([
       api.getInsurerDashboard(),
       api.getDisruptionEvents(undefined, 20),
       api.getZoneRiskMatrix(),
       api.getAntiSpoofingAlerts(),
       api.getShadowComparison(),
+      api.getInsurerPayouts({ month: currentMonth, page: 1, limit: 1000 }),
     ]);
 
     return {
@@ -69,6 +75,7 @@ export default function InsurerPage() {
       zones: zones.zones,
       alerts: alerts.alerts,
       shadow,
+      payouts,
     };
   };
 
@@ -119,6 +126,11 @@ export default function InsurerPage() {
   }, [eventsFlash]);
 
   const approveClaim = async (claimId: string) => {
+    const password = window.prompt('Enter your insurer password to approve claim:')?.trim() ?? '';
+    if (!password) {
+      return;
+    }
+
     try {
       const response = await api.approveClaim(claimId);
       setToast(`Approved. Payout ${formatInr(response.payout_amount)}`);
@@ -134,6 +146,11 @@ export default function InsurerPage() {
   };
 
   const denyClaim = async (claimId: string) => {
+    const password = window.prompt('Enter your insurer password to deny claim:')?.trim() ?? '';
+    if (!password) {
+      return;
+    }
+
     const reason = window.prompt('Reason for denial')?.trim() ?? '';
     if (!reason) {
       return;

@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import OtpInput from '@/components/ui/OtpInput';
 import PhoneInput from '@/components/ui/PhoneInput';
 import { APIError, api } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 const RESEND_SECONDS = 30;
 
@@ -17,6 +19,8 @@ function prettyPhone(phone: string) {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { role, isLoading, setWorkerLogin } = useAuth();
   const [phoneDigits, setPhoneDigits] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
@@ -25,6 +29,12 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoading && role === 'worker') {
+      router.replace('/dashboard');
+    }
+  }, [role, isLoading, router]);
 
   const startCountdown = () => {
     setCountdown(RESEND_SECONDS);
@@ -81,10 +91,8 @@ export default function LoginPage() {
 
     try {
       const response = await api.verifyOtp({ phone_number: phoneNumber, otp: code });
-      localStorage.setItem('gigguard_token', response.token);
-      localStorage.setItem('gigguard_role', 'worker');
-      api.setToken(response.token);
-      window.location.assign('/dashboard');
+      setWorkerLogin(response.token, response.worker);
+      router.replace('/dashboard');
     } catch (err) {
       if (err instanceof APIError) {
         setError(err.message || 'Invalid OTP.');

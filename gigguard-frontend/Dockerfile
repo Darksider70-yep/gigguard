@@ -16,7 +16,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm ci --no-audit
 
 # Copy application source
 COPY . .
@@ -43,7 +43,7 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci --omit=dev && \
+RUN npm ci --omit=dev --no-audit && \
     npm cache clean --force
 
 # Copy built application from build stage

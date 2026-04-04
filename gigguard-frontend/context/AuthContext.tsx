@@ -20,6 +20,8 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (role: Exclude<Role, null>, options?: LoginOptions) => Promise<void>;
   logout: (skipRedirect?: boolean) => void;
+  setWorkerLogin: (token: string, worker: WorkerProfile) => void;
+  setInsurerLogin: (token: string, insurer: InsurerProfile) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -131,8 +133,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const setWorkerLogin = (newToken: string, workerProfile: WorkerProfile) => {
+    localStorage.setItem(TOKEN_KEY, newToken);
+    localStorage.setItem(ROLE_KEY, 'worker');
+    setToken(newToken);
+    setRole('worker');
+    setWorker(workerProfile);
+    setInsurer(null);
+    api.setToken(newToken);
+    setIsLoading(false);
+  };
+
+  const setInsurerLogin = (newToken: string, insurerProfile: InsurerProfile) => {
+    localStorage.setItem(TOKEN_KEY, newToken);
+    localStorage.setItem(ROLE_KEY, 'insurer');
+    setToken(newToken);
+    setRole('insurer');
+    setWorker(null);
+    setInsurer(insurerProfile);
+    api.setToken(newToken);
+    setIsLoading(false);
+  };
+
   const value = useMemo<AuthContextValue>(
-    () => ({ token, role, worker, insurer, isLoading, login, logout }),
+    () => ({ token, role, worker, insurer, isLoading, login, logout, setWorkerLogin, setInsurerLogin }),
     [token, role, worker, insurer, isLoading]
   );
 
