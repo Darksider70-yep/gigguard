@@ -5,9 +5,11 @@
 **GigGuard is a revolutionary InsurTech platform designed from the ground up to protect the backbone of the modern economy: the gig worker.** We provide a simple, automated, and transparent financial safety net, ensuring that disruptions like bad weather or city-wide shutdowns don't have to mean a lost day's income.
 
 ![Built for Guidewire DEVTrails 2026](https://img.shields.io/badge/Built%20for-Guidewire%20DEVTrails%202026-blue)
-![Phase-2](https://img.shields.io/badge/Phase-2-blue)
+![Phase-2](https://img.shields.io/badge/Phase-2%20Complete-blue)
+![Phase-3](https://img.shields.io/badge/Phase--3-Starting%205%20Apr-orange)
 ![Tests](https://img.shields.io/badge/Tests-61%2F61-brightgreen)
 ![Build](https://img.shields.io/badge/Build-Passing-brightgreen)
+![Pandemic](https://img.shields.io/badge/Pandemic%20Protection-Phase%203-purple)
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -229,6 +231,114 @@ Comprehensive guides for all Phase 2 features:
 
 ---
 
+## Phase 3 Roadmap: Starting 5 April 2026
+
+Phase 3 focuses on three pillars: deploying the ML models that were trained in Phase 2 into production, expanding the trigger engine to cover health emergencies, and introducing blockchain-backed policy guarantees.
+
+### 3.1 GNN Fraud Detection — Live Deployment
+Replace the Isolation Forest scorer with the trained GraphSAGE model. The graph schema (`graph_edges`, `upi_addresses`, `worker_devices`) is already live in Phase 2. Phase 3 wires the model into the real-time claim pipeline and targets recall > 0.90 on coordinated fraud rings of size ≥ 5.
+
+### 3.2 RL Premium Engine — Full Rollout
+Graduate the SAC agent from shadow mode to live pricing. The shadow log from Phase 2 provides the training signal. Target: loss ratio < 75% at live traffic scale.
+
+### 3.3 Smart Contract Policy Execution
+Deploy `GigGuardPolicy.sol` to Polygon Mumbai testnet. When a Chainlink oracle confirms a trigger threshold breach, the contract self-executes the payout — making it mathematically guaranteed and visible on-chain. Workers can verify their own policy on a block explorer.
+
+### 3.4 Pandemic / Health Emergency Trigger
+
+#### Why This Trigger Exists
+
+The COVID-19 pandemic revealed a category of income disruption that weather-based parametric insurance cannot cover: **government-mandated health restrictions that prevent work even when conditions are physically safe.** A delivery worker cannot ride out a containment zone lockdown the way they can wait out a rainstorm. The disruption is legal, not meteorological — and it is total.
+
+GigGuard's parametric model is uniquely suited to handle this because the trigger is an objective, independently verifiable government declaration — exactly the kind of data our engine is built for.
+
+#### What Is and Is Not Covered
+
+This is the most important design decision in the pandemic trigger and the one that separates it from naive implementations.
+
+**Covered — Income loss caused by a declared containment zone:**
+- Government of India / State government issues a formal containment zone notification for the worker's registered district
+- The notification is active for the worker's shift window
+- The worker's zone falls within the declared boundary (verified via H3 hex overlap with the containment polygon)
+- Worker was online on their delivery platform within 2 hours before the declaration
+
+**Not covered — General pandemic conditions:**
+- Nationwide lockdowns are explicitly excluded. A nationwide lockdown creates correlated loss across the entire policyholder base simultaneously, which is uninsurable at our premium levels. This is the same reason earthquake insurance excludes simultaneous regional collapse.
+- Voluntary decisions to stop working due to health fear, without a formal containment zone declaration
+- Supply-side disruptions (restaurant closures, order volume drops) that reduce earnings without preventing delivery
+- Loss of income due to illness — this is health insurance, not income insurance
+
+#### Why This Is Not a Correlated-Loss Problem (If Designed Correctly)
+
+Traditional insurance companies exclude pandemic events because they produce correlated losses — everyone claims at once, which wipes out any reserve. GigGuard avoids this by design:
+
+**Containment zones are geographically isolated.** A containment zone in Dharavi does not affect workers in Andheri West. Our H3-based zone system means we pay only the workers whose hex IDs fall within the declared boundary — not every worker in the city. In COVID-19, most containment zones covered 1–3 km² at a time. At H3 resolution 8 (0.74 km²/hex), we can price this with the same precision as a rainfall event.
+
+**Containment zones are time-bounded.** Unlike a nationwide lockdown, a district containment zone typically lasts 14–28 days. Our weekly policy structure means premiums can be repriced each week to reflect containment risk in real time.
+
+**The trigger is the declaration, not the disease.** We do not model disease spread, mortality rates, or healthcare outcomes. We model a single binary variable: *is there an active government containment zone declaration for this district?* This is as verifiable as rainfall measurement.
+
+#### Premium Adjustment for Pandemic Risk
+
+The pandemic trigger adds a new multiplier to the premium formula during active health alert periods:
+
+$$P_{\text{weekly}} = R_{\text{base}} \times M_{\text{zone}} \times M_{\text{weather}} \times M_{\text{history}} \times M_{\text{health}}$$
+
+Where \\( M_{\text{health}} \\) is:
+- **1.00** — No active health advisory in the district (default, no cost to worker)
+- **1.15** — District on health watch list (advisory issued, no containment yet)
+- **1.35** — Active containment zone declared in adjacent district
+- **1.60** — Active containment zone in worker's own district
+
+The health multiplier is computed weekly at policy purchase time, not retroactively. Workers buying during a health advisory pay a higher premium. Workers who bought before the advisory was issued are covered at their original premium — this is the parametric guarantee.
+
+#### Payout Trigger Specification
+
+```
+Trigger Type:   pandemic_containment
+Data Source:    MoHFW Containment Zone API (Phase 3: mock webhook)
+                WHO Disease Outbreak News RSS Feed
+                State government gazette notifications (webhook)
+Threshold:      Formal containment zone declaration active for worker's district
+                AND worker's H3 hex overlaps with containment polygon
+                AND worker was platform-online within 2 hours of declaration
+Disruption:     8 hours (full working day) per declared day
+Max Payout:     avg_daily_earning / 8 × 8 × 0.8 = 80% of daily income
+                Weekly cap: ₹800 (same as flood/curfew)
+Anti-duplication: 24-hour window (one payout per worker per declared day,
+                  not per declaration event)
+```
+
+#### Moral Hazard Defense
+
+The most obvious fraud vector: a worker registers their zone inside a declared containment area while physically located elsewhere, then claims the payout.
+
+Defense layers:
+- H3 hex overlap with official containment polygon is mandatory — the containment zone boundary is a government-published coordinate set, not a vague district name
+- Platform online status check (same as other triggers) — worker must have been actively working immediately before the declaration
+- 48-hour zone-change freeze — workers cannot change their registered zone within 48 hours before a health emergency declaration (detected via declaration timestamp vs. zone update timestamp)
+- Coordinated claim burst detection — if 200 workers all update their zone to the same district within 24 hours of a health advisory, the GNN flags it as a coordinated abuse attempt
+
+#### Data Sources (Phase 3 Implementation)
+
+| Source | API/Feed | What It Provides |
+|---|---|---|
+| MoHFW (mock webhook) | `POST /webhooks/health-emergency` | Containment zone boundaries as GeoJSON |
+| WHO Disease Outbreak News | RSS feed (public) | International health emergency declarations |
+| State government gazette | Mock webhook (Phase 3) | State-level containment notifications |
+| IMD Health Advisory | Mock endpoint | Heatwave health emergency declarations |
+
+In Phase 3, all sources use mock webhooks identical in structure to the curfew/strike trigger already implemented. The parametric engine treats a pandemic containment declaration identically to a curfew declaration — it is a boolean event with a geographic boundary and a timestamp.
+
+#### Phase 3 Implementation Plan
+
+- **Day 1–2:** Add `pandemic_containment` to trigger type enum. Create `health_advisories` table: `{ id, district, state, boundary_geojson, declared_at, lifted_at, source, severity }`. Add GeoJSON H3 overlap check to trigger monitor.
+- **Day 3:** Add `M_health` multiplier to premium calculator. Wire to `/policies/premium` response.
+- **Day 4:** Build mock webhook endpoint `POST /webhooks/health-emergency`. Test trigger with synthetic containment zone over seeded worker zones.
+- **Day 5:** Integration tests: containment zone declared → only workers inside boundary affected → payout calculated at 80% of daily income → 24-hour anti-duplication window enforced.
+
+---
+
 ## 4. Core Features
 
 Our platform is built on three pillars: automated triggers, fair pricing, and robust security.
@@ -243,6 +353,7 @@ This is the feature that enables automatic payouts. By defining clear, objective
 | Extreme Heat      | OpenWeatherMap API   | > 44°C (Feels Like)       | 4 hours                    |
 | Flood / Red Alert | IMD Mock RSS         | Alert Active for Zone     | 8 hours (Full Day)         |
 | Curfew / Strike   | Mock Webhook         | Event Active for Zone     | 8 hours (Full Day)         |
+| **Pandemic / Health Emergency** *(Phase 3)* | **MoHFW API + WHO RSS** | **Containment Zone declared in district** | **8 hours (Full Day)** |
 
 > For detailed justifications, fraud guard mechanisms, and API parsing logic, see the [**Trigger Definitions Document**](docs/trigger-definitions.md).
 
@@ -425,6 +536,7 @@ Beyond the core engine, we have a strategic plan to implement advanced features 
 | **Graph Neural Network Fraud**      | Stripe Radar       | Builds a graph of all users, claims, and payouts to detect and dismantle sophisticated, coordinated fraud rings that are invisible to traditional models. |
 | **Causal Inference Validation**     | Netflix / Spotify  | Uses causal inference to determine if a worker would have been offline anyway, ensuring we only pay for income loss *caused* by the disruption event. |
 | **Smart Contract Execution**        | AXA Fizzy          | Encodes the policy terms on a public blockchain (like Polygon) to create a mathematically guaranteed, tamper-proof insurance contract, offering ultimate transparency. |
+| **Pandemic / Health Emergency Trigger** | *Novel — GigGuard* | Monitors MoHFW containment zone declarations and WHO alerts to trigger income protection when government-mandated health restrictions prevent delivery work. Includes correlated-loss safeguards. |
 
 > For technical details, schema changes, and implementation timelines for each innovation, see the [**Innovation Plan Document**](docs/GigGuard_Innovation_Plan.docx).
 
@@ -656,6 +768,7 @@ Detailed specifications for rain, AQI, heat, flood, and curfew triggers with thr
 | 💰 RL Premium | ✅ Live (shadow) | Evaluating | Deploy live |
 | 🔍 GNN Fraud | ✅ Ready (training) | Not live yet | Deploy live, replace Isolation Forest |
 | 🛡️ Security | ✅ Live | Prevents fraud + tampering | Strengthen with GNN |
+| 🦠 Pandemic Trigger | 🔜 Phase 3 | Covers health emergency income loss | Build + deploy in Phase 3 |
 
 ---
 

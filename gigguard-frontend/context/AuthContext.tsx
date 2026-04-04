@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, APIError } from '@/lib/api';
 import { InsurerProfile, WorkerProfile } from '@/lib/types';
@@ -31,6 +31,7 @@ const ROLE_KEY = 'gigguard_role';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const recentAuthAtRef = useRef(0);
   const [token, setToken] = useState<string | null>(null);
   const [role, setRole] = useState<Role>(null);
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
@@ -52,7 +53,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     api.setUnauthorizedHandler(() => {
+      // Ignore stale 401s that can race in right after successful OTP login.
+      if (Date.now() - recentAuthAtRef.current < 10_000) {
+        return;
+      }
+
+      const currentRole = (localStorage.getItem(ROLE_KEY) as Role) || null;
       logout(true);
+
+      if (currentRole === 'worker') {
+        router.replace('/login');
+        return;
+      }
+
+      if (currentRole === 'insurer') {
+        router.replace('/insurer-login');
+        return;
+      }
+
       router.replace('/');
     });
 
@@ -109,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new APIError('Use OTP login on /login', 400, 'USE_OTP_LOGIN');
       } else {
         const response = await api.loginInsurer(options.secret);
+        recentAuthAtRef.current = Date.now();
         localStorage.setItem(TOKEN_KEY, response.token);
         localStorage.setItem(ROLE_KEY, 'insurer');
         setToken(response.token);
@@ -134,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const setWorkerLogin = (newToken: string, workerProfile: WorkerProfile) => {
+    recentAuthAtRef.current = Date.now();
     localStorage.setItem(TOKEN_KEY, newToken);
     localStorage.setItem(ROLE_KEY, 'worker');
     setToken(newToken);
@@ -145,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const setInsurerLogin = (newToken: string, insurerProfile: InsurerProfile) => {
+    recentAuthAtRef.current = Date.now();
     localStorage.setItem(TOKEN_KEY, newToken);
     localStorage.setItem(ROLE_KEY, 'insurer');
     setToken(newToken);
