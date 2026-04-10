@@ -397,6 +397,42 @@ def _register_rl_blueprint(app: Flask) -> Blueprint:
         report = validate_shadow(settings.database_url)
         return jsonify(report)
 
+    @bp.post("/rl-live-premium")
+    def rl_live_premium() -> Any:
+        payload = request.get_json(silent=True) or {}
+            
+        sac_model = app.extensions.get("sac_shadow_model")
+        if not sac_model or not getattr(sac_model, 'loaded', False):
+            return jsonify({"error": "SAC model not loaded"}), 503
+            
+        try:
+            zone_multiplier = float(payload.get("zone_multiplier", 1.0))
+            weather_multiplier = float(payload.get("weather_multiplier", 1.0))
+            history_multiplier = float(payload.get("history_multiplier", 1.0))
+            account_age_days = float(payload.get("account_age_days", 180.0))
+            platform_enc = 1.0 if str(payload.get("platform", "")).lower() == "swiggy" else 0.0
+            
+            import numpy as np
+            state_vector = np.array([
+                zone_multiplier,
+                weather_multiplier,
+                history_multiplier,
+                account_age_days / 365.0,
+                platform_enc
+            ], dtype=np.float32)
+            
+            rl_premium = sac_model.predict_premium(state_vector)
+            
+            return jsonify({
+                "rl_premium": float(rl_premium) if rl_premium is not None else None,
+                "pricing_source": "rl",
+                "state_vector": [float(x) for x in state_vector.tolist()]
+            })
+        except Exception as e:
+            import logging
+            logging.getLogger("gigguard-ml").error(f"RL live prediction failed: {e}")
+            return jsonify({"error": str(e)}), 500
+
     app.register_blueprint(bp)
     return bp
 

@@ -1,0 +1,160 @@
+{
+  "pages": {
+    "/_not-found/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/app/_not-found/page-107910a694aba528.js"
+    ],
+    "/layout": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/css/176c2b6315fc39eb.css",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/layout-b0016c1cb91bff94.js"
+    ],
+    "/buy-policy/confirmed/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/app/buy-policy/confirmed/page-308961445c24adf9.js"
+    ],
+    "/buy-policy/quote/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/976-3247996a16a2fa0b.js",
+      "static/chunks/app/buy-policy/quote/page-db809d6162541294.js"
+    ],
+    "/buy-policy/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/app/buy-policy/page-3dcae09f0f35a60e.js"
+    ],
+    "/insurer/analytics/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/insurer/analytics/page-a9836684ccb1131a.js"
+    ],
+    "/claims/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/app/claims/page-6bb78a68a151d73f.js"
+    ],
+    "/insurer-login/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/insurer-login/page-07b97f5025db9d41.js"
+    ],
+    "/insurer/coverage/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/insurer/coverage/page-fc96ce36739a7a35.js"
+    ],
+    "/insurer/workers/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/insurer/workers/page-0c0fbdc64524b026.js"
+    ],
+    "/dashboard/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/976-3247996a16a2fa0b.js",
+      "static/chunks/app/dashboard/page-7426462769717f83.js"
+    ],
+    "/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/page-f956119234aa85d5.js"
+    ],
+    "/insurer/flagged/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/insurer/flagged/page-38cb56615ac01060.js"
+    ],
+    "/register/complete/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/app/register/complete/page-919d5189591ce920.js"
+    ],
+    "/login/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/login/page-1461a3f4351846fc.js"
+    ],
+    "/register/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/register/page-3c342c90c9d19973.js"
+    ],
+    "/insurer/payouts/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/insurer/payouts/page-58ed0d89e4ae2ac8.js"
+    ],
+    "/insurer/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/insurer/page-3fa3375bde07270e.js"
+    ],
+    "/insurer/policies/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/718-d96d745fb195c1f9.js",
+      "static/chunks/app/insurer/policies/page-2053b6285bffd338.js"
+    ],
+    "/register/verify/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-e402d90333abc26a.js",
+      "static/chunks/23-e902b7612d77a084.js",
+      "static/chunks/main-app-5a9832d2aea30c28.js",
+      "static/chunks/app/register/verify/page-e1d6cb190caf43e6.js"
+    ]
+  }
+}

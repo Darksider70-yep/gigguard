@@ -9,6 +9,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "test": "jest",
     "backfill:hex-ids": "ts-node scripts/backfill_hex_ids.ts",
+    "evaluate:rl": "jest src/__tests__/integration/rl-ab-test.test.ts",
     "train:gnn": "docker compose exec ml-service python train_gnn.py"
   },
   "dependencies": {
