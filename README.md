@@ -887,6 +887,28 @@ Detailed specifications for rain, AQI, heat, flood, and curfew triggers with thr
 
 ---
 
-### 🔧 Living Documentation
+### 🔧 Documentation Index
 
-All guides are tied directly to production code in `/backend`, `/gigguard-frontend`, and `/ml-service`. When code changes, documentation is updated in tandem. The docs reflect what's **actually running right now**—treat them as gospel.
+All in-depth documentation lives in the [`docs/`](docs/) directory:
+
+| Document | Description |
+|----------|-------------|
+| [**API Reference**](docs/API_REFERENCE.md) | Complete endpoint reference for Backend + ML Service |
+| [**Architecture**](docs/ARCHITECTURE.md) | System design, data flows, database schema, background jobs |
+| [**Deployment Guide**](docs/DEPLOYMENT.md) | Docker setup, RAM-safe build, troubleshooting |
+| [**ML Models**](docs/ML_MODELS.md) | Premium formula, Isolation Forest, Bandits, RL, GNN |
+| [**Trigger Definitions**](docs/trigger-definitions.md) | Parametric trigger specs, thresholds, fraud guards |
+| [**H3 Implementation Guide**](docs/H3_IMPLEMENTATION_GUIDE.md) | H3 geospatial indexing setup and usage |
+| [**H3 API Reference**](docs/H3_API_REFERENCE.md) | H3 code patterns and query examples |
+| [**H3 Deployment Summary**](docs/H3_DEPLOYMENT_SUMMARY.md) | H3 deployment results and performance |
+| [**GIN Index Explanation**](docs/GIN_INDEX_EXPLANATION.md) | PostgreSQL GIN indexes for H3 hex lookups |
+| [**Bandit Implementation**](docs/BANDIT_IMPLEMENTATION.md) | Thompson Sampling bandit deep-dive |
+| [**Review Summary**](docs/REVIEW_COMPLETE_SUMMARY.md) | Bandit implementation review and test suite |
+
+#### Additional Documents (Office format)
+| Document | Description |
+|----------|-------------|
+| [**System Architecture**](docs/System_architecture.docx) | Full architecture deep-dive (Word) |
+| [**ER Model**](docs/GigGuard_ER_Model.docx) | Database entity-relationship model (Word) |
+| [**Premium Model**](docs/Premium_model.docx) | Premium formula and business viability (Word) |
+| [**Innovation Plan**](docs/GigGuard_Innovation_Plan.docx) | Future innovations roadmap (Word) |

@@ -433,6 +433,34 @@ def _register_rl_blueprint(app: Flask) -> Blueprint:
             logging.getLogger("gigguard-ml").error(f"RL live prediction failed: {e}")
             return jsonify({"error": str(e)}), 500
 
+    @bp.get("/shadow-comparison")
+    def shadow_comparison() -> Any:
+        """Return formula-vs-RL premium comparison data for the insurer dashboard."""
+        try:
+            with session_scope() as session:
+                rows = session.execute(
+                    text(
+                        """
+                        SELECT
+                            COUNT(*)::int                                        AS total_rows,
+                            ROUND(AVG(formula_premium)::numeric, 2)              AS avg_formula_premium,
+                            ROUND(AVG(rl_premium)::numeric, 2)                   AS avg_rl_premium,
+                            ROUND(AVG(ABS(formula_premium - rl_premium))::numeric, 2) AS avg_abs_diff,
+                            SUM(CASE WHEN formula_won THEN 1 ELSE 0 END)::int    AS formula_wins,
+                            SUM(CASE WHEN NOT formula_won THEN 1 ELSE 0 END)::int AS rl_wins
+                        FROM rl_shadow_log
+                        """
+                    )
+                ).mappings().first()
+
+                if not rows or rows["total_rows"] == 0:
+                    return jsonify({"total_rows": 0, "message": "No shadow log data yet"})
+
+                return jsonify(dict(rows))
+        except Exception as exc:
+            app.logger.warning("shadow-comparison query failed: %s", exc)
+            return jsonify({"error": "Shadow comparison unavailable", "detail": str(exc)}), 500
+
     app.register_blueprint(bp)
     return bp
 
