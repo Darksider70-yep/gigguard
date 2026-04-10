@@ -1,4 +1,4 @@
-﻿import { NextFunction, Request, Response, Router } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { authenticateInsurer } from '../middleware/auth';
 import { query } from '../db';
@@ -554,7 +554,7 @@ router.get('/phase2-checklist', authenticateInsurer, asyncRoute(async (_req, res
 
 
 router.get('/gnn-dashboard', authenticateInsurer, asyncRoute(async (_req, res) => {
-  const { rows: summaryRows } = await query(    SELECT 
+  const { rows: summaryRows } = await query(`    SELECT 
       COUNT(*) as total_claims_scored,
       COUNT(CAST(NULLIF(graph_flags->>'scorer_used', '') AS TEXT)) as gnn_count,
       COUNT(CASE WHEN status = 'approved' THEN 1 END) as auto_approved,
@@ -563,9 +563,9 @@ router.get('/gnn-dashboard', authenticateInsurer, asyncRoute(async (_req, res) =
       COALESCE(SUM(CASE WHEN status = 'flagged' THEN payout_amount END), 0) as prevented_inr
     FROM claims 
     WHERE created_at > NOW() - INTERVAL '7 days'
-  \);
+  `);
   
-  const { rows: activeRingsRows } = await query(    SELECT 
+  const { rows: activeRingsRows } = await query(`    SELECT 
       MD5(w.zone)::text as ring_id, 
       COUNT(DISTINCT w.id)::int as size,
       ARRAY_AGG(DISTINCT w.id) as workers,
@@ -579,7 +579,7 @@ router.get('/gnn-dashboard', authenticateInsurer, asyncRoute(async (_req, res) =
     GROUP BY w.zone
     HAVING COUNT(DISTINCT w.id) > 1
     LIMIT 10
-  \);
+  `);
 
   // Hardcode some ML stats since we don't have python API for reading meta directly here without a proxy route
   res.json({

@@ -516,9 +516,9 @@ router.get('/:id/gnn-score', authenticateInsurer, async (req: AuthenticatedReque
     const workerId = req.params.id;
     
     const { rows } = await query(
-      \SELECT w.gnn_fraud_score, w.zone
+      `SELECT w.gnn_fraud_score, w.zone
        FROM workers w
-       WHERE w.id = \,
+       WHERE w.id = $1`,
       [workerId]
     );
     
@@ -531,13 +531,13 @@ router.get('/:id/gnn-score', authenticateInsurer, async (req: AuthenticatedReque
     
     // fetch neighbors
     const { rows: edgeRows } = await query(
-      \SELECT target_type, target_id FROM graph_edges WHERE source_type = 'worker' AND source_id = 
+      `SELECT target_type, target_id FROM graph_edges WHERE source_type = 'worker' AND source_id = $1
        UNION
-       SELECT source_type, source_id FROM graph_edges WHERE target_type = 'worker' AND target_id = \,
+       SELECT source_type, source_id FROM graph_edges WHERE target_type = 'worker' AND target_id = $1`,
       [workerId]
     );
     
-    const flaggedNodes = edgeRows.map((r: any) => \:\);
+    const flaggedNodes = edgeRows.map((r: any) => `${r.target_type || r.source_type}:${r.target_id || r.source_id}`);
     
     let recommendation = 'approve';
     if (gnnScore >= 0.6) recommendation = 'deny';
