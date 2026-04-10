@@ -18,4 +18,4 @@ COPY . /app
 
 EXPOSE 5001
 
-CMD ["sh", "-c", "gunicorn --workers 2 --bind 0.0.0.0:${ML_SERVICE_PORT:-5001} \"app:create_app()\""]
+CMD ["sh", "-c", "mkdir -p /app/models && gunicorn --workers 2 --bind 0.0.0.0:${ML_SERVICE_PORT:-5001} \"app:create_app()\""]
