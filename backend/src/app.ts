@@ -1,4 +1,5 @@
 import express from 'express';
+import { config } from './config';
 import workersRouter from './routes/workers';
 import policiesRouter from './routes/policies';
 import claimsRouter from './routes/claims';
@@ -35,10 +36,23 @@ function startBackgroundProcesses(): void {
 export function createApp() {
   const app = express();
 
+  // Security headers
   app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '0');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    return next();
+  });
+
+  // CORS — configurable origin, not wildcard
+  app.use((req, res, next) => {
+    const origin = config.CORS_ORIGIN || 'http://localhost:3000';
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Razorpay-Signature');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
     if (req.method === 'OPTIONS') {
       return res.sendStatus(204);
     }

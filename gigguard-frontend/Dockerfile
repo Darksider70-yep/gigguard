@@ -41,14 +41,7 @@ ENV PORT=3000
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# Copy package files
-COPY package*.json ./
-
-# Install production dependencies only
-RUN npm ci --omit=dev --no-audit && \
-    npm cache clean --force
-
-# Copy built application from build stage
+# Copy built application from build stage (standalone bundles all deps)
 COPY --from=build --chown=nodejs:nodejs /app/public ./public
 COPY --from=build --chown=nodejs:nodejs /app/.next-build/standalone ./
 COPY --from=build --chown=nodejs:nodejs /app/.next-build/static ./.next-build/static

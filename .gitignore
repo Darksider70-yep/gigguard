@@ -1,4 +1,4 @@
-﻿.env
+.env
 .env.*
 !.env.example
 .env.local
@@ -20,3 +20,19 @@
 # Logs
 **/*.log
 
+# Python
+**/__pycache__/
+**/.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+
+# ML model artifacts
+*.pkl
+*.pt
+*.zip
+*.h5
+*.onnx
+
+# Build artifacts
+.dist/

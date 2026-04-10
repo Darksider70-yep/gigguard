@@ -60,7 +60,7 @@ export const config = {
   RAZORPAY_ACCOUNT_NUMBER: getStringEnv('RAZORPAY_ACCOUNT_NUMBER', ''),
   RAZORPAY_WEBHOOK_SECRET: getStringEnv('RAZORPAY_WEBHOOK_SECRET', ''),
 
-  JWT_SECRET: getStringEnv('JWT_SECRET', getStringEnv('RAZORPAY_KEY_SECRET', 'dev_jwt_secret')),
+  JWT_SECRET: getStringEnv('JWT_SECRET', 'dev_jwt_secret_change_me'),
 
   USE_MOCK_APIS: getBooleanEnv('USE_MOCK_APIS', true),
   USE_MOCK_PAYOUT: getBooleanEnv('USE_MOCK_PAYOUT', true),
@@ -70,6 +70,8 @@ export const config = {
   NODE_ENV: getStringEnv('NODE_ENV', 'development'),
 
   INSURER_LOGIN_SECRET: getStringEnv('INSURER_LOGIN_SECRET', ''),
+
+  CORS_ORIGIN: getStringEnv('CORS_ORIGIN', 'http://localhost:3000'),
 
   // Legacy aliases for backward compatibility.
   port: getNumberEnv('PORT', 4000),
@@ -81,7 +83,7 @@ export const config = {
   isDemoMode: getBooleanEnv('IS_DEMO_MODE', false),
   openWeatherApiKey: OPENWEATHERMAP_API_KEY,
   openWeatherBaseUrl: OPENWEATHERMAP_BASE_URL,
-  jwtSecret: getStringEnv('JWT_SECRET', getStringEnv('RAZORPAY_KEY_SECRET', 'dev_jwt_secret')),
+  jwtSecret: getStringEnv('JWT_SECRET', 'dev_jwt_secret_change_me'),
   razorpayKeyId: getStringEnv('RAZORPAY_KEY_ID', 'rzp_test_xxx'),
   razorpayKeySecret: getStringEnv('RAZORPAY_KEY_SECRET', ''),
   razorpayWebhookSecret: getStringEnv('RAZORPAY_WEBHOOK_SECRET', ''),

@@ -1,17 +1,17 @@
 {
-  "evaluated_at": "2026-04-01T18:57:41.337237+00:00",
+  "evaluated_at": "2026-04-10T18:45:11.728076+00:00",
   "total_timesteps": 30000,
   "n_eval_episodes": 500,
   "sac": {
-    "mean_premium": 44.10458884615384,
-    "purchase_rate": 0.6859615384615384,
-    "loss_ratio": 0.05480140654371033,
-    "mean_reward": 0.5736583746274679
+    "mean_premium": 43.111488076923074,
+    "purchase_rate": 0.6940769230769231,
+    "loss_ratio": 0.05531289465893666,
+    "mean_reward": 0.5859550654200097
   },
   "formula": {
     "mean_premium": 40.2915226923077,
     "purchase_rate": 0.7248076923076924,
-    "loss_ratio": 0.059509004012743706,
+    "loss_ratio": 0.0595090040127437,
     "mean_reward": 0.6421797862486656
   },
   "targets": {

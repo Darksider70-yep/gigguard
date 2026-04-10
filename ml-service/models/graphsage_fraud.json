@@ -1,0 +1,8 @@
+{
+  "trained_at": "2026-04-10T18:46:26.242407+00:00",
+  "model_version": "graphsage_v1",
+  "val_recall": 0.93,
+  "val_precision": 0.88,
+  "val_auc": 1.0,
+  "val_pr_auc": 1.0
+}

@@ -65,4 +65,4 @@ EXPOSE 5001
 HEALTHCHECK --interval=15s --timeout=5s --retries=3 --start-period=30s \
     CMD python -c "import json,sys,urllib.request; d=json.loads(urllib.request.urlopen('http://localhost:5001/health', timeout=3).read().decode()); sys.exit(0 if d.get('status')=='ok' else 1)" || exit 1
 
-CMD ["sh", "-c", "mkdir -p /app/models && gunicorn --workers 1 --threads 2 --preload --bind 0.0.0.0:${ML_SERVICE_PORT:-5001} --timeout 120 --access-logfile - --error-logfile - \"app:create_app()\""]
+CMD ["sh", "-c", "mkdir -p /app/models && gunicorn --workers 1 --threads 2 --preload --bind 0.0.0.0:${ML_SERVICE_PORT:-5001} --timeout 120 --max-requests 1000 --max-requests-jitter 50 --worker-tmp-dir /dev/shm --access-logfile - --error-logfile - \"app:create_app()\""]

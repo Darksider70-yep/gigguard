@@ -58,11 +58,20 @@
 
 ## Docker Compose (Recommended)
 
+All Docker configuration lives in the `infra/` directory.
+
 ### Quick Start
 
 ```bash
 # From the project root directory
+cd infra
 docker compose up --build
+```
+
+Or from root without changing directory:
+
+```bash
+docker compose -f infra/docker-compose.yml up --build
 ```
 
 ### Access URLs
@@ -82,9 +91,10 @@ Docker Compose handles dependency ordering automatically:
 ```
 1. PostgreSQL → healthcheck (pg_isready)
 2. Redis → healthcheck (redis-cli ping)
-3. ML Service → depends on PostgreSQL
-4. Backend → depends on PostgreSQL, ML Service, Redis
-5. Frontend → depends on Backend
+3. DB Seed → runs migrations after PostgreSQL is healthy
+4. ML Service → depends on PostgreSQL
+5. Backend → depends on PostgreSQL, DB Seed, Redis, ML Service
+6. Frontend → depends on Backend
 ```
 
 ---
@@ -96,8 +106,10 @@ The ML service container includes heavy Python dependencies (PyTorch, torch-geom
 ### Option 1: Sequential Build (Recommended)
 
 ```powershell
+cd infra
+
 # Build one service at a time
-docker compose build postgres
+docker compose build db
 docker compose build redis
 docker compose build backend
 docker compose build ml-service
@@ -110,6 +122,7 @@ docker compose up
 ### Option 2: Parallel Limit
 
 ```bash
+cd infra
 # Limit parallel builds (Docker Compose v2.23+)
 docker compose build --parallel 1
 docker compose up
@@ -121,10 +134,11 @@ docker compose up
 # Pull base images first (reduces build-time RAM)
 docker pull postgres:15-alpine
 docker pull redis:7-alpine
-docker pull node:20-alpine
-docker pull python:3.10-slim
+docker pull node:22-alpine
+docker pull python:3.11-slim
 
 # Then build
+cd infra
 docker compose build
 docker compose up
 ```
@@ -136,10 +150,16 @@ The compose file includes memory limits for each service:
 | Service | Memory Limit | Reservation |
 |---------|-------------|-------------|
 | PostgreSQL | 512 MB | 256 MB |
-| Redis | 128 MB | 64 MB |
-| ML Service | 2 GB | 1 GB |
+| Redis | 256 MB | 128 MB |
+| ML Service | 1 GB | 512 MB |
 | Backend | 512 MB | 256 MB |
 | Frontend | 512 MB | 256 MB |
+
+### Gunicorn RAM Optimization (ML Service)
+
+The ML service uses gunicorn with `--max-requests 1000` to auto-recycle workers
+before memory leaks accumulate, and `--worker-tmp-dir /dev/shm` to avoid disk I/O
+spikes from worker heartbeats.
 
 ---
 

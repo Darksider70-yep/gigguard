@@ -99,6 +99,8 @@ services:
       ML_SERVICE_PORT: 5001
       SAC_MODEL_PATH: /app/models/sac_premium_v1.zip
       IF_MODEL_PATH: /app/models/isolation_forest.pkl
+      GNN_MODEL_PATH: /app/models/graphsage_fraud.pt
+      MALLOC_TRIM_THRESHOLD_: 100000
     volumes:
       - ../ml-service/models:/app/models:ro
       - ../ml-service/data:/app/data:ro
@@ -140,6 +142,8 @@ services:
       ML_SERVICE_URL: http://ml-service:5001
       ML_SERVICE_TIMEOUT_MS: 500
       JWT_SECRET: ${JWT_SECRET:-gigguard_dev_jwt_secret}
+      INSURER_LOGIN_SECRET: ${INSURER_LOGIN_SECRET:-change_me_insurer_secret}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
       RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-dev_webhook_secret}

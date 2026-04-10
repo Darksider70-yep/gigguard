@@ -4,7 +4,7 @@ import { latLngToCell } from 'h3-js';
 import { config } from '../config';
 import { CITIES, getZoneByName, getZonesByCity } from '../constants/zones';
 import { query } from '../db';
-import { AuthenticatedRequest, issueInsurerToken, issueWorkerToken, requireWorker } from '../middleware/auth';
+import { AuthenticatedRequest, authenticateInsurer, issueInsurerToken, issueWorkerToken, requireWorker } from '../middleware/auth';
 import { mlService } from '../services/mlService';
 import { otpService } from '../services/otpService';
 
