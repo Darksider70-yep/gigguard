@@ -253,4 +253,22 @@ router.get('/shadow-comparison', authenticateInsurer, async (_req, res) => {
   res.json(data ?? { error: 'ML service unavailable' });
 });
 
+
+router.post('/rl-rollout', authenticateInsurer, async (req, res) => {
+  const { rollout_percentage, kill_switch_engaged } = req.body;
+  if (rollout_percentage !== undefined) {
+    const p = Number(rollout_percentage);
+    if (!isNaN(p) && p >= 0 && p <= 100) {
+      await query(`UPDATE rl_rollout_config SET rollout_percentage = $1 WHERE id = 1`, [p]);
+    }
+  }
+  if (kill_switch_engaged !== undefined) {
+    await query(`UPDATE rl_rollout_config SET kill_switch_engaged = $1 WHERE id = 1`, [Boolean(kill_switch_engaged)]);
+  }
+  
+  const { rows } = await query('SELECT * FROM rl_rollout_config WHERE id = 1');
+  res.json({ success: true, config: rows[0] });
+});
+
 export default router;
+

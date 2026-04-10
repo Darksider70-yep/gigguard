@@ -8,7 +8,8 @@
     "build": "tsc",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "test": "jest",
-    "backfill:hex-ids": "ts-node scripts/backfill_hex_ids.ts"
+    "backfill:hex-ids": "ts-node scripts/backfill_hex_ids.ts",
+    "evaluate:rl": "jest src/__tests__/integration/rl-ab-test.test.ts"
   },
   "dependencies": {
     "@googlemaps/google-maps-services-js": "^3.4.2",

@@ -108,6 +108,25 @@ class MLService {
     return result;
   }
 
+  async predictRLPremium(
+    workerId: string,
+    zoneMultiplier: number,
+    weatherMultiplier: number,
+    historyMultiplier: number,
+    platform: string,
+    accountAgeDays: number
+  ): Promise<{ rl_premium: number | null }> {
+    const result = await this.post<{ rl_premium: number | null }>('/rl-live-premium', {
+      worker_id: workerId,
+      zone_multiplier: zoneMultiplier,
+      weather_multiplier: weatherMultiplier,
+      history_multiplier: historyMultiplier,
+      platform,
+      account_age_days: accountAgeDays
+    });
+    return result || { rl_premium: null };
+  }
+
   async scoreFraud(params: {
     claim_id: string;
     worker_id: string;
