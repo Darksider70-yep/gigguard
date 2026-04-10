@@ -442,115 +442,22 @@ router.get('/api-budget', authenticateInsurer, (_req, res) => {
   });
 });
 
-async function fetchMlHealth(): Promise<{ isolation_forest?: string; sac_model?: string }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 500);
-  try {
-    const response = await fetch(`${config.ML_SERVICE_URL}/health`, { signal: controller.signal });
-    if (!response.ok) {
-      return {};
+
+router.post('/rl-rollout', authenticateInsurer, async (req, res) => {
+  const { rollout_percentage, kill_switch_engaged } = req.body;
+  if (rollout_percentage !== undefined) {
+    const p = Number(rollout_percentage);
+    if (!isNaN(p) && p >= 0 && p <= 100) {
+      await query(`UPDATE rl_rollout_config SET rollout_percentage = $1 WHERE id = 1`, [p]);
     }
-    const data = await response.json();
-    return {
-      isolation_forest: data?.isolation_forest,
-      sac_model: data?.sac_model,
-    };
-  } catch {
-    return {};
-  } finally {
-    clearTimeout(timer);
   }
-}
-
-router.get('/phase2-checklist', authenticateInsurer, asyncRoute(async (_req, res) => {
-  const checks = await Promise.allSettled([
-    query<{ count: string }>('SELECT COUNT(*)::text as count FROM workers WHERE home_hex_id IS NOT NULL').then((r) => ({
-      h3_workers: parseInt(r.rows[0]?.count ?? '0', 10),
-    })),
-    query<{ count: string }>(
-      `SELECT COUNT(*)::text as count
-       FROM workers
-       WHERE COALESCE(hex_is_centroid_fallback, false) = false`
-    ).then((r) => ({
-      h3_precise_workers: parseInt(r.rows[0]?.count ?? '0', 10),
-    })),
-    query('SELECT state->\'global_alpha\' as alpha FROM bandit_state WHERE id = 1').then((r) => ({
-      bandit_initialised: r.rows.length > 0,
-    })),
-    query<{ count: string }>('SELECT COUNT(*)::text as count FROM rl_shadow_log').then((r) => ({
-      rl_shadow_rows: parseInt(r.rows[0]?.count ?? '0', 10),
-    })),
-    query<{ avg: string | null }>(
-      'SELECT AVG(fraud_score)::text as avg FROM claims WHERE fraud_score IS NOT NULL'
-    ).then((r) => ({
-      avg_fraud_score: r.rows[0]?.avg ? Number(r.rows[0].avg).toFixed(3) : '0.000',
-    })),
-    query(
-      `SELECT 1
-       FROM pg_constraint
-       WHERE conname = 'payouts_claim_id_unique'`
-    ).then((r) => ({
-      payout_dedup_constraint: r.rows.length > 0,
-    })),
-    query<{ count: string }>(
-      `SELECT COUNT(*)::text as count
-       FROM information_schema.tables
-       WHERE table_schema = 'public'
-         AND table_name IN ('graph_edges','upi_addresses','worker_devices')`
-    ).then((r) => ({
-      gnn_schema_tables: parseInt(r.rows[0]?.count ?? '0', 10),
-    })),
-    fetchMlHealth(),
-  ]);
-
-  const results = checks.reduce((acc, check) => {
-    if (check.status === 'fulfilled') {
-      return { ...acc, ...check.value };
-    }
-    return acc;
-  }, {} as Record<string, any>);
-
-  const phase2_complete = [
-    Number(results.h3_workers ?? 0) > 100,
-    Boolean(results.bandit_initialised),
-    Boolean(results.payout_dedup_constraint),
-    Number(results.gnn_schema_tables ?? 0) === 3,
-    results.isolation_forest === 'loaded',
-  ].every(Boolean);
-
-  return res.json({
-    phase2_complete,
-    features: {
-      h3_geospatial: {
-        status: Number(results.h3_workers ?? 0) > 100 ? 'live' : 'partial',
-        workers_with_h3: Number(results.h3_workers ?? 0),
-        workers_precise: Number(results.h3_precise_workers ?? 0),
-      },
-      contextual_bandit: {
-        status: results.bandit_initialised ? 'live' : 'not_initialised',
-        initialised: Boolean(results.bandit_initialised),
-      },
-      rl_shadow_mode: {
-        status: Number(results.rl_shadow_rows ?? 0) > 0 ? 'active' : 'awaiting_traffic',
-        shadow_log_rows: Number(results.rl_shadow_rows ?? 0),
-      },
-      fraud_detection: {
-        status: results.isolation_forest === 'loaded' ? 'live' : 'model_missing',
-        model: results.isolation_forest ?? 'unknown',
-        avg_fraud_score: results.avg_fraud_score ?? '0.000',
-      },
-      gnn_data_prep: {
-        status: Number(results.gnn_schema_tables ?? 0) === 3 ? 'ready' : 'incomplete',
-        schema_tables: Number(results.gnn_schema_tables ?? 0),
-      },
-      payout_deduplication: {
-        status: results.payout_dedup_constraint ? 'active' : 'missing_constraint',
-        unique_constraint: Boolean(results.payout_dedup_constraint),
-      },
-    },
-    checked_at: new Date().toISOString(),
-  });
-}));
+  if (kill_switch_engaged !== undefined) {
+    await query(`UPDATE rl_rollout_config SET kill_switch_engaged = $1 WHERE id = 1`, [Boolean(kill_switch_engaged)]);
+  }
+  
+  const { rows } = await query('SELECT * FROM rl_rollout_config WHERE id = 1');
+  res.json({ success: true, config: rows[0] });
+});
 
 export default router;
 

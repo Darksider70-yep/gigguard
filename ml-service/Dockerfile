@@ -62,7 +62,4 @@ USER mluser
 
 EXPOSE 5001
 
-HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=30s \
-    CMD python -c "import json,sys,urllib.request; d=json.loads(urllib.request.urlopen('http://localhost:5001/health', timeout=3).read().decode()); sys.exit(0 if d.get('status')=='ok' else 1)" || exit 1
-
-CMD ["sh", "-c", "gunicorn --workers 2 --worker-class sync --bind 0.0.0.0:${ML_SERVICE_PORT:-5001} --timeout 120 --access-logfile - --error-logfile - \"app:create_app()\""]
+CMD ["sh", "-c", "mkdir -p /app/models && gunicorn --workers 2 --bind 0.0.0.0:${ML_SERVICE_PORT:-5001} \"app:create_app()\""]
