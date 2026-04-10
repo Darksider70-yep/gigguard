@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db';
 import { config } from '../config';
+import { weatherBudget } from '../services/weatherService';
 
 const router = Router();
 
@@ -28,6 +29,7 @@ router.get('/health', async (_req, res) => {
     db: dbOk ? 'connected' : 'error',
     ml_service: mlOk ? 'connected' : 'unavailable',
     redis: 'connected',
+    weather_budget: weatherBudget.getStatus(),
     uptime_seconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });

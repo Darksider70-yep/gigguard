@@ -3,16 +3,24 @@ import {
   AntiSpoofingAlertsResponse,
   ClaimsResponse,
   DisruptionEventsResponse,
-  InsurerProfile,
   InsurerDashboardResponse,
+  InsurerPayoutsResponse,
+  InsurerProfile,
+  InsurerWorkersResponse,
   LoginResponse,
+  OtpChallengeResponse,
+  OtpRequest,
+  Phase2ChecklistResponse,
   PolicyHistoryResponse,
   PremiumQuoteResponse,
   PurchasePolicyBody,
   PurchasePolicyResponse,
   RazorpayOrderResponse,
+  RegisterRequest,
+  RegisterResponse,
   ShadowComparisonResponse,
   SimulateTriggerBody,
+  VerifyOtpResponse,
   WorkerProfile,
   ZoneRiskMatrixResponse,
 } from './types';
@@ -26,6 +34,11 @@ export class APIError extends Error {
     this.status = status;
     this.code = code;
   }
+}
+
+interface APIRequestOptions extends RequestInit {
+  skipAuth?: boolean;
+  skipUnauthorizedHandler?: boolean;
 }
 
 class GigGuardAPI {
@@ -43,14 +56,22 @@ class GigGuardAPI {
     this.unauthorizedHandler = handler;
   }
 
-  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(path: string, options: APIRequestOptions = {}): Promise<T> {
+    const {
+      skipAuth = false,
+      skipUnauthorizedHandler = false,
+      headers: customHeaders,
+      ...fetchOptions
+    } = options;
+    const shouldAttachAuth = !skipAuth && Boolean(this.token);
+
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
-        ...options,
+        ...fetchOptions,
         headers: {
           'Content-Type': 'application/json',
-          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-          ...(options.headers || {}),
+          ...(shouldAttachAuth ? { Authorization: `Bearer ${this.token}` } : {}),
+          ...(customHeaders || {}),
         },
       });
 
@@ -65,7 +86,12 @@ class GigGuardAPI {
       }
 
       if (!response.ok) {
-        if (response.status === 401 && this.unauthorizedHandler) {
+        if (
+          response.status === 401 &&
+          this.unauthorizedHandler &&
+          shouldAttachAuth &&
+          !skipUnauthorizedHandler
+        ) {
           this.unauthorizedHandler();
         }
         throw new APIError(payload.message || 'Request failed', response.status, payload.code);
@@ -81,10 +107,12 @@ class GigGuardAPI {
     }
   }
 
-  loginWorker(phone_number: string): Promise<LoginResponse> {
-    return this.request<LoginResponse>('/workers/login', {
+  loginWorker(phone_number: string): Promise<OtpChallengeResponse> {
+    return this.request<OtpChallengeResponse>('/workers/login', {
       method: 'POST',
       body: JSON.stringify({ role: 'worker', phone_number }),
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
     });
   }
 
@@ -92,6 +120,35 @@ class GigGuardAPI {
     return this.request<LoginResponse>('/workers/login', {
       method: 'POST',
       body: JSON.stringify({ role: 'insurer', secret }),
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
+    });
+  }
+
+  registerWorker(body: RegisterRequest) {
+    return this.request<RegisterResponse>('/workers/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
+    });
+  }
+
+  verifyOtp(body: OtpRequest) {
+    return this.request<VerifyOtpResponse>('/workers/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
+    });
+  }
+
+  resendOtp(phone_number: string) {
+    return this.request<OtpChallengeResponse>('/workers/resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone_number }),
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
     });
   }
 
@@ -151,6 +208,18 @@ class GigGuardAPI {
     return this.request<DisruptionEventsResponse>(`/insurer/disruption-events?${search.toString()}`);
   }
 
+  getPublicDisruptionEvents(status = 'active', limit = 1) {
+    const search = new URLSearchParams();
+    if (status) {
+      search.set('status', status);
+    }
+    search.set('limit', String(limit));
+    return this.request<DisruptionEventsResponse>(`/triggers/live-events?${search.toString()}`, {
+      skipAuth: true,
+      skipUnauthorizedHandler: true,
+    });
+  }
+
   getAntiSpoofingAlerts() {
     return this.request<AntiSpoofingAlertsResponse>('/insurer/anti-spoofing-alerts');
   }
@@ -183,8 +252,36 @@ class GigGuardAPI {
     return this.request<ShadowComparisonResponse>('/insurer/shadow-comparison');
   }
 
+  getInsurerWorkers(params?: {
+    page?: number;
+    limit?: number;
+    city?: string;
+    platform?: string;
+    search?: string;
+  }) {
+    const query = new URLSearchParams();
+    query.set('page', String(params?.page ?? 1));
+    query.set('limit', String(params?.limit ?? 50));
+    if (params?.city) query.set('city', params.city);
+    if (params?.platform) query.set('platform', params.platform);
+    if (params?.search) query.set('search', params.search);
+    return this.request<InsurerWorkersResponse>(`/insurer/workers?${query.toString()}`);
+  }
+
+  getInsurerPayouts(params?: { month?: string; page?: number; limit?: number }) {
+    const query = new URLSearchParams();
+    if (params?.month) query.set('month', params.month);
+    query.set('page', String(params?.page ?? 1));
+    query.set('limit', String(params?.limit ?? 50));
+    return this.request<InsurerPayoutsResponse>(`/insurer/payouts?${query.toString()}`);
+  }
+
+  getPhase2Checklist() {
+    return this.request<Phase2ChecklistResponse>('/insurer/phase2-checklist');
+  }
+
   banditUpdate(context_key: string, arm: number, reward: number) {
-    return this.request<{ success: boolean }>('/policies/bandit-update', {
+    return this.request<{ success: boolean; ml_service: 'updated' | 'unavailable' }>('/policies/bandit-update', {
       method: 'POST',
       body: JSON.stringify({ context_key, arm, reward }),
     });

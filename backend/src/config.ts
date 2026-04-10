@@ -37,7 +37,7 @@ const OPENWEATHERMAP_API_KEY =
   getStringEnv('OPENWEATHERMAP_API_KEY') || getStringEnv('OPENWEATHER_API_KEY');
 const OPENWEATHERMAP_BASE_URL =
   getStringEnv('OPENWEATHERMAP_BASE_URL') ||
-  getStringEnv('OPENWEATHER_BASE_URL', 'https://api.openweathermap.org/data/3.0');
+  getStringEnv('OPENWEATHER_BASE_URL', 'https://api.openweathermap.org/data/2.5');
 
 const AQICN_API_KEY = getStringEnv('AQICN_API_KEY') || getStringEnv('AQI_API_KEY');
 const AQICN_BASE_URL = getStringEnv('AQICN_BASE_URL', 'https://api.waqi.info/feed');
@@ -64,6 +64,7 @@ export const config = {
 
   USE_MOCK_APIS: getBooleanEnv('USE_MOCK_APIS', true),
   USE_MOCK_PAYOUT: getBooleanEnv('USE_MOCK_PAYOUT', true),
+  IS_DEMO_MODE: getBooleanEnv('IS_DEMO_MODE', false),
 
   PORT: getNumberEnv('PORT', 4000),
   NODE_ENV: getStringEnv('NODE_ENV', 'development'),
@@ -77,6 +78,7 @@ export const config = {
   mlTimeoutMs: getNumberEnv('ML_SERVICE_TIMEOUT_MS', getNumberEnv('ML_TIMEOUT_MS', 500)),
   useMockApis: getBooleanEnv('USE_MOCK_APIS', true),
   useMockPayout: getBooleanEnv('USE_MOCK_PAYOUT', true),
+  isDemoMode: getBooleanEnv('IS_DEMO_MODE', false),
   openWeatherApiKey: OPENWEATHERMAP_API_KEY,
   openWeatherBaseUrl: OPENWEATHERMAP_BASE_URL,
   jwtSecret: getStringEnv('JWT_SECRET', getStringEnv('RAZORPAY_KEY_SECRET', 'dev_jwt_secret')),

@@ -1,12 +1,11 @@
-"""Evaluate SAC model against formula baseline."""
+"""Compare SAC agent vs formula baseline on identical episodes."""
 
 from __future__ import annotations
 
 import json
-import os
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, Tuple
+from pathlib import Path
+from typing import Any, Dict, List
 
 import numpy as np
 from stable_baselines3 import SAC
@@ -14,124 +13,108 @@ from stable_baselines3 import SAC
 from rl.gigguard_env import GigGuardEnv
 
 
-@dataclass
-class EvalMetrics:
-    """Aggregated metrics for one policy strategy."""
-
-    mean_premium: float
-    purchase_rate: float
-    loss_ratio: float
-    mean_reward: float
-
-
 def _formula_action(state: np.ndarray) -> np.ndarray:
-    """Formula baseline action from current state."""
-    zone_risk = float(state[0])
-    multiplier = np.clip(0.8 + 0.5 * zone_risk, 0.5, 2.0)
+    # Baseline formula around base 35 with risk adjustments.
+    multiplier = float(np.clip(0.8 + 0.45 * float(state[0]), 0.5, 2.0))
     return np.array([multiplier], dtype=np.float32)
 
 
-def _run_episode(env: GigGuardEnv, policy: str, model: SAC | None) -> Tuple[float, int, float, float]:
-    """Run one episode and return premium sum, purchases, payout sum, reward sum."""
-    total_premium = 0.0
+def _episode_rollout(env: GigGuardEnv, mode: str, model: SAC | None) -> Dict[str, float]:
+    obs, _ = env.reset()
+    premiums: List[float] = []
+    rewards: List[float] = []
     purchases = 0
-    total_payout = 0.0
-    total_reward = 0.0
+    payouts = 0.0
+    done = False
 
-    state, _ = env.reset()
-    terminated = False
-    while not terminated:
-        if policy == "sac":
+    while not done:
+        if mode == "sac":
             assert model is not None
-            action, _ = model.predict(state, deterministic=True)
+            action, _ = model.predict(obs, deterministic=True)
         else:
-            action = _formula_action(state)
+            action = _formula_action(obs)
 
-        state, reward, terminated, _, info = env.step(action)
-        total_reward += float(reward)
-        total_premium += float(info["premium"])
-        if bool(info["purchased"]):
+        obs, reward, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+        premiums.append(float(info["premium"]))
+        rewards.append(float(reward))
+        if info["purchased"]:
             purchases += 1
-        total_payout += float(info["payout"])
+        if info["claim_filed"]:
+            payouts += float(info["payout"])
 
-    return total_premium, purchases, total_payout, total_reward
+    total_premium = float(sum(premiums))
+    return {
+        "mean_premium": float(np.mean(premiums)) if premiums else 0.0,
+        "purchase_rate": purchases / 52.0,
+        "loss_ratio": payouts / max(total_premium, 1.0),
+        "mean_reward": float(np.mean(rewards)) if rewards else 0.0,
+    }
 
 
-def evaluate_model(model_path: str, episodes: int = 1_000) -> Dict[str, Dict[str, float]]:
-    """Evaluate SAC and formula baselines on matched episode seeds."""
+def run_with_model(mode: str, seeds: List[int], model: SAC | None = None) -> Dict[str, float]:
+    rows: List[Dict[str, float]] = []
+    for seed in seeds:
+        np.random.seed(seed)
+        env = GigGuardEnv()
+        rows.append(_episode_rollout(env, mode=mode, model=model))
+        env.close()
+
+    return {
+        "mean_premium": float(np.mean([row["mean_premium"] for row in rows])) if rows else 0.0,
+        "purchase_rate": float(np.mean([row["purchase_rate"] for row in rows])) if rows else 0.0,
+        "loss_ratio": float(np.mean([row["loss_ratio"] for row in rows])) if rows else 0.0,
+        "mean_reward": float(np.mean([row["mean_reward"] for row in rows])) if rows else 0.0,
+    }
+
+
+def compare_sac_vs_formula(n_episodes: int = 500, model_path: str = "models/sac_premium_v1.zip") -> Dict[str, Any]:
+    env = GigGuardEnv()
+    env.close()
     model = SAC.load(model_path)
 
-    sac_premiums: list[float] = []
-    sac_purchases: list[int] = []
-    sac_payouts: list[float] = []
-    sac_rewards: list[float] = []
+    seeds = [i * 7 + 13 for i in range(n_episodes)]
+    sac_results = run_with_model(mode="sac", seeds=seeds, model=model)
+    formula_results = run_with_model(mode="formula", seeds=seeds, model=None)
 
-    formula_premiums: list[float] = []
-    formula_purchases: list[int] = []
-    formula_payouts: list[float] = []
-    formula_rewards: list[float] = []
+    print("\n" + "=" * 55)
+    print(f"{'Metric':<25} {'SAC':>12} {'Formula':>12}")
+    print("=" * 55)
+    metrics = [
+        ("Mean premium (Rs)", sac_results["mean_premium"], formula_results["mean_premium"]),
+        ("Purchase rate", sac_results["purchase_rate"], formula_results["purchase_rate"]),
+        ("Loss ratio", sac_results["loss_ratio"], formula_results["loss_ratio"]),
+        ("Mean reward", sac_results["mean_reward"], formula_results["mean_reward"]),
+    ]
+    for name, sac_val, formula_val in metrics:
+        print(f"{name:<25} {sac_val:>12.3f} {formula_val:>12.3f}")
+    print("=" * 55)
 
-    for seed in range(episodes):
-        np.random.seed(seed)
-        sac_env = GigGuardEnv()
-        sac_episode = _run_episode(sac_env, policy="sac", model=model)
-        sac_env.close()
-
-        np.random.seed(seed)
-        formula_env = GigGuardEnv()
-        formula_episode = _run_episode(formula_env, policy="formula", model=None)
-        formula_env.close()
-
-        sac_premiums.append(sac_episode[0])
-        sac_purchases.append(sac_episode[1])
-        sac_payouts.append(sac_episode[2])
-        sac_rewards.append(sac_episode[3])
-
-        formula_premiums.append(formula_episode[0])
-        formula_purchases.append(formula_episode[1])
-        formula_payouts.append(formula_episode[2])
-        formula_rewards.append(formula_episode[3])
-
-    def _metrics(premiums: list[float], purchases: list[int], payouts: list[float], rewards: list[float]) -> EvalMetrics:
-        premium_total = float(np.sum(premiums))
-        payout_total = float(np.sum(payouts))
-        return EvalMetrics(
-            mean_premium=float(np.mean(premiums) / 52.0),
-            purchase_rate=float(np.sum(purchases) / (episodes * 52.0)),
-            loss_ratio=float(payout_total / max(premium_total, 1e-8)),
-            mean_reward=float(np.mean(rewards) / 52.0),
-        )
-
-    sac_metrics = _metrics(sac_premiums, sac_purchases, sac_payouts, sac_rewards)
-    formula_metrics = _metrics(formula_premiums, formula_purchases, formula_payouts, formula_rewards)
+    winner = "SAC" if (
+        sac_results["loss_ratio"] < formula_results["loss_ratio"]
+        and sac_results["purchase_rate"] >= formula_results["purchase_rate"]
+    ) else "FORMULA"
+    print(f"\nRecommendation: {winner} performs better")
 
     report = {
         "evaluated_at": datetime.now(timezone.utc).isoformat(),
-        "episodes": episodes,
-        "sac": sac_metrics.__dict__,
-        "formula": formula_metrics.__dict__,
+        "n_episodes": n_episodes,
+        "sac": sac_results,
+        "formula": formula_results,
+        "recommendation": "rl_ready" if winner == "SAC" else "formula_wins",
     }
-    output_path = os.path.join(os.path.dirname(model_path), "eval_report.json")
-    with open(output_path, "w", encoding="utf-8") as handle:
+    out = Path("models") / "eval_report.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w", encoding="utf-8") as handle:
         json.dump(report, handle, indent=2)
-
-    print("Metric          | SAC    | Formula")
-    print(f"Mean premium    | Rs{sac_metrics.mean_premium:.1f} | Rs{formula_metrics.mean_premium:.1f}")
-    print(f"Purchase rate   | {sac_metrics.purchase_rate:.2%} | {formula_metrics.purchase_rate:.2%}")
-    print(f"Loss ratio      | {sac_metrics.loss_ratio:.2%} | {formula_metrics.loss_ratio:.2%}")
-    print(f"Mean reward     | {sac_metrics.mean_reward:.2f} | {formula_metrics.mean_reward:.2f}")
-
     return report
 
 
-def main() -> None:
-    """CLI entrypoint for SAC evaluation."""
-    model_path = os.getenv("SAC_MODEL_PATH")
-    if not model_path:
-        raise RuntimeError("SAC_MODEL_PATH environment variable is required")
-    evaluate_model(model_path, episodes=1_000)
+def evaluate_model(model_path: str, episodes: int = 500) -> Dict[str, Any]:
+    """Backward-compatible wrapper."""
+    return compare_sac_vs_formula(n_episodes=episodes, model_path=model_path)
 
 
 if __name__ == "__main__":
-    main()
+    compare_sac_vs_formula()
 

@@ -53,7 +53,7 @@
 -- - Speedup: 25-50x improvement for typical trigger events
 --
 CREATE INDEX IF NOT EXISTS idx_workers_home_hex_id_gin 
-  ON workers USING GIN (array[home_hex_id]::bigint[]);
+  ON workers USING GIN ((ARRAY[home_hex_id]::bigint[]));
 
 -- 2. GIN index on disruption_events.affected_hex_ids for array containment
 --    This index enables fast queries checking if a specific hex was affected.

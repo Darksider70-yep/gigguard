@@ -1,14 +1,17 @@
 import cron from 'node-cron';
 import { expireOldPolicies } from '../workers/policyExpiry';
+import { logger } from '../lib/logger';
 
 export function startPolicyExpiryJob(): void {
   cron.schedule('55 23 * * 0', async () => {
-    console.info('[PolicyExpiry] Running policy expiry job');
+    logger.info('PolicyExpiry', 'run_started');
     try {
       await expireOldPolicies();
     } catch (err) {
-      console.error('[PolicyExpiry] Failed:', err);
+      logger.error('PolicyExpiry', 'run_failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   });
-  console.info('[PolicyExpiry] Scheduled - Sunday 23:55');
+  logger.info('PolicyExpiry', 'scheduled', { cron: '55 23 * * 0' });
 }

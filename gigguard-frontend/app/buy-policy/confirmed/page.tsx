@@ -1,8 +1,9 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AuthGuard from '@/components/AuthGuard';
+import ConfettiOnce from '@/components/ui/ConfettiOnce';
 
 interface PurchaseConfirmationState {
   policy_id: string;
@@ -19,15 +20,14 @@ interface PurchaseConfirmationState {
   zone?: string;
   city?: string;
 }
-
-function formatInr(value: number): string {
-  return `INR ${Math.round(value).toLocaleString('en-IN')}`;
-}
+const INR = '\u20B9';
+const CHECK = '\u2713';
 
 export default function BuyPolicyConfirmedPage() {
   const router = useRouter();
   const [data, setData] = useState<PurchaseConfirmationState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const raw = sessionStorage.getItem('buy_policy_purchase');
@@ -41,71 +41,91 @@ export default function BuyPolicyConfirmedPage() {
     setLoading(false);
   }, [router]);
 
+  const copyPolicyId = async () => {
+    if (!data) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(data.policy_id);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
     <AuthGuard allowedRoles={['worker']}>
-      <div className="mx-auto max-w-3xl space-y-6">
-        <h1 className="text-3xl font-bold text-slate-900">Policy Confirmed</h1>
-
-        {loading ? (
-          <div className="space-y-3">
-            <div className="h-24 animate-pulse rounded-xl bg-slate-200" />
-            <div className="h-40 animate-pulse rounded-xl bg-slate-200" />
-          </div>
-        ) : data ? (
-          <>
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-800">
-              <p className="text-lg font-semibold">{data.message}</p>
-              <p className="mt-1 text-sm">Your zone is now protected for this week.</p>
+      {loading ? (
+        <div className="space-y-3">
+          <div className="skeleton h-24 rounded-xl" />
+          <div className="skeleton h-96 rounded-xl" />
+        </div>
+      ) : data ? (
+        <div className="space-y-5">
+          <section className="surface-card relative overflow-hidden p-8 text-center">
+            <ConfettiOnce active />
+            <div className="mx-auto h-24 w-24">
+              <svg viewBox="0 0 100 100" className="h-full w-full">
+                <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(16,185,129,0.35)" strokeWidth="6" />
+                <path
+                  d="M30 52 L44 66 L72 38"
+                  fill="none"
+                  stroke="#10b981"
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ strokeDasharray: 120, strokeDashoffset: 0, animation: 'fadeInUp 700ms ease' }}
+                />
+              </svg>
             </div>
+            <h1 className="mt-3 text-4xl font-semibold text-emerald-300">Policy Active!</h1>
+            <p className="mt-2 text-secondary">Your coverage is now live for this week.</p>
+          </section>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-slate-900">Policy details</h2>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded bg-slate-50 p-3 text-sm">
-                  <p className="text-slate-500">Policy Code</p>
-                  <p className="font-semibold text-slate-900">{data.policy_id}</p>
-                </div>
-                <div className="rounded bg-slate-50 p-3 text-sm">
-                  <p className="text-slate-500">Status</p>
-                  <p className="font-semibold text-slate-900">{data.policy.status}</p>
-                </div>
-                <div className="rounded bg-slate-50 p-3 text-sm">
-                  <p className="text-slate-500">Week</p>
-                  <p className="font-semibold text-slate-900">
-                    {data.policy.week_start} to {data.policy.week_end}
-                  </p>
-                </div>
-                <div className="rounded bg-slate-50 p-3 text-sm">
-                  <p className="text-slate-500">Premium Paid</p>
-                  <p className="font-semibold text-slate-900">{formatInr(data.policy.premium_paid)}</p>
-                </div>
-                <div className="rounded bg-slate-50 p-3 text-sm">
-                  <p className="text-slate-500">Coverage Amount</p>
-                  <p className="font-semibold text-slate-900">{formatInr(data.policy.coverage_amount)}</p>
-                </div>
-                <div className="rounded bg-slate-50 p-3 text-sm">
-                  <p className="text-slate-500">Payment Reference</p>
-                  <p className="font-semibold text-slate-900">{data.policy.razorpay_payment_id}</p>
-                </div>
-                <div className="rounded bg-slate-50 p-3 text-sm sm:col-span-2">
-                  <p className="text-slate-500">Location</p>
-                  <p className="font-semibold text-slate-900">
-                    {data.zone || 'Unknown zone'}, {data.city || 'Unknown city'}
-                  </p>
-                </div>
+          <section className="surface-card relative overflow-hidden border-2 border-double border-amber-500/45 p-6">
+            <div className="absolute right-4 top-4 text-6xl font-bold text-amber-500/10">GG</div>
+            <p className="text-xs uppercase tracking-[0.24em] text-amber-200">GigGuard Policy Certificate</p>
+            <p className="mt-2 font-mono-data text-lg text-amber-300">{data.policy_id}</p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+                Week<br />
+                <span className="font-mono-data">{data.policy.week_start} - {data.policy.week_end}</span>
+              </div>
+              <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+                Premium<br />
+                <span className="font-mono-data">{`${INR}${Math.round(data.policy.premium_paid)}`}</span>
+              </div>
+              <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+                Coverage<br />
+                <span className="font-mono-data">{`${INR}${Math.round(data.policy.coverage_amount)}`}</span>
+              </div>
+              <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+                Razorpay Ref<br />
+                <span className="font-mono-data text-xs">{data.policy.razorpay_payment_id}</span>
+              </div>
+              <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 col-span-2">
+                Zone<br />
+                <span className="font-mono-data">{data.zone ?? '-'}, {data.city ?? '-'}</span>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => router.push('/dashboard')}
-              className="w-full rounded-lg bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700"
-            >
-              Go to dashboard
-            </button>
-          </>
-        ) : null}
-      </div>
+            <div className="mt-5 flex items-center gap-3">
+              <button onClick={copyPolicyId} type="button" className="btn-saffron px-4 py-2 text-sm">
+                Share Policy ID
+              </button>
+              {copied ? <span className="text-sm text-emerald-300">{`Copied ${CHECK}`}</span> : null}
+            </div>
+          </section>
+
+          <button type="button" onClick={() => router.push('/dashboard')} className="btn-outline-saffron w-full px-4 py-3">
+            Go to dashboard
+          </button>
+        </div>
+      ) : null}
     </AuthGuard>
   );
 }
+

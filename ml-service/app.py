@@ -27,7 +27,9 @@ from config import Settings, get_settings
 from db.connection import ENGINE, session_scope
 from fraud.isolation_forest import FraudScorer
 from premium.calculator import PremiumCalculator
+from premium.zones import ZONES
 from rl.validate_shadow import validate_shadow
+from weather.live_weather import weather_client
 
 
 class SACShadowModel:
@@ -144,20 +146,34 @@ def _register_premium_blueprint(app: Flask) -> Blueprint:
     @bp.post("/predict-premium")
     def predict_premium() -> Any:
         payload = request.get_json(silent=True) or {}
+        state_payload = dict(payload)
 
         try:
             zone_multiplier = _parse_float(payload, "zone_multiplier", default=1.0)
-            weather_multiplier = _parse_float(payload, "weather_multiplier", default=1.0)
             history_multiplier = _parse_float(payload, "history_multiplier", default=1.0)
         except (TypeError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 400
+
+        lat = payload.get("lat")
+        lng = payload.get("lng")
+        if lat is not None and lng is not None:
+            try:
+                weather_data = weather_client.get_weather_multiplier(float(lat), float(lng))
+                weather_multiplier = float(weather_data.get("weather_multiplier", 1.0))
+                state_payload["rain_prob_7d"] = weather_data.get("rain_prob_7d", state_payload.get("rain_prob_7d", 0.2))
+                state_payload["aqi_avg_7d"] = weather_data.get("aqi_avg_7d", state_payload.get("aqi_avg_7d", 0.2))
+                state_payload["weather_multiplier"] = weather_multiplier
+            except Exception:
+                weather_multiplier = _parse_float(payload, "weather_multiplier", default=1.0)
+        else:
+            weather_multiplier = _parse_float(payload, "weather_multiplier", default=1.0)
 
         calculator: PremiumCalculator = app.extensions["premium_calculator"]
         formula = calculator.calculate(zone_multiplier, weather_multiplier, history_multiplier)
         premium_value = float(formula["premium"])
 
         sac_model: SACShadowModel = app.extensions["sac_shadow_model"]
-        state_vector = _rl_state_from_request(payload)
+        state_vector = _rl_state_from_request(state_payload)
         rl_premium = sac_model.predict_premium(state_vector)
 
         shadow_logged = False
@@ -184,6 +200,29 @@ def _register_premium_blueprint(app: Flask) -> Blueprint:
             }
         )
 
+    @bp.get("/zone-multipliers")
+    def get_zone_multipliers() -> Any:
+        try:
+            from premium.zone_model import get_all_zone_multipliers
+
+            multipliers = get_all_zone_multipliers()
+            return jsonify(
+                {
+                    "multipliers": multipliers,
+                    "source": "zone_model_v1",
+                    "n_zones": len(multipliers),
+                }
+            )
+        except Exception as exc:
+            fallback = {str(zone["zone_id"]): float(zone["zone_multiplier"]) for zone in ZONES}
+            return jsonify(
+                {
+                    "multipliers": fallback,
+                    "source": "hardcoded_fallback",
+                    "error": str(exc),
+                }
+            )
+
     app.register_blueprint(bp)
     return bp
 
@@ -208,7 +247,14 @@ def _register_fraud_blueprint(app: Flask) -> Blueprint:
         }
 
         claim_id = payload.get("claim_id")
+        parsed_claim_id: str | None = None
         if claim_id:
+            try:
+                parsed_claim_id = str(uuid.UUID(str(claim_id)))
+            except (TypeError, ValueError):
+                parsed_claim_id = None
+
+        if parsed_claim_id:
             with session_scope() as session:
                 session.execute(
                     text(
@@ -219,7 +265,7 @@ def _register_fraud_blueprint(app: Flask) -> Blueprint:
                         WHERE id = :claim_id
                         """
                     ),
-                    {"fraud_score": float(result["fraud_score"]), "claim_id": str(claim_id)},
+                    {"fraud_score": float(result["fraud_score"]), "claim_id": parsed_claim_id},
                 )
 
         return jsonify(response)
@@ -428,3 +474,4 @@ if __name__ == "__main__":
     app_instance = create_app()
     config = get_settings()
     app_instance.run(host="0.0.0.0", port=config.ml_service_port)
+

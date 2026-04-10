@@ -1,15 +1,20 @@
 export interface WorkerProfile {
   id: string;
   name: string;
+  phone_number?: string | null;
   platform: 'zomato' | 'swiggy';
   city: string;
   zone: string | null;
   home_hex_id?: string | null;
+  hex_is_centroid_fallback?: boolean;
   avg_daily_earning: number;
   zone_multiplier: number;
   history_multiplier: number;
   experience_tier?: 'new' | 'mid' | 'veteran' | null;
   upi_vpa?: string | null;
+  avatar_seed?: string | null;
+  verified?: boolean;
+  verified_at?: string | null;
   created_at: string;
 }
 
@@ -37,6 +42,7 @@ export interface PremiumQuoteResponse {
     weather_multiplier: number;
     history_multiplier: number;
     raw_premium: number;
+    premium?: number;
   };
   rl_premium: number | null;
   coverage: {
@@ -138,6 +144,7 @@ export interface PurchasePolicyBody {
   premium_paid: number;
   coverage_amount: number;
   recommended_arm: number;
+  selected_arm?: number;
   context_key: string;
   arm_accepted: boolean;
 }
@@ -177,6 +184,7 @@ export interface ZoneRiskMatrixResponse {
     city: string;
     zone_multiplier: number;
     risk_level: 'High' | 'Medium' | 'Low';
+    worker_count?: number;
   }>;
 }
 
@@ -222,6 +230,48 @@ export interface ShadowComparisonResponse {
   avg_delta: number;
 }
 
+export interface InsurerWorkersResponse {
+  workers: WorkerProfile[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface InsurerPayoutsResponse {
+  payouts: Array<{
+    id: string;
+    amount: number;
+    status: string;
+    upi_vpa: string | null;
+    razorpay_payout_id: string | null;
+    created_at: string;
+    processed_at: string | null;
+    worker_id: string;
+    worker_name: string;
+    city: string;
+    zone: string;
+    trigger_type: string;
+    claim_id: string;
+  }>;
+  total: number;
+  total_amount: number;
+  page: number;
+  limit: number;
+}
+
+export interface Phase2ChecklistResponse {
+  phase2_complete: boolean;
+  features: {
+    h3_geospatial: { status: string; workers_with_h3: number; workers_precise: number };
+    contextual_bandit: { status: string; initialised: boolean };
+    rl_shadow_mode: { status: string; shadow_log_rows: number };
+    fraud_detection: { status: string; model: string; avg_fraud_score: string };
+    gnn_data_prep: { status: string; schema_tables: number };
+    payout_deduplication: { status: string; unique_constraint: boolean };
+  };
+  checked_at: string;
+}
+
 export interface LoginResponse {
   token: string;
   role: 'worker' | 'insurer';
@@ -238,3 +288,37 @@ export interface SimulateTriggerBody {
   trigger_value?: number;
   disruption_hours?: number;
 }
+
+
+export interface RegisterRequest {
+  name: string;
+  phone_number: string;
+  platform: 'zomato' | 'swiggy';
+  city: string;
+  zone: string;
+  avg_daily_earning: number;
+  upi_vpa: string;
+}
+
+export interface RegisterResponse {
+  message: string;
+  phone_number: string;
+  worker_id: string;
+}
+
+export interface OtpRequest {
+  phone_number: string;
+  otp?: string;
+}
+
+export interface OtpChallengeResponse {
+  message: string;
+  phone_number: string;
+}
+
+export interface VerifyOtpResponse {
+  token: string;
+  worker: WorkerProfile;
+}
+
+export type RegistrationStep = 'details' | 'verify' | 'complete';

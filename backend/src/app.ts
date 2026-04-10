@@ -7,11 +7,14 @@ import insurerRouter from './routes/insurer';
 import razorpayRouter from './routes/razorpay';
 import triggersRouter from './routes/triggers';
 import healthRouter from './routes/health';
+import adminRouter from './routes/admin';
 import { startTriggerMonitor } from './jobs/triggerMonitor';
 import { startPolicyExpiryJob } from './jobs/policyExpiryJob';
+import { startHexBackfillJob } from './jobs/hexBackfillJob';
 import { claimCreationWorker } from './workers/claimCreation';
 import { claimValidationWorker } from './workers/claimValidation';
 import { payoutCreationWorker } from './workers/payoutCreation';
+import { logger } from './lib/logger';
 
 let backgroundStarted = false;
 
@@ -25,6 +28,7 @@ function startBackgroundProcesses(): void {
   void payoutCreationWorker;
   startTriggerMonitor();
   startPolicyExpiryJob();
+  startHexBackfillJob();
   backgroundStarted = true;
 }
 
@@ -52,9 +56,22 @@ export function createApp() {
   app.use('/insurer', insurerRouter);
   app.use('/razorpay', razorpayRouter);
   app.use('/triggers', triggersRouter);
+  app.use(adminRouter);
 
   // Legacy compatibility paths from Phase 1.
   app.use('/api/policies', policiesRouter);
+
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    logger.error('API', 'request_failed', {
+      method: req.method,
+      path: req.originalUrl,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    if (res.headersSent) {
+      return next(err);
+    }
+    return res.status(500).json({ message: 'Internal server error' });
+  });
 
   app.use((_req, res) => {
     return res.status(404).json({ message: 'Route not found' });

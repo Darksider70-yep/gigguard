@@ -29,6 +29,15 @@ jest.mock('../../services/razorpayService', () => ({
   },
 }));
 
+jest.mock('../../lib/logger', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
 import { query, withTransaction } from '../../db';
 import { claimValidationQueue, payoutQueue } from '../../queues';
 import { mlService } from '../../services/mlService';
@@ -37,6 +46,7 @@ import { processClaimCreationJob } from '../claimCreation';
 import { processClaimValidationJob } from '../claimValidation';
 import { processPayoutCreationJob } from '../payoutCreation';
 import { config } from '../../config';
+import { logger } from '../../lib/logger';
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
 const mockWithTransaction = withTransaction as jest.MockedFunction<typeof withTransaction>;
@@ -44,6 +54,7 @@ const mockClaimValidationQueue = claimValidationQueue as jest.Mocked<typeof clai
 const mockPayoutQueue = payoutQueue as jest.Mocked<typeof payoutQueue>;
 const mockMlService = mlService as jest.Mocked<typeof mlService>;
 const mockRazorpayService = razorpayService as jest.Mocked<typeof razorpayService>;
+const mockLogger = logger as jest.Mocked<typeof logger>;
 
 describe('Claim pipeline workers', () => {
   beforeEach(() => {
@@ -88,7 +99,10 @@ describe('Claim pipeline workers', () => {
               });
             }
             if (sql.includes('FROM claims')) {
-              return Promise.resolve({ rows: [{ '?column?': 1 }], rowCount: 1 });
+              return Promise.resolve({
+                rows: [{ id: 'claim-1', payout_amount: '400', status: 'approved' }],
+                rowCount: 1,
+              });
             }
             return Promise.resolve({ rows: [], rowCount: 0 });
           }),
@@ -101,6 +115,46 @@ describe('Claim pipeline workers', () => {
         trigger_type: 'heavy_rainfall',
         disruption_hours: 4,
         trigger_value: 18,
+        worker_ids: ['worker-1'],
+      });
+
+      expect(result.claims_created).toBe(0);
+      expect(mockClaimValidationQueue.add).not.toHaveBeenCalled();
+    });
+
+    test('blocks same-day upgrade when payout already processing', async () => {
+      mockWithTransaction.mockImplementation(async (fn: any) => {
+        const client = {
+          query: jest.fn().mockImplementation((sql: string) => {
+            if (sql.includes('FROM policies')) {
+              return Promise.resolve({
+                rows: [{ id: 'policy-1', avg_daily_earning: '1000' }],
+                rowCount: 1,
+              });
+            }
+            if (sql.includes('SELECT id, payout_amount::text, status') && sql.includes('FROM claims')) {
+              return Promise.resolve({
+                rows: [{ id: 'claim-1', payout_amount: '320', status: 'approved' }],
+                rowCount: 1,
+              });
+            }
+            if (sql.includes('FROM payouts') && sql.includes("status IN ('processing', 'paid')")) {
+              return Promise.resolve({
+                rows: [{ status: 'processing' }],
+                rowCount: 1,
+              });
+            }
+            return Promise.resolve({ rows: [], rowCount: 0 });
+          }),
+        };
+        return fn(client);
+      });
+
+      const result = await processClaimCreationJob({
+        disruption_event_id: 'event-1',
+        trigger_type: 'flood_alert',
+        disruption_hours: 8,
+        trigger_value: 1,
         worker_ids: ['worker-1'],
       });
 
@@ -390,7 +444,7 @@ describe('Claim pipeline workers', () => {
       });
     });
 
-    test('creates payouts record with status=\'pending\' then \'processing\'', async () => {
+    test('creates payout row with status=\'processing\' when no existing payout', async () => {
       mockQuery.mockImplementation(async (sql: string) => {
         if (sql.includes('FROM claims c') && sql.includes("c.status='approved'")) {
           return {
@@ -405,6 +459,9 @@ describe('Claim pipeline workers', () => {
             rowCount: 1,
           };
         }
+        if (sql.includes('FROM payouts') && sql.includes('WHERE claim_id=$1')) {
+          return { rows: [], rowCount: 0 };
+        }
         if (sql.includes('INSERT INTO payouts')) {
           return { rows: [{ id: 'payout-1' }], rowCount: 1 };
         }
@@ -416,10 +473,6 @@ describe('Claim pipeline workers', () => {
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining("INSERT INTO payouts (claim_id, worker_id, amount, upi_vpa, status)"),
         expect.any(Array)
-      );
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("SET status='processing'"),
-        ['payout-1']
       );
     });
 
@@ -437,6 +490,9 @@ describe('Claim pipeline workers', () => {
             ],
             rowCount: 1,
           };
+        }
+        if (sql.includes('FROM payouts') && sql.includes('WHERE claim_id=$1')) {
+          return { rows: [], rowCount: 0 };
         }
         if (sql.includes('INSERT INTO payouts')) {
           return { rows: [{ id: 'payout-1' }], rowCount: 1 };
@@ -466,7 +522,6 @@ describe('Claim pipeline workers', () => {
     });
 
     test('logs error and returns if worker has no upi_vpa', async () => {
-      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
       mockQuery.mockImplementation(async (sql: string) => {
         if (sql.includes('FROM claims c') && sql.includes("c.status='approved'")) {
           return {
@@ -486,9 +541,38 @@ describe('Claim pipeline workers', () => {
 
       await processPayoutCreationJob({ claim_id: 'claim-1' });
 
-      expect(errorSpy).toHaveBeenCalled();
+      expect(mockLogger.error).toHaveBeenCalled();
       expect(mockRazorpayService.createPayout).not.toHaveBeenCalled();
-      errorSpy.mockRestore();
+    });
+
+    test('skips duplicate payout when existing payout is processing', async () => {
+      mockQuery.mockImplementation(async (sql: string) => {
+        if (sql.includes('FROM claims c') && sql.includes("c.status='approved'")) {
+          return {
+            rows: [
+              {
+                payout_amount: '500',
+                worker_id: 'worker-1',
+                upi_vpa: 'worker@okaxis',
+                worker_name: 'Worker',
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM payouts') && sql.includes('WHERE claim_id=$1')) {
+          return { rows: [{ id: 'payout-existing', status: 'processing' }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      });
+
+      const result = await processPayoutCreationJob({ claim_id: 'claim-1' });
+      expect(result).toEqual({
+        skipped: true,
+        reason: 'duplicate',
+        existing_payout_id: 'payout-existing',
+      });
+      expect(mockRazorpayService.createPayout).not.toHaveBeenCalled();
     });
   });
 });

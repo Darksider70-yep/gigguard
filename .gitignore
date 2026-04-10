@@ -1,14 +1,22 @@
-.env
+﻿.env
 .env.*
 !.env.example
+.env.local
+.env.production
+.env.*.local
 
 # Node / Next.js (monorepo-safe)
 **/node_modules/
 **/.next/
+**/.next-build/
 **/out/
 **/dist/
 **/build/
+.husky/_/
 **/coverage/
+!gigguard-frontend/app/insurer/coverage/
+!gigguard-frontend/app/insurer/coverage/page.tsx
 
 # Logs
 **/*.log
+

@@ -111,9 +111,30 @@ const purchasePolicySchema = z.object({
   premium_paid: z.number(),
   coverage_amount: z.number(),
   recommended_arm: z.number().int().min(0).max(3).optional(),
+  selected_arm: z.number().int().min(0).max(3).optional(),
   context_key: z.string().optional(),
   arm_accepted: z.boolean().optional(),
 });
+
+const banditUpdateSchema = z.object({
+  context_key: z.string().min(1),
+  arm: z.number().int().min(0).max(3),
+  reward: z.union([z.literal(0), z.literal(1)]),
+});
+
+const sessionExitSchema = z.object({
+  context_key: z.string().min(1),
+  arm: z.number().int().min(0).max(3),
+});
+
+function normalizeContextCity(city: string): string {
+  return city.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function contextMatchesWorker(contextKey: string, worker: { platform: string; city: string }): boolean {
+  const expectedPrefix = `${worker.platform}_${normalizeContextCity(worker.city)}_`;
+  return contextKey.startsWith(expectedPrefix);
+}
 
 router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (req, res) => {
   const worker = req.worker!;
@@ -161,13 +182,11 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
       RETURNING *`,
       [
         worker.id,
+        worker.zone,
         weekStart,
         weekEnd,
         body.premium_paid,
         body.coverage_amount,
-        worker.zone_multiplier,
-        1.0,
-        worker.history_multiplier,
         body.recommended_arm ?? null,
         body.arm_accepted ?? null,
         body.context_key ?? null,
@@ -178,8 +197,9 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
     return result.rows[0];
   });
 
-  if (body.context_key && body.recommended_arm !== undefined) {
-    mlService.updateBandit(worker.id, body.context_key, body.recommended_arm, 1.0);
+  const selectedArm = body.selected_arm ?? body.recommended_arm;
+  if (body.context_key && selectedArm !== undefined) {
+    void mlService.updateBandit(worker.id, body.context_key, selectedArm, 1.0);
   }
 
   res.status(201).json({
@@ -188,13 +208,42 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
       id: policy.id,
       week_start: policy.week_start,
       week_end: policy.week_end,
-      premium_paid: Math.round(Number(policy.weekly_premium)),
+      premium_paid: Math.round(Number(policy.premium_paid)),
       coverage_amount: Number(policy.coverage_amount),
       status: policy.status,
       razorpay_payment_id: policy.razorpay_payment_id,
     },
     message: "Policy active. We'll monitor your zone 24/7.",
   });
+});
+
+router.post('/bandit-update', authenticateWorker, validateBody(banditUpdateSchema), async (req, res) => {
+  const worker = req.worker!;
+  const body = req.body as z.infer<typeof banditUpdateSchema>;
+  if (!contextMatchesWorker(body.context_key, worker)) {
+    return res.status(400).json({
+      code: 'CONTEXT_MISMATCH',
+      message: 'context_key does not match authenticated worker',
+    });
+  }
+
+  const success = await mlService.updateBandit(worker.id, body.context_key, body.arm, body.reward);
+
+  return res.json({
+    success,
+    ml_service: success ? 'updated' : 'unavailable',
+  });
+});
+
+router.post('/session-exit', authenticateWorker, validateBody(sessionExitSchema), async (req, res) => {
+  const worker = req.worker!;
+  const body = req.body as z.infer<typeof sessionExitSchema>;
+  if (!contextMatchesWorker(body.context_key, worker)) {
+    return res.status(204).send();
+  }
+
+  await mlService.updateBandit(worker.id, body.context_key, body.arm, 0.0);
+  return res.status(204).send();
 });
 
 router.get('/active', authenticateWorker, async (req, res) => {
@@ -204,7 +253,7 @@ router.get('/active', authenticateWorker, async (req, res) => {
     id: string;
     week_start: string;
     week_end: string;
-    weekly_premium: string;
+    premium_paid: string;
     coverage_amount: string;
     status: string;
     claim_id: string | null;
@@ -240,7 +289,7 @@ router.get('/active', authenticateWorker, async (req, res) => {
       id: row.id,
       week_start: row.week_start,
       week_end: row.week_end,
-      premium_paid: Math.round(Number(row.weekly_premium)),
+      premium_paid: Math.round(Number(row.premium_paid)),
       coverage_amount: Number(row.coverage_amount),
       zone: req.worker!.zone,
       city: req.worker!.city,
@@ -281,8 +330,6 @@ router.get('/history', authenticateWorker, async (req, res) => {
 
   const normalizedPolicies = rows.map((row: any) => ({
     ...row,
-    weekly_premium:
-      row.weekly_premium != null ? Math.round(Number(row.weekly_premium)) : row.weekly_premium,
     premium_paid: row.premium_paid != null ? Math.round(Number(row.premium_paid)) : row.premium_paid,
     coverage_amount:
       row.coverage_amount != null ? Math.round(Number(row.coverage_amount)) : row.coverage_amount,

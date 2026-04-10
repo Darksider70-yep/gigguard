@@ -1,10 +1,14 @@
 const DAILY_CAP = 800;
 
+const TRIGGER_ALIASES: Record<string, string> = {
+  flood_red_alert: 'flood_alert',
+};
+
 const TRIGGER_DISRUPTION_HOURS: Record<string, number> = {
   heavy_rainfall: 4,
   extreme_heat: 4,
   severe_aqi: 5,
-  flood_red_alert: 8,
+  flood_alert: 8,
   curfew_strike: 8,
 };
 
@@ -12,38 +16,47 @@ const TRIGGER_THRESHOLDS: Record<string, number> = {
   heavy_rainfall: 15,
   extreme_heat: 44,
   severe_aqi: 300,
-  flood_red_alert: 1,
+  flood_alert: 1,
   curfew_strike: 1,
 };
 
+function normalizeTriggerType(triggerType: string): string {
+  return TRIGGER_ALIASES[triggerType] ?? triggerType;
+}
+
 export function calculateCoverageAmount(avgDailyEarning: number, triggerType: string): number {
-  const hours = TRIGGER_DISRUPTION_HOURS[triggerType] ?? 4;
+  const normalized = normalizeTriggerType(triggerType);
+  const hours = TRIGGER_DISRUPTION_HOURS[normalized] ?? 4;
   const raw = (avgDailyEarning / 8) * hours * 0.8;
   return Math.floor(Math.min(raw, DAILY_CAP));
 }
 
 export function calculateAllCoverages(avgDailyEarning: number): Record<string, number> {
-  return Object.fromEntries(
+  const coverages = Object.fromEntries(
     Object.keys(TRIGGER_DISRUPTION_HOURS).map((trigger) => [
       trigger,
       calculateCoverageAmount(avgDailyEarning, trigger),
     ])
   );
+  return {
+    ...coverages,
+    flood_red_alert: coverages.flood_alert,
+  };
 }
 
 export function getDisruptionHours(triggerType: string): number {
-  return TRIGGER_DISRUPTION_HOURS[triggerType] ?? 4;
+  return TRIGGER_DISRUPTION_HOURS[normalizeTriggerType(triggerType)] ?? 4;
 }
 
 export function getThreshold(triggerType: string): number {
-  return TRIGGER_THRESHOLDS[triggerType] ?? 0;
+  return TRIGGER_THRESHOLDS[normalizeTriggerType(triggerType)] ?? 0;
 }
 
 export function computeSeverity(
   triggerType: string,
   value: number
 ): 'moderate' | 'severe' | 'extreme' {
-  const threshold = TRIGGER_THRESHOLDS[triggerType] ?? 0;
+  const threshold = TRIGGER_THRESHOLDS[normalizeTriggerType(triggerType)] ?? 0;
   if (threshold <= 0) {
     return 'moderate';
   }

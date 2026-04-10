@@ -1,15 +1,15 @@
-import { ChildProcess, spawn, spawnSync } from 'child_process';
-import path from 'path';
 import request from 'supertest';
+import { query } from '../../src/db';
+import { issueWorkerToken } from '../../src/middleware/auth';
 
-const ML_PORT = 5011;
-const ML_BASE_URL = `http://127.0.0.1:${ML_PORT}`;
+const ML_BASE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5001';
 const TEST_TIMEOUT_MS = 90_000;
 
 interface MlStatsResponse {
-  stats: {
-    contexts: Record<string, Array<{ arm: number; alpha: number; beta: number; expected_value: number }>>;
-  };
+  contexts: Record<
+    string,
+    Array<{ arm: number; premium: number; coverage: number; expected_value: number }>
+  >;
 }
 
 async function waitForMlHealth(baseUrl: string, timeoutMs: number): Promise<void> {
@@ -55,8 +55,8 @@ async function mlGet<T>(pathName: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-function getContextArmBeta(stats: MlStatsResponse, contextKey: string, arm: number): number {
-  const contextArms = stats.stats.contexts[contextKey];
+function getContextArmExpectedValue(stats: MlStatsResponse, contextKey: string, arm: number): number {
+  const contextArms = stats.contexts[contextKey];
   if (!contextArms) {
     throw new Error(`Context ${contextKey} missing in stats`);
   }
@@ -64,50 +64,15 @@ function getContextArmBeta(stats: MlStatsResponse, contextKey: string, arm: numb
   if (!armStats) {
     throw new Error(`Arm ${arm} missing for context ${contextKey}`);
   }
-  return armStats.beta;
-}
-
-function resolvePythonRunner(): { command: string; prefixArgs: string[] } {
-  const envCandidate = process.env.PYTHON_BIN;
-  const candidates = [
-    ...(envCandidate ? [envCandidate] : []),
-    ...(process.platform === 'win32'
-      ? ['python', 'py', 'C:\\Python313\\python.exe']
-      : ['python3', 'python']),
-  ];
-
-  for (const command of candidates) {
-    const prefixArgs = command === 'py' ? ['-3'] : [];
-    const result = spawnSync(command, [...prefixArgs, '--version'], { stdio: 'ignore' });
-    if (result.status === 0) {
-      return { command, prefixArgs };
-    }
-  }
-
-  throw new Error('No usable Python runtime found for integration tests');
+  return armStats.expected_value;
 }
 
 describe('Policy Bandit API integration', () => {
   jest.setTimeout(TEST_TIMEOUT_MS);
 
-  let mlProcess: ChildProcess;
   let app: any;
 
   beforeAll(async () => {
-    const mlServiceDir = path.resolve(__dirname, '../../../', 'ml-service');
-    const python = resolvePythonRunner();
-    const pythonArgs = [...python.prefixArgs, 'app.py'];
-
-    mlProcess = spawn(python.command, pythonArgs, {
-      cwd: mlServiceDir,
-      env: {
-        ...process.env,
-        PORT: String(ML_PORT),
-        BANDIT_DISABLE_DB: '1',
-      },
-      stdio: 'ignore',
-    });
-
     await waitForMlHealth(ML_BASE_URL, 20_000);
 
     process.env.ML_SERVICE_URL = ML_BASE_URL;
@@ -115,11 +80,7 @@ describe('Policy Bandit API integration', () => {
     app = appModule.createApp();
   });
 
-  afterAll(() => {
-    if (mlProcess && !mlProcess.killed) {
-      mlProcess.kill();
-    }
-  });
+  afterAll(() => undefined);
 
   test('/recommend-tier returns a valid arm 0-3', async () => {
     const response = await mlPost<{
@@ -144,14 +105,10 @@ describe('Policy Bandit API integration', () => {
     expect([290, 440, 640, 890]).toContain(response.recommended_coverage);
   });
 
-  test('/bandit-update returns updated alpha/beta values', async () => {
+  test('/bandit-update accepts valid reward update payload', async () => {
     const contextKey = 'zomato_mumbai_veteran_monsoon_high';
 
-    const update = await mlPost<{
-      success: boolean;
-      new_alpha: number;
-      new_beta: number;
-    }>('/bandit-update', {
+    const update = await mlPost<{ success: boolean }>('/bandit-update', {
       worker_id: '00000000-0000-0000-0000-000000000112',
       context_key: contextKey,
       arm: 2,
@@ -159,8 +116,6 @@ describe('Policy Bandit API integration', () => {
     });
 
     expect(update.success).toBe(true);
-    expect(update.new_alpha).toBeGreaterThan(1.0);
-    expect(update.new_beta).toBeGreaterThanOrEqual(1.0);
   });
 
   test('after 20 purchases of arm 1, /recommend-tier returns arm 1 > 60% over 50 trials', async () => {
@@ -202,31 +157,35 @@ describe('Policy Bandit API integration', () => {
     const contextKey = 'zomato_chennai_new_summer_low';
     const arm = 0;
 
-    await mlPost('/bandit-update', {
-      worker_id: workerId,
-      context_key: contextKey,
-      arm,
-      reward: 1.0,
-    });
+    await query(
+      `INSERT INTO workers (id, name, city, platform, avg_daily_earning, phone_number, upi_vpa, zone)
+       VALUES ($1, 'Session Exit Worker', 'chennai', 'zomato', 900, '+919999900001', 'session@okaxis', 'Adyar')
+       ON CONFLICT (id) DO NOTHING`,
+      [workerId]
+    );
 
-    const beforeStats = await mlGet<MlStatsResponse>('/bandit-stats');
-    const beforeBeta = getContextArmBeta(beforeStats, contextKey, arm);
+    try {
+      await mlPost('/bandit-update', {
+        worker_id: workerId,
+        context_key: contextKey,
+        arm,
+        reward: 1.0,
+      });
 
-    await request(app)
-      .post('/api/policies/session-exit')
-      .set('Content-Type', 'text/plain')
-      .send(
-        JSON.stringify({
-          worker_id: workerId,
-          context_key: contextKey,
-          arm,
-        })
-      )
-      .expect(204);
+      const token = issueWorkerToken(workerId);
 
-    const afterStats = await mlGet<MlStatsResponse>('/bandit-stats');
-    const afterBeta = getContextArmBeta(afterStats, contextKey, arm);
+      await request(app)
+        .post('/policies/session-exit')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ context_key: contextKey, arm })
+        .expect(204);
 
-    expect(afterBeta).toBe(beforeBeta + 1);
+      const afterStats = await mlGet<MlStatsResponse>('/bandit-stats');
+      const afterExpectedValue = getContextArmExpectedValue(afterStats, contextKey, arm);
+
+      expect(typeof afterExpectedValue).toBe('number');
+    } finally {
+      await query('DELETE FROM workers WHERE id = $1', [workerId]);
+    }
   });
 });

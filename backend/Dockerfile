@@ -1,25 +1,55 @@
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
 
+# Build argument for TypeScript compiler used during container build.
+# Backend currently requires TS5 syntax support in dependencies.
+ARG TYPESCRIPT_VERSION=5.9.3
+
+# Copy package files and install dependencies
+COPY package*.json ./
+RUN npm ci --no-audit && npm install --no-save --no-audit typescript@${TYPESCRIPT_VERSION}
+
+# Copy source files
 COPY tsconfig.json ./
 COPY src ./src
 
-RUN npm run build
+# Build the application.
+# Force Node-style module resolution during Docker build to match the current runtime module target.
+RUN npx tsc --project tsconfig.json --moduleResolution node
 
-FROM node:20-alpine AS runtime
+# Runtime stage
+FROM node:22-alpine AS runtime
 
 WORKDIR /app
+
+# Set production environment
 ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=256"
 
+# Security: create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Copy package files
 COPY package*.json ./
-RUN npm ci --omit=dev
 
-COPY --from=build /app/dist ./dist
+# Install production dependencies only
+RUN npm ci --omit=dev --no-audit && \
+    npm cache clean --force
+
+# Copy built application from build stage
+COPY --from=build --chown=nodejs:nodejs /app/dist ./dist
+
+# Switch to non-root user
+USER nodejs
 
 EXPOSE 4000
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=15s \
+    CMD node -e "require('http').get('http://localhost:4000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})" || exit 1
 
 CMD ["node", "dist/src/index.js"]

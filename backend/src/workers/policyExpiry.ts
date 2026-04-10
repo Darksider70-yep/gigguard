@@ -1,4 +1,5 @@
 import { query } from '../db';
+import { logger } from '../lib/logger';
 
 export async function expireOldPolicies(): Promise<void> {
   const { rows } = await query<{ id: string; worker_id: string }>(
@@ -9,7 +10,7 @@ export async function expireOldPolicies(): Promise<void> {
      RETURNING id, worker_id`
   );
 
-  console.info(`Expired ${rows.length} policies`);
+  logger.info('PolicyExpiry', 'policies_expired', { count: rows.length });
 
   for (const policy of rows) {
     await updateHistoryMultiplier(policy.worker_id);

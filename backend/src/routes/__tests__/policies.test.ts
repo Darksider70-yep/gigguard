@@ -74,7 +74,7 @@ describe('Policies routes', () => {
               id: 'policy-db-id',
               week_start: '2026-03-23',
               week_end: '2026-03-29',
-              weekly_premium: '52',
+              premium_paid: '52',
               coverage_amount: '480',
               status: 'active',
               razorpay_payment_id: 'pay_123',
@@ -105,6 +105,7 @@ describe('Policies routes', () => {
       context_key: 'ctx_1',
       exploration: false,
     });
+    mockMlService.updateBandit.mockResolvedValue(true);
     mockRazorpayService.verifyPaymentSignature.mockReturnValue(true);
   });
 
@@ -289,6 +290,98 @@ describe('Policies routes', () => {
     expect(mockMlService.updateBandit).toHaveBeenCalledWith(worker.id, 'ctx_1', 2, 1.0);
   });
 
+  test('POST /policies/bandit-update requires JWT', async () => {
+    const res = await request(app)
+      .post('/policies/bandit-update')
+      .send({
+        context_key: 'ctx_1',
+        arm: 1,
+        reward: 0,
+      });
+
+    expect(res.status).toBe(401);
+    expect(mockMlService.updateBandit).not.toHaveBeenCalled();
+  });
+
+  test('POST /policies/bandit-update rejects context mismatch', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [worker], rowCount: 1 });
+
+    const res = await request(app)
+      .post('/policies/bandit-update')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        context_key: 'swiggy_delhi_mid_winter_medium',
+        arm: 1,
+        reward: 0,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('CONTEXT_MISMATCH');
+    expect(mockMlService.updateBandit).not.toHaveBeenCalled();
+  });
+
+  test('POST /policies/bandit-update rejects non-binary reward', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [worker], rowCount: 1 });
+
+    const res = await request(app)
+      .post('/policies/bandit-update')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        context_key: 'zomato_mumbai_mid_monsoon_medium',
+        arm: 1,
+        reward: 0.5,
+      });
+
+    expect(res.status).toBe(400);
+    expect(mockMlService.updateBandit).not.toHaveBeenCalled();
+  });
+
+  test('POST /policies/bandit-update returns ML availability status', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [worker], rowCount: 1 });
+    mockMlService.updateBandit.mockResolvedValueOnce(false);
+
+    const res = await request(app)
+      .post('/policies/bandit-update')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        context_key: 'zomato_mumbai_mid_monsoon_medium',
+        arm: 1,
+        reward: 0,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      success: false,
+      ml_service: 'unavailable',
+    });
+    expect(mockMlService.updateBandit).toHaveBeenCalledWith(
+      worker.id,
+      'zomato_mumbai_mid_monsoon_medium',
+      1,
+      0
+    );
+  });
+
+  test('POST /policies/session-exit maps payload to reward=0 update', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [worker], rowCount: 1 });
+
+    const res = await request(app)
+      .post('/policies/session-exit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        context_key: 'zomato_mumbai_mid_monsoon_medium',
+        arm: 0,
+      });
+
+    expect(res.status).toBe(204);
+    expect(mockMlService.updateBandit).toHaveBeenCalledWith(
+      worker.id,
+      'zomato_mumbai_mid_monsoon_medium',
+      0,
+      0
+    );
+  });
+
   test('POST /policies policy_id matches format POL-YYYY-WNN-XXX', async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
@@ -331,7 +424,7 @@ describe('Policies routes', () => {
             id: 'policy-1',
             week_start: '2026-03-23',
             week_end: '2026-03-29',
-            weekly_premium: '52',
+            premium_paid: '52',
             coverage_amount: '480',
             status: 'active',
             claim_id: 'claim-1',
@@ -366,7 +459,7 @@ describe('Policies routes', () => {
               id: 'policy-1',
               week_start: '2026-03-23',
               week_end: '2026-03-29',
-              weekly_premium: '52',
+              premium_paid: '52',
               coverage_amount: '480',
               status: 'active',
               claim_id: 'claim-1',

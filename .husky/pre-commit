@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -e
+
+STAGED_FILES=$(git diff --cached --name-only)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+if echo "$STAGED_FILES" | xargs grep -IlE "sk-[A-Za-z0-9]{20,}|rzp_live_[A-Za-z0-9]{10,}|rzp_test_[A-Za-z0-9]{10,}" 2>/dev/null | grep -q .; then
+  echo "ERROR: Staged files may contain API keys. Remove secrets before commit."
+  exit 1
+fi

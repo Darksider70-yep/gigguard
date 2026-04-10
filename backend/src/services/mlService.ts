@@ -1,4 +1,6 @@
 import { config } from '../config';
+import { logger } from '../lib/logger';
+import { formulaPremium, GRACEFUL_DEFAULTS } from './gracefulDefaults';
 
 export interface PremiumResponse {
   premium: number;
@@ -40,39 +42,61 @@ class MLService {
   }
 
   private async post<T>(path: string, body: object): Promise<T | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), this.timeout);
       const res = await fetch(`${this.baseUrl}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: controller.signal,
       });
-      clearTimeout(timer);
       if (!res.ok) {
         throw new Error(`ML service ${path} returned ${res.status}`);
       }
       return (await res.json()) as T;
     } catch (err) {
-      console.warn(`ML service call failed: ${path}`, err);
+      if (err instanceof Error && err.name === 'AbortError') {
+        logger.warn('MLService', 'timeout', {
+          endpoint: path,
+          timeout_ms: this.timeout,
+        });
+      } else {
+        logger.warn('MLService', 'unavailable', {
+          endpoint: path,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
   private async get<T>(path: string): Promise<T | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), this.timeout);
       const res = await fetch(`${this.baseUrl}${path}`, { signal: controller.signal });
-      clearTimeout(timer);
       if (!res.ok) {
         throw new Error(`ML service GET ${path} returned ${res.status}`);
       }
       return (await res.json()) as T;
     } catch (err) {
-      console.warn(`ML service GET failed: ${path}`, err);
+      if (err instanceof Error && err.name === 'AbortError') {
+        logger.warn('MLService', 'timeout', {
+          endpoint: path,
+          timeout_ms: this.timeout,
+        });
+      } else {
+        logger.warn('MLService', 'unavailable', {
+          endpoint: path,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -90,9 +114,10 @@ class MLService {
     });
 
     if (!result) {
+      const premium = formulaPremium(zoneMultiplier, weatherMultiplier, historyMultiplier);
       const raw = 35 * zoneMultiplier * weatherMultiplier * historyMultiplier;
       return {
-        premium: Math.round(raw),
+        premium,
         formula_breakdown: {
           base_rate: 35,
           zone_multiplier: zoneMultiplier,
@@ -103,6 +128,15 @@ class MLService {
         rl_premium: null,
         shadow_logged: false,
       };
+    }
+
+    if (result.rl_premium != null) {
+      logger.info('MLService', 'shadow_logged', {
+        worker_id: workerId,
+        formula_premium: Number(result.formula_breakdown.raw_premium),
+        rl_premium: Number(result.rl_premium),
+        delta: Number(result.rl_premium) - Number(result.formula_breakdown.raw_premium),
+      });
     }
 
     return result;
@@ -140,10 +174,10 @@ class MLService {
     const result = await this.post<FraudResponse>('/score-fraud', params);
     if (!result) {
       return {
-        fraud_score: 0.0,
+        fraud_score: GRACEFUL_DEFAULTS.FRAUD_SCORE,
         gnn_fraud_score: null,
         graph_flags: [],
-        tier: 1,
+        tier: GRACEFUL_DEFAULTS.FRAUD_TIER,
         flagged: false,
         scorer: 'fallback_default',
       };
@@ -172,13 +206,15 @@ class MLService {
     contextKey: string,
     arm: number,
     reward: number
-  ): void {
-    this.post('/bandit-update', {
+  ): Promise<boolean> {
+    return this.post<{ success: boolean }>('/bandit-update', {
       worker_id: workerId,
       context_key: contextKey,
       arm,
       reward,
-    }).catch(() => {});
+    })
+      .then((result) => Boolean(result?.success))
+      .catch(() => false);
   }
 
   async getShadowComparison(): Promise<Record<string, unknown> | null> {
@@ -234,8 +270,8 @@ export function banditUpdate(
   contextKey: string,
   arm: number,
   reward: number
-): void {
-  mlService.updateBandit(workerId, contextKey, arm, reward);
+): Promise<boolean> {
+  return mlService.updateBandit(workerId, contextKey, arm, reward);
 }
 
 export async function getShadowComparison(): Promise<Record<string, unknown> | null> {
