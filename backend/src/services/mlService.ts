@@ -17,8 +17,15 @@ export interface PremiumResponse {
 
 export interface FraudResponse {
   fraud_score: number;
-  gnn_fraud_score: number | null;
-  graph_flags: string[];
+  gnn_score?: number | null;
+  gnn_fraud_score?: number | null;
+  isolation_forest_score?: number;
+  confidence?: number | null;
+  graph_flags: any;
+  recommendation?: string;
+  bcs_tier?: number;
+  scorer_used?: string;
+  
   tier: 1 | 2 | 3;
   flagged: boolean;
   scorer: string;
@@ -157,7 +164,9 @@ class MLService {
       return {
         fraud_score: GRACEFUL_DEFAULTS.FRAUD_SCORE,
         gnn_fraud_score: null,
-        graph_flags: [],
+        graph_flags: null,
+        recommendation: 'approve',
+        bcs_tier: 1,
         tier: GRACEFUL_DEFAULTS.FRAUD_TIER,
         flagged: false,
         scorer: 'fallback_default',

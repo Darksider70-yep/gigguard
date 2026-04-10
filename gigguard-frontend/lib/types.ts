@@ -198,7 +198,7 @@ export interface AntiSpoofingAlertsResponse {
     bcs_score: number;
     bcs_tier: number;
     payout_amount: number;
-    graph_flags: string[];
+    graph_flags: any;
     created_at: string;
   }>;
 }

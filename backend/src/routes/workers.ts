@@ -510,4 +510,51 @@ router.get('/me', requireWorker, async (req: AuthenticatedRequest, res: Response
   }
 });
 
+
+router.get('/:id/gnn-score', authenticateInsurer, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const workerId = req.params.id;
+    
+    const { rows } = await query(
+      \SELECT w.gnn_fraud_score, w.zone
+       FROM workers w
+       WHERE w.id = \,
+      [workerId]
+    );
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Worker not found' });
+    }
+    
+    const worker = rows[0];
+    const gnnScore = Number(worker.gnn_fraud_score || 0);
+    
+    // fetch neighbors
+    const { rows: edgeRows } = await query(
+      \SELECT target_type, target_id FROM graph_edges WHERE source_type = 'worker' AND source_id = 
+       UNION
+       SELECT source_type, source_id FROM graph_edges WHERE target_type = 'worker' AND target_id = \,
+      [workerId]
+    );
+    
+    const flaggedNodes = edgeRows.map((r: any) => \:\);
+    
+    let recommendation = 'approve';
+    if (gnnScore >= 0.6) recommendation = 'deny';
+    else if (gnnScore >= 0.3) recommendation = 'review';
+    
+    res.json({
+      worker_id: workerId,
+      gnn_fraud_score: gnnScore,
+      fraud_ring_membership: gnnScore > 0.5 ? worker.zone : null,
+      flagged_nodes: flaggedNodes,
+      recommendation,
+      trust_score: Math.max(0, 1.0 - gnnScore)
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: 'Failed to fetch GNN score' });
+  }
+});
+
 export default router;
+

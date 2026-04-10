@@ -26,6 +26,7 @@ from bandits.policy_bandit import ThompsonSamplingBandit, build_context_key
 from config import Settings, get_settings
 from db.connection import ENGINE, session_scope
 from fraud.isolation_forest import FraudScorer
+from fraud.gnn_scorer import GNNScorer
 from premium.calculator import PremiumCalculator
 from premium.zones import ZONES
 from rl.validate_shadow import validate_shadow
@@ -235,15 +236,66 @@ def _register_fraud_blueprint(app: Flask) -> Blueprint:
     def score_fraud() -> Any:
         payload = request.get_json(silent=True) or {}
         scorer: FraudScorer = app.extensions["fraud_scorer"]
+        gnn_scorer = app.extensions.get("gnn_scorer")
 
-        result = scorer.score(payload)
+        worker_id = payload.get("worker_id")
+        claim_id = payload.get("claim_id")
+        
+        if_result = scorer.score(payload)
+        isolation_forest_score = if_result["fraud_score"]
+        
+        gnn_result = None
+        if worker_id and gnn_scorer and getattr(gnn_scorer, "gnn_available", False):
+            try:
+                gnn_result = gnn_scorer.score(worker_id)
+            except Exception as e:
+                import logging
+                logging.getLogger("gigguard-ml").error(f"GNN scoring failed: {e}")
+        
+        final_fraud_score = isolation_forest_score
+        scorer_used = "isolation_forest"
+        gnn_score_val = None
+        confidence = None
+        graph_flags = None
+        
+        if gnn_result:
+            gnn_score_val = gnn_result.get("gnn_score")
+            confidence = gnn_result.get("confidence")
+            graph_flags = gnn_result.get("graph_flags")
+            
+            if confidence is not None and confidence < 0.3:
+                final_fraud_score = (gnn_score_val + isolation_forest_score) / 2.0
+                scorer_used = "ensemble"
+            else:
+                final_fraud_score = gnn_score_val
+                scorer_used = "gnn"
+        
+        if final_fraud_score < 0.3:
+            recommendation = "approve"
+            bcs_tier = 1
+        elif final_fraud_score < 0.6:
+            recommendation = "review"
+            bcs_tier = 2
+        else:
+            recommendation = "deny"
+            bcs_tier = 3
+
         response = {
-            "fraud_score": result["fraud_score"],
-            "gnn_fraud_score": None,
-            "graph_flags": [],
-            "tier": result["tier"],
-            "flagged": result["flagged"],
-            "scorer": result["scorer"],
+            "worker_id": worker_id,
+            "claim_id": claim_id,
+            "fraud_score": float(round(final_fraud_score, 4)),
+            "scorer_used": scorer_used,
+            "gnn_score": float(round(gnn_score_val, 4)) if gnn_score_val is not None else None,
+            "isolation_forest_score": float(round(isolation_forest_score, 4)),
+            "confidence": float(round(confidence, 4)) if confidence is not None else None,
+            "graph_flags": graph_flags,
+            "recommendation": recommendation,
+            "bcs_tier": bcs_tier,
+            
+            "gnn_fraud_score": float(round(gnn_score_val, 4)) if gnn_score_val is not None else None,
+            "tier": bcs_tier,
+            "flagged": recommendation == "deny",
+            "scorer": scorer_used,
         }
 
         claim_id = payload.get("claim_id")
@@ -265,7 +317,7 @@ def _register_fraud_blueprint(app: Flask) -> Blueprint:
                         WHERE id = :claim_id
                         """
                     ),
-                    {"fraud_score": float(result["fraud_score"]), "claim_id": parsed_claim_id},
+                    {"fraud_score": float(response["fraud_score"]), "claim_id": parsed_claim_id},
                 )
 
         return jsonify(response)
@@ -404,6 +456,12 @@ def create_app() -> Flask:
     app.extensions["settings"] = settings
     app.extensions["premium_calculator"] = PremiumCalculator()
     app.extensions["fraud_scorer"] = FraudScorer(settings.if_model_path)
+    try:
+        from fraud.gnn_scorer import GNNScorer
+        app.extensions["gnn_scorer"] = GNNScorer("models/graphsage_model.pt", "models/graphsage_meta.json")
+    except Exception as e:
+        logger.warning(f"Could not load GNNScorer: {e}")
+        app.extensions["gnn_scorer"] = None
     app.extensions["policy_bandit"] = ThompsonSamplingBandit()
 
     bandit_store = BanditStateStore(settings.database_url, lambda: app.extensions["policy_bandit"].get_state())
