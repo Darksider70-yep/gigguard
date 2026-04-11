@@ -59,12 +59,14 @@ export const config = {
   RAZORPAY_KEY_SECRET: getStringEnv('RAZORPAY_KEY_SECRET', ''),
   RAZORPAY_ACCOUNT_NUMBER: getStringEnv('RAZORPAY_ACCOUNT_NUMBER', ''),
   RAZORPAY_WEBHOOK_SECRET: getStringEnv('RAZORPAY_WEBHOOK_SECRET', ''),
+  HEALTH_WEBHOOK_SECRET: getStringEnv('HEALTH_WEBHOOK_SECRET', ''),
 
   JWT_SECRET: getStringEnv('JWT_SECRET', 'dev_jwt_secret_change_me'),
 
   USE_MOCK_APIS: getBooleanEnv('USE_MOCK_APIS', true),
   USE_MOCK_PAYOUT: getBooleanEnv('USE_MOCK_PAYOUT', true),
   IS_DEMO_MODE: getBooleanEnv('IS_DEMO_MODE', false),
+  FEATURE_PANDEMIC_TRIGGER_ENABLED: getBooleanEnv('FEATURE_PANDEMIC_TRIGGER_ENABLED', true),
 
   PORT: getNumberEnv('PORT', 4000),
   NODE_ENV: getStringEnv('NODE_ENV', 'development'),
@@ -87,9 +89,11 @@ export const config = {
   razorpayKeyId: getStringEnv('RAZORPAY_KEY_ID', 'rzp_test_xxx'),
   razorpayKeySecret: getStringEnv('RAZORPAY_KEY_SECRET', ''),
   razorpayWebhookSecret: getStringEnv('RAZORPAY_WEBHOOK_SECRET', ''),
+  healthWebhookSecret: getStringEnv('HEALTH_WEBHOOK_SECRET', ''),
   razorpayAccountNumber: getStringEnv('RAZORPAY_ACCOUNT_NUMBER', ''),
   redisUrl: getStringEnv('REDIS_URL', 'redis://localhost:6379'),
   insurerLoginSecret: getStringEnv('INSURER_LOGIN_SECRET', ''),
+  featurePandemicTriggerEnabled: getBooleanEnv('FEATURE_PANDEMIC_TRIGGER_ENABLED', true),
 } as const;
 
 export type AppConfig = typeof config;

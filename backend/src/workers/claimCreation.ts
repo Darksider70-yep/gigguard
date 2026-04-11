@@ -11,6 +11,8 @@ export interface ClaimCreationJob {
   disruption_hours: number;
   trigger_value: number;
   worker_ids: string[];
+  health_advisory_id?: string;
+  claim_date?: string;
 }
 
 export async function processClaimCreationJob(
@@ -22,6 +24,8 @@ export async function processClaimCreationJob(
     disruption_hours,
     trigger_value,
     worker_ids,
+    health_advisory_id,
+    claim_date,
   } = data;
 
   let claimsCreated = 0;
@@ -82,7 +86,7 @@ export async function processClaimCreationJob(
               worker_id: workerId,
             });
             return {
-              claimId: null,
+              claimId: existingClaim.id,
               claimCreated: false,
               claimUpdated: false,
               payoutAmount: existingPayout,
@@ -184,6 +188,28 @@ export async function processClaimCreationJob(
 
       if (upsertResult.claimCreated) {
         claimsCreated += 1;
+      }
+
+      if (
+        trigger_type === 'pandemic_containment' &&
+        health_advisory_id &&
+        claim_date &&
+        upsertResult.claimId
+      ) {
+        await query(
+          `UPDATE pandemic_claim_dedup
+           SET claim_id = $1
+           WHERE worker_id = $2
+             AND health_advisory_id = $3
+             AND claim_date = $4::date`,
+          [upsertResult.claimId, workerId, health_advisory_id, claim_date]
+        ).catch((err) => {
+          logger.warn('ClaimCreation', 'pandemic_dedup_update_failed', {
+            worker_id: workerId,
+            health_advisory_id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
       }
 
       if (upsertResult.claimId && (upsertResult.claimCreated || upsertResult.claimUpdated)) {

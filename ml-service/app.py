@@ -85,6 +85,72 @@ def _parse_float(payload: Dict[str, Any], key: str, default: Optional[float] = N
     return float(value)
 
 
+def compute_m_health(worker_city: str, worker_district: str) -> tuple[float, str]:
+    """
+    Compute health advisory multiplier for premium pricing.
+
+    Returns:
+      (1.00, 'none')         -> no active advisory
+      (1.15, 'watch')        -> watch advisory in city
+      (1.35, 'adjacent')     -> containment in another district of same city
+      (1.60, 'containment')  -> containment in worker district
+    """
+    city = (worker_city or "").strip().lower()
+    district = (worker_district or "").strip().lower()
+    if not city:
+        return 1.00, "none"
+
+    try:
+        with session_scope() as session:
+            rows = session.execute(
+                text(
+                    """
+                    SELECT severity, district
+                    FROM health_advisories
+                    WHERE LOWER(city) = :city
+                      AND lifted_at IS NULL
+                      AND nationwide = FALSE
+                    ORDER BY
+                      CASE severity
+                        WHEN 'containment' THEN 1
+                        WHEN 'adjacent'    THEN 2
+                        WHEN 'watch'       THEN 3
+                        ELSE 4
+                      END
+                    LIMIT 10
+                    """
+                ),
+                {"city": city},
+            ).fetchall()
+    except Exception:
+        return 1.00, "none"
+
+    if not rows:
+        return 1.00, "none"
+
+    advisories = [
+        (
+            str(row[0] or "").strip().lower(),
+            str(row[1] or "").strip().lower(),
+        )
+        for row in rows
+    ]
+
+    for severity, advisory_district in advisories:
+        if severity == "containment" and district and advisory_district == district:
+            return 1.60, "containment"
+
+    for severity, advisory_district in advisories:
+        if severity == "containment" and (not district or advisory_district != district):
+            return 1.35, "adjacent"
+
+    for severity, _ in advisories:
+        if severity == "watch":
+            return 1.15, "watch"
+
+    return 1.00, "none"
+
+
 def _rl_state_from_request(payload: Dict[str, Any]) -> np.ndarray:
     """Build 8-dim RL shadow state vector from request values."""
     zone_risk = float(payload.get("zone_multiplier", 1.0))
@@ -147,6 +213,8 @@ def _register_premium_blueprint(app: Flask) -> Blueprint:
     def predict_premium() -> Any:
         payload = request.get_json(silent=True) or {}
         state_payload = dict(payload)
+        worker_city = str(payload.get("city", "")).strip()
+        worker_district = str(payload.get("zone", "")).strip()
 
         try:
             zone_multiplier = _parse_float(payload, "zone_multiplier", default=1.0)
@@ -170,7 +238,20 @@ def _register_premium_blueprint(app: Flask) -> Blueprint:
 
         calculator: PremiumCalculator = app.extensions["premium_calculator"]
         formula = calculator.calculate(zone_multiplier, weather_multiplier, history_multiplier)
-        premium_value = float(formula["premium"])
+        m_health, health_severity = compute_m_health(worker_city, worker_district)
+
+        base_rate = float(formula.get("base_rate", 35.0))
+        raw_without_health = float(
+            formula.get(
+                "raw_premium",
+                base_rate * zone_multiplier * weather_multiplier * history_multiplier,
+            )
+        )
+        raw_premium = raw_without_health * float(m_health)
+        premium_value = round(raw_premium, 2)
+        formula["health"] = float(m_health)
+        formula["raw_premium"] = raw_premium
+        formula["premium"] = premium_value
 
         sac_model: SACShadowModel = app.extensions["sac_shadow_model"]
         state_vector = _rl_state_from_request(state_payload)
@@ -195,6 +276,11 @@ def _register_premium_blueprint(app: Flask) -> Blueprint:
             {
                 "premium": premium_value,
                 "formula_breakdown": formula,
+                "health_advisory": {
+                    "active": health_severity != "none",
+                    "severity": health_severity,
+                    "multiplier": float(m_health),
+                },
                 "rl_premium": rl_premium,
                 "shadow_logged": shadow_logged,
             }

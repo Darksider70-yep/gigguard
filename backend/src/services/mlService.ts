@@ -9,7 +9,13 @@ export interface PremiumResponse {
     zone_multiplier: number;
     weather_multiplier: number;
     history_multiplier: number;
+    health?: number;
     raw_premium: number;
+  };
+  health_advisory?: {
+    active: boolean;
+    severity: 'none' | 'watch' | 'adjacent' | 'containment';
+    multiplier: number;
   };
   rl_premium: number | null;
   shadow_logged: boolean;
@@ -111,13 +117,17 @@ class MLService {
     workerId: string,
     zoneMultiplier: number,
     weatherMultiplier: number,
-    historyMultiplier: number
+    historyMultiplier: number,
+    city?: string,
+    zone?: string
   ): Promise<PremiumResponse> {
     const result = await this.post<PremiumResponse>('/predict-premium', {
       worker_id: workerId,
       zone_multiplier: zoneMultiplier,
       weather_multiplier: weatherMultiplier,
       history_multiplier: historyMultiplier,
+      city: city ?? '',
+      zone: zone ?? '',
     });
 
     if (!result) {
@@ -130,7 +140,13 @@ class MLService {
           zone_multiplier: zoneMultiplier,
           weather_multiplier: weatherMultiplier,
           history_multiplier: historyMultiplier,
+          health: 1.0,
           raw_premium: raw,
+        },
+        health_advisory: {
+          active: false,
+          severity: 'none',
+          multiplier: 1.0,
         },
         rl_premium: null,
         shadow_logged: false,
@@ -239,12 +255,16 @@ export async function predictPremium(params: {
   zone_multiplier: number;
   weather_multiplier: number;
   history_multiplier: number;
+  city?: string;
+  zone?: string;
 }): Promise<PremiumResponse> {
   return mlService.predictPremium(
     params.worker_id,
     params.zone_multiplier,
     params.weather_multiplier,
-    params.history_multiplier
+    params.history_multiplier,
+    params.city,
+    params.zone
   );
 }
 

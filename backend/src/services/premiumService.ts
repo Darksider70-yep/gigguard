@@ -10,6 +10,7 @@ const TRIGGER_DISRUPTION_HOURS: Record<string, number> = {
   severe_aqi: 5,
   flood_alert: 8,
   curfew_strike: 8,
+  pandemic_containment: 8,
 };
 
 const TRIGGER_THRESHOLDS: Record<string, number> = {
@@ -18,6 +19,7 @@ const TRIGGER_THRESHOLDS: Record<string, number> = {
   severe_aqi: 300,
   flood_alert: 1,
   curfew_strike: 1,
+  pandemic_containment: 1,
 };
 
 function normalizeTriggerType(triggerType: string): string {

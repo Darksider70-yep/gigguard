@@ -42,8 +42,14 @@ export interface PremiumQuoteResponse {
     zone_multiplier: number;
     weather_multiplier: number;
     history_multiplier: number;
+    health?: number;
     raw_premium: number;
     premium?: number;
+  };
+  health_advisory?: {
+    active: boolean;
+    severity: 'none' | 'watch' | 'adjacent' | 'containment';
+    multiplier: number;
   };
   rl_premium: number | null;
   coverage: {
@@ -288,6 +294,12 @@ export interface SimulateTriggerBody {
   lng?: number;
   trigger_value?: number;
   disruption_hours?: number;
+  severity?: 'watch' | 'adjacent' | 'containment';
+  state?: string;
+  boundary_geojson?: {
+    type: 'Polygon' | 'MultiPolygon';
+    coordinates: number[][][] | number[][][][];
+  };
 }
 
 

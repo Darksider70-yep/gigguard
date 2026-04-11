@@ -12,6 +12,13 @@ import { pool } from '../db';
 import { latLngToCell, gridDisk } from 'h3-js';
 import { randomUUID } from 'crypto';
 import { logger } from '../lib/logger';
+import { claimCreationQueue } from '../queues';
+import { premiumService } from '../services/premiumService';
+import { checkPlatformOnlineStatus } from '../services/platformVerification';
+import {
+  HealthBoundaryGeoJSON,
+  isWorkerInContainmentZone,
+} from './pandemicHexOverlap';
 
 // --- Type Definitions ---
 
@@ -42,6 +49,26 @@ interface TriggerEvent {
   trigger_type: string;
   city: string;
   metadata?: Record<string, any>; // e.g., rainfall_mm, aqi_value
+}
+
+interface PandemicAdvisory {
+  id: string;
+  district: string;
+  state: string;
+  city: string;
+  boundary_geojson: HealthBoundaryGeoJSON | null;
+  affected_hex_ids: Array<string | number | bigint> | null;
+  severity: 'watch' | 'adjacent' | 'containment';
+  declared_at: string;
+  source: string;
+  nationwide: boolean;
+}
+
+interface PandemicEligibleWorker {
+  id: string;
+  avg_daily_earning: string;
+  home_hex_id: string;
+  zone_updated_at: string | null;
 }
 
 // --- Constants ---
@@ -254,4 +281,213 @@ export async function isLocationCovered(
 export function getHexRing(lat: number, lng: number, k: number = 1): string[] {
   const centerHex = latLngToCell(lat, lng, H3_RESOLUTION);
   return gridDisk(centerHex, k);
+}
+
+function parseBigIntArray(values: PandemicAdvisory['affected_hex_ids']): bigint[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values
+    .map((value) => {
+      if (typeof value === 'bigint') {
+        return value;
+      }
+      if (typeof value === 'number') {
+        return BigInt(Math.trunc(value));
+      }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return null;
+        }
+        if (trimmed.startsWith('0x') || trimmed.startsWith('0X')) {
+          return BigInt(trimmed);
+        }
+        if (/^[0-9]+$/.test(trimmed)) {
+          return BigInt(trimmed);
+        }
+        return BigInt(`0x${trimmed}`);
+      }
+      return null;
+    })
+    .filter((value): value is bigint => value !== null);
+}
+
+function computeBoundaryCentroid(
+  boundary: HealthBoundaryGeoJSON | null
+): { lat: number; lng: number } {
+  if (!boundary) {
+    return { lat: 0, lng: 0 };
+  }
+
+  let points: number[][] = [];
+  if (boundary.type === 'Polygon') {
+    points = boundary.coordinates[0] ?? [];
+  } else if (boundary.type === 'MultiPolygon') {
+    points = boundary.coordinates[0]?.[0] ?? [];
+  }
+
+  if (points.length === 0) {
+    return { lat: 0, lng: 0 };
+  }
+
+  const totals = points.reduce(
+    (acc, point) => {
+      acc.lng += Number(point[0] ?? 0);
+      acc.lat += Number(point[1] ?? 0);
+      return acc;
+    },
+    { lat: 0, lng: 0 }
+  );
+
+  return {
+    lat: totals.lat / points.length,
+    lng: totals.lng / points.length,
+  };
+}
+
+/**
+ * Process a district-level health advisory and enqueue claims for eligible workers.
+ */
+export async function processPandemicTrigger(advisoryId: string): Promise<string[]> {
+  const { rows: advisories } = await pool.query<PandemicAdvisory>(
+    `SELECT
+       id::text,
+       district,
+       state,
+       city,
+       boundary_geojson,
+       affected_hex_ids,
+       severity,
+       declared_at,
+       source,
+       nationwide
+     FROM health_advisories
+     WHERE id = $1
+       AND lifted_at IS NULL
+     LIMIT 1`,
+    [advisoryId]
+  );
+
+  const advisory = advisories[0];
+  if (!advisory) {
+    throw new Error(`Advisory ${advisoryId} not found or already lifted`);
+  }
+
+  if (advisory.nationwide) {
+    logger.warn('PandemicTrigger', 'nationwide_excluded', { advisory_id: advisoryId });
+    return [];
+  }
+
+  const affectedHexIds = parseBigIntArray(advisory.affected_hex_ids);
+  if (affectedHexIds.length === 0) {
+    logger.warn('PandemicTrigger', 'advisory_without_hexes', { advisory_id: advisoryId });
+    return [];
+  }
+
+  const { rows: workers } = await pool.query<PandemicEligibleWorker>(
+    `SELECT DISTINCT
+       w.id::text,
+       w.avg_daily_earning::text,
+       w.home_hex_id::text,
+       w.zone_updated_at
+     FROM workers w
+     JOIN policies p ON p.worker_id = w.id
+     WHERE w.home_hex_id = ANY($1::bigint[])
+       AND p.status = 'active'
+       AND p.week_start <= CURRENT_DATE
+       AND p.week_end >= CURRENT_DATE
+       AND (w.zone_updated_at IS NULL OR w.zone_updated_at < $2::timestamptz - INTERVAL '48 hours')
+       AND LOWER(w.city) = LOWER($3)`,
+    [affectedHexIds.map((hex) => hex.toString()), advisory.declared_at, advisory.city]
+  );
+
+  const verifiedWorkerIds: string[] = [];
+  for (const worker of workers) {
+    const workerHex = BigInt(worker.home_hex_id);
+    if (!isWorkerInContainmentZone(workerHex, affectedHexIds)) {
+      continue;
+    }
+
+    const wasOnline = await checkPlatformOnlineStatus(worker.id, 120, advisory.declared_at);
+    if (wasOnline) {
+      verifiedWorkerIds.push(worker.id);
+    }
+  }
+
+  const claimDate = new Date(advisory.declared_at).toISOString().slice(0, 10);
+  const newlyEligible: string[] = [];
+
+  for (const workerId of verifiedWorkerIds) {
+    const insert = await pool.query(
+      `INSERT INTO pandemic_claim_dedup (worker_id, health_advisory_id, claim_date)
+       VALUES ($1, $2, $3::date)
+       ON CONFLICT (worker_id, health_advisory_id, claim_date) DO NOTHING`,
+      [workerId, advisory.id, claimDate]
+    );
+    if ((insert.rowCount ?? 0) > 0) {
+      newlyEligible.push(workerId);
+    }
+  }
+
+  const centroid = computeBoundaryCentroid(advisory.boundary_geojson);
+  const disruptionHours = premiumService.getDisruptionHours('pandemic_containment');
+  const { rows: events } = await pool.query<{ id: string }>(
+    `INSERT INTO disruption_events (
+       trigger_type, city, zone, latitude, longitude,
+       trigger_value, trigger_threshold, severity, disruption_hours,
+       affected_hex_ids, affected_worker_count, affected_workers_count,
+       total_payout, total_payout_amount, status, event_start
+     ) VALUES (
+       'pandemic_containment', $1, $2, $3, $4,
+       1, 1, $5, $6,
+       $7, $8, $8,
+       0, 0, 'active', $9
+     )
+     RETURNING id`,
+    [
+      advisory.city,
+      advisory.district,
+      centroid.lat,
+      centroid.lng,
+      advisory.severity,
+      disruptionHours,
+      affectedHexIds.map((hex) => hex.toString()),
+      newlyEligible.length,
+      advisory.declared_at,
+    ]
+  );
+
+  const eventId = events[0]?.id;
+  if (eventId && newlyEligible.length > 0) {
+    await claimCreationQueue.add(
+      'create-claims',
+      {
+        disruption_event_id: eventId,
+        trigger_type: 'pandemic_containment',
+        disruption_hours: disruptionHours,
+        trigger_value: 1,
+        worker_ids: newlyEligible,
+        health_advisory_id: advisory.id,
+        claim_date: claimDate,
+      },
+      {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: { count: 1000 },
+        removeOnFail: { count: 500 },
+      }
+    );
+  }
+
+  logger.info('PandemicTrigger', 'processed', {
+    advisory_id: advisory.id,
+    city: advisory.city,
+    district: advisory.district,
+    workers_scanned: workers.length,
+    workers_queued: newlyEligible.length,
+  });
+
+  return newlyEligible;
 }

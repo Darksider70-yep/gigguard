@@ -4,6 +4,7 @@ import { processTriggerEvent } from '../jobs/triggerMonitor';
 import { query } from '../db';
 import { premiumService } from '../services/premiumService';
 import { logger } from '../lib/logger';
+import { processHealthEmergencyPayload } from './webhooks';
 
 const router = Router();
 
@@ -77,6 +78,28 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
     );
     const zone = String(req.body?.zone || '');
 
+    if (triggerType === 'pandemic_containment') {
+      const latForPolygon = Number(req.body?.lat ?? coords.lat);
+      const lngForPolygon = Number(req.body?.lng ?? coords.lng);
+      const severity = String(req.body?.severity ?? 'containment').toLowerCase();
+
+      const webhookResult = await processHealthEmergencyPayload({
+        event_type: 'containment_zone_declared',
+        source: 'simulate',
+        district: zone || 'Test District',
+        state: String(req.body?.state ?? 'Test State'),
+        city,
+        severity: severity as 'watch' | 'adjacent' | 'containment',
+        nationwide: false,
+        declared_at: new Date().toISOString(),
+        lifted_at: null,
+        boundary_geojson: req.body?.boundary_geojson ?? buildTestPolygon(latForPolygon, lngForPolygon),
+        metadata: { simulated: true },
+      });
+
+      return res.status(webhookResult.status_code).json(webhookResult.payload);
+    }
+
     const result = await processTriggerEvent({
       trigger_type: triggerType,
       city,
@@ -122,5 +145,19 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
     return res.status(500).json({ message: 'Failed to simulate trigger event' });
   }
 });
+
+function buildTestPolygon(lat: number, lng: number) {
+  const d = 0.005;
+  return {
+    type: 'Polygon' as const,
+    coordinates: [[
+      [lng - d, lat - d],
+      [lng + d, lat - d],
+      [lng + d, lat + d],
+      [lng - d, lat + d],
+      [lng - d, lat - d],
+    ]],
+  };
+}
 
 export default router;

@@ -42,7 +42,9 @@ router.get('/premium', authenticateWorker, async (req, res) => {
     worker.id,
     Number(worker.zone_multiplier),
     weatherMultiplier,
-    Number(worker.history_multiplier)
+    Number(worker.history_multiplier),
+    worker.city,
+    worker.zone ?? ''
   );
 
   if (inCohortB) {
@@ -101,6 +103,11 @@ router.get('/premium', authenticateWorker, async (req, res) => {
     has_active_policy: existing.rowCount > 0,
     week_start: weekStart,
     week_end: weekEnd,
+    health_advisory: premiumData.health_advisory ?? {
+      active: false,
+      severity: 'none',
+      multiplier: 1.0,
+    },
   });
 });
 

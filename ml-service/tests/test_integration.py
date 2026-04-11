@@ -51,6 +51,8 @@ def test_predict_premium_endpoint(client) -> None:
     payload = response.get_json()
     assert 25.0 <= payload["premium"] <= 150.0
     assert "formula_breakdown" in payload
+    assert "health" in payload["formula_breakdown"]
+    assert payload["health_advisory"]["active"] is False
 
 
 def test_score_fraud_endpoint(client) -> None:

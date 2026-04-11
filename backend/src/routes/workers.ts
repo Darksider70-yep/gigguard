@@ -272,7 +272,7 @@ router.post('/register', async (req: AuthenticatedRequest, res: Response) => {
     const deviceFingerprint = getDeviceFingerprint(req);
     const avatarSeed = computeAvatarSeed(name, phoneNumber);
 
-    await mlService.predictPremium(workerId, zoneMultiplier, 1.0, 1.0);
+    await mlService.predictPremium(workerId, zoneMultiplier, 1.0, 1.0, city, zone);
 
     await query(
       `INSERT INTO workers (

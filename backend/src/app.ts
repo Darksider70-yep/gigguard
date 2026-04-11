@@ -9,6 +9,7 @@ import razorpayRouter from './routes/razorpay';
 import triggersRouter from './routes/triggers';
 import healthRouter from './routes/health';
 import adminRouter from './routes/admin';
+import webhooksRouter from './routes/webhooks';
 import { startTriggerMonitor } from './jobs/triggerMonitor';
 import { startPolicyExpiryJob } from './jobs/policyExpiryJob';
 import { startHexBackfillJob } from './jobs/hexBackfillJob';
@@ -51,7 +52,10 @@ export function createApp() {
     const origin = config.CORS_ORIGIN || 'http://localhost:3000';
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Razorpay-Signature');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, X-Razorpay-Signature, X-GigGuard-Signature'
+    );
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     if (req.method === 'OPTIONS') {
       return res.sendStatus(204);
@@ -60,6 +64,7 @@ export function createApp() {
   });
 
   app.use('/payouts', payoutsRouter);
+  app.use('/webhooks', webhooksRouter);
   app.use(express.json({ limit: '2mb' }));
 
   app.use(healthRouter);

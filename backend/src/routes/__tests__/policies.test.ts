@@ -93,7 +93,13 @@ describe('Policies routes', () => {
         zone_multiplier: 1.15,
         weather_multiplier: 1.2,
         history_multiplier: 0.95,
+        health: 1.0,
         raw_premium: 45.99,
+      },
+      health_advisory: {
+        active: false,
+        severity: 'none',
+        multiplier: 1.0,
       },
       rl_premium: 49,
       shadow_logged: true,
@@ -127,13 +133,27 @@ describe('Policies routes', () => {
     expect(res.body.premium).toBe(52);
     expect(res.body.formula_breakdown).toBeDefined();
     expect(res.body.coverage).toBeDefined();
+    expect(res.body.health_advisory).toBeDefined();
+    expect(res.body.formula_breakdown.health).toBeDefined();
     expect(res.body.recommended_arm).toBe(2);
   });
 
   test('GET /policies/premium has_active_policy=true when policy exists this week', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [{ id: 'policy-1' }], rowCount: 1 });
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM workers')) {
+        return { rows: [worker], rowCount: 1 };
+      }
+      if (sql.includes('FROM rl_rollout_config')) {
+        return { rows: [{ id: 1, rollout_percentage: 0, kill_switch_engaged: false }], rowCount: 1 };
+      }
+      if (sql.includes('INSERT INTO rl_ab_assignments')) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes('FROM policies')) {
+        return { rows: [{ id: 'policy-1' }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
 
     const res = await request(app)
       .get('/policies/premium')
@@ -170,7 +190,9 @@ describe('Policies routes', () => {
       worker.id,
       worker.zone_multiplier,
       1.2,
-      worker.history_multiplier
+      worker.history_multiplier,
+      worker.city,
+      worker.zone
     );
   });
 
@@ -182,7 +204,13 @@ describe('Policies routes', () => {
         zone_multiplier: 1.15,
         weather_multiplier: 1.2,
         history_multiplier: 0.95,
+        health: 1.0,
         raw_premium: 39.9,
+      },
+      health_advisory: {
+        active: false,
+        severity: 'none',
+        multiplier: 1.0,
       },
       rl_premium: null,
       shadow_logged: false,

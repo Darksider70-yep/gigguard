@@ -230,8 +230,30 @@ export default function BuyPolicyQuotePage() {
                 zoneMultiplier={quote.formula_breakdown.zone_multiplier}
                 weatherMultiplier={quote.formula_breakdown.weather_multiplier}
                 historyMultiplier={quote.formula_breakdown.history_multiplier}
+                healthMultiplier={quote.formula_breakdown.health}
                 finalPremium={quote.premium}
               />
+              <div className="mt-3 space-y-1 rounded-lg border border-slate-700 bg-slate-900/45 p-3 text-sm">
+                <div className="flex justify-between text-secondary">
+                  <span>Zone risk</span>
+                  <span className="font-medium text-slate-100">×{quote.formula_breakdown.zone_multiplier.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-secondary">
+                  <span>Weather</span>
+                  <span className="font-medium text-slate-100">×{quote.formula_breakdown.weather_multiplier.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-secondary">
+                  <span>History</span>
+                  <span className="font-medium text-slate-100">×{quote.formula_breakdown.history_multiplier.toFixed(2)}</span>
+                </div>
+                {typeof quote.formula_breakdown.health === 'number' &&
+                quote.formula_breakdown.health !== 1.0 ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-amber-200">Health advisory</span>
+                    <span className="font-medium text-amber-300">×{quote.formula_breakdown.health.toFixed(2)}</span>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </section>
 
@@ -254,6 +276,28 @@ export default function BuyPolicyQuotePage() {
           </section>
 
           <section className="surface-card p-5">
+            {quote.health_advisory?.active ? (
+              <div className="mb-4 rounded-lg border border-amber-300/30 bg-amber-500/10 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-amber-300 text-xl">{'\u26A0\uFE0F'}</span>
+                  <div>
+                    <p className="font-semibold text-amber-200">
+                      {quote.health_advisory.severity === 'containment'
+                        ? 'Active containment zone in your district'
+                        : quote.health_advisory.severity === 'adjacent'
+                          ? 'Containment zone in a nearby district'
+                          : 'Health advisory in your city'}
+                    </p>
+                    <p className="mt-1 text-sm text-amber-100/90">
+                      A health risk surcharge of{' '}
+                      {((quote.health_advisory.multiplier - 1) * 100).toFixed(0)}%
+                      {' '}has been added to your premium this week. If a containment zone is declared
+                      in your area after purchase, your coverage remains locked at today&apos;s price.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-500/50 bg-amber-500/15 px-3 py-1 text-sm text-amber-200">
               {`${STAR} AI Recommended tier: ${quote.recommended_arm}`}
             </div>
