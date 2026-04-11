@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -59,6 +59,7 @@ function triggerRowsFromCoverage(quote: PremiumQuoteResponse) {
     { key: 'flood_red_alert', amount: quote.coverage.flood_red_alert, desc: 'Official flood/red alert notice' },
     { key: 'severe_aqi', amount: quote.coverage.severe_aqi, desc: 'AQI emergency crossing severe threshold' },
     { key: 'curfew_strike', amount: quote.coverage.curfew_strike, desc: 'City curfew or strike disruption block' },
+    { key: 'pandemic_containment', amount: quote.coverage.pandemic_containment, desc: 'Official health or containment zone' },
   ] as const;
 }
 

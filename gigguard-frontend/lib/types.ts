@@ -58,6 +58,7 @@ export interface PremiumQuoteResponse {
     flood_red_alert: number;
     severe_aqi: number;
     curfew_strike: number;
+    pandemic_containment: number;
   };
   recommended_arm: number;
   recommended_premium: number;

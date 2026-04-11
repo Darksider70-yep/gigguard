@@ -209,9 +209,7 @@ Comprehensive guides for all Phase 2 features:
 
 | Document | Purpose |
 |---|---|
-| [Phase 2 Architecture Overview](docs/PHASE_2_ARCHITECTURE_OVERVIEW.md) | System diagram, data flows, deployment architecture, monitoring |
-| [Phase 2 Migration Guide](docs/PHASE_2_MIGRATION_GUIDE.md) | Step-by-step upgrade from Phase 1, database migrations, testing checklist |
-| [API Changes Phase 2](docs/API_CHANGES_PHASE2.md) | Breaking changes, new endpoints, error codes, backwards compatibility |
+
 | [H3 Implementation Guide](docs/H3_IMPLEMENTATION_GUIDE.md) | H3 hexagon theory, trigger monitor algorithm, backfill process |
 | [Bandit Policy Recommendation](docs/BANDIT_POLICY_RECOMMENDATION.md) | Thompson Sampling math, context features, cold start handling |
 | [RL Premium Engine](docs/RL_PREMIUM_ENGINE.md) | SAC algorithm, state-action-reward, nightly training, shadow evaluation |
@@ -755,30 +753,7 @@ Our documentation is organized into focused technical guides that walk you throu
 
 ---
 
-### 🚀 Getting Started & Deployment
 
-<table>
-<tr>
-<td width="20" align="center">📖</td>
-<td>
-
-**[Phase 2 Migration Guide](docs/PHASE_2_MIGRATION_GUIDE.md)** — *Your roadmap from Phase 1 to Phase 2*
-
-Step-by-step upgrade instructions with database migrations, testing checklist, smoke tests, and a gradual rollout strategy (5% canary → 50% → 100%). Complete with rollback procedures and validation queries.
-
-</td>
-</tr>
-<tr>
-<td width="20" align="center">🏗️</td>
-<td>
-
-**[Phase 2 Architecture Overview](docs/PHASE_2_ARCHITECTURE_OVERVIEW.md)** — *See how it all fits together*
-
-Complete system architecture with ASCII diagrams, real-world data flow examples, query latency tables, and monitoring dashboards. The definitive reference for understanding component interactions and performance characteristics.
-
-</td>
-</tr>
-</table>
 
 ---
 

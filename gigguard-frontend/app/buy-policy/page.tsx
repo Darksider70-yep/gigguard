@@ -110,7 +110,8 @@ export default function BuyPolicyStepOnePage() {
                 <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">Extreme Heat <span className="font-mono-data float-right">{`${INR}${quote.coverage.extreme_heat}`}</span></div>
                 <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">Flood Alert <span className="font-mono-data float-right">{`${INR}${quote.coverage.flood_red_alert}`}</span></div>
                 <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">Severe AQI <span className="font-mono-data float-right">{`${INR}${quote.coverage.severe_aqi}`}</span></div>
-                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3 col-span-2">Curfew/Strike <span className="font-mono-data float-right">{`${INR}${quote.coverage.curfew_strike}`}</span></div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">Curfew/Strike <span className="font-mono-data float-right">{`${INR}${quote.coverage.curfew_strike}`}</span></div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900/45 p-3">Health Emergency <span className="font-mono-data float-right">{`${INR}${quote.coverage.pandemic_containment}`}</span></div>
               </div>
 
               <div className="mt-4 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">

@@ -171,6 +171,36 @@ The trigger engine is a cron job that runs within our Node.js backend service. I
 -   **Edge Cases:** Validating the source of the webhook is critical to prevent malicious triggers. This is done via a pre-shared secret or HMAC signature.
 -   **Real-World Scenario:** A city-wide strike is called in Delhi. We push a signed payload to our webhook endpoint. The engine receives it and creates claims for all policyholders in the affected zones.
 
+### Trigger: Pandemic / Health Emergency
+
+-   **Type Key:** `pandemic_containment`
+-   **Data Source:** Multiple including MoHFW API for geographic bounds, State notification webhooks, and WHO alerts.
+-   **Polling Frequency:** Webhook-driven or pooled hourly.
+-   **Threshold:** A registered health containment zone is active for the worker's operational district.
+-   **Threshold Justification:** Health advisories block outdoor logistics work regardless of favorable ambient conditions (weather) and create an unpredictable, instant disruption of income.
+-   **Disruption Hours Formula:** Fixed at `8 hours` per 24 hours of active isolation/containment status.
+-   **Max Weekly Payout at this Trigger:** For a worker earning ₹800/day: `(800 / 8) * 8 * 0.8 = ₹640`.
+-   **Sample API Response (Mock Endpoints):**
+    ```json
+    {
+      "health_advisory_id": "MOHFW-012A",
+      "severity": "containment",
+      "status": "active",
+      "district": "Mumbai_Suburban"
+    }
+    ```
+-   **Parsing Logic (Pseudocode):**
+    ```
+    response = call_health_registry_endpoint(zone)
+    if response.severity == 'containment' and is_active:
+      dedup_check = query('select 1 from pandemic_claim_dedup where worker_id = $1')
+      if not dedup_check:
+        create_disruption_event('pandemic_containment', zone, 'Health Emergency') 
+        insert_dedup_log()
+    ```
+-   **Edge Cases:** Deduplication is extremely important here because containment statuses persist for weeks. The system actively utilizes a `pandemic_claim_dedup` registry to guarantee at maximum one daily claim event per registered worker.
+-   **Real-World Scenario:** The municipal corporation issues an emergency containment notice restricting vehicular movement in a 5km radius due to a localized health emergency. A worker in this zone instantly receives a payout for the missed shift.
+
 ---
 
 ## 4. Trigger Combinations
