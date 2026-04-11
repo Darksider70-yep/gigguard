@@ -9,14 +9,26 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install build dependencies
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       libpq-dev \
-       gcc \
-       g++ \
-       make \
-    && rm -rf /var/lib/apt/lists/*
+# Install build dependencies with retries to handle transient mirror hash mismatch.
+RUN set -eux; \
+    rm -rf /var/lib/apt/lists/*; \
+    for attempt in 1 2 3; do \
+      apt-get -o Acquire::Retries=5 -o Acquire::http::No-Cache=true -o Acquire::https::No-Cache=true update && \
+      apt-get -o Acquire::Retries=5 -o Acquire::http::No-Cache=true -o Acquire::https::No-Cache=true install -y --no-install-recommends \
+        libpq-dev \
+        gcc \
+        g++ \
+        make && \
+      break; \
+      if [ "$attempt" -eq 3 ]; then \
+        echo "apt install failed after ${attempt} attempts" >&2; \
+        exit 1; \
+      fi; \
+      echo "Retrying apt install after transient apt mirror mismatch (attempt ${attempt})" >&2; \
+      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb; \
+      sleep $((attempt * 2)); \
+    done; \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
 
 # Copy and prepare requirements
 COPY requirements.txt .
@@ -43,10 +55,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Security: create non-root user
 RUN groupadd -r mluser && useradd -r -g mluser mluser
 
-# Install runtime dependencies only
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies with retries to handle transient mirror hash mismatch.
+RUN set -eux; \
+    rm -rf /var/lib/apt/lists/*; \
+    for attempt in 1 2 3; do \
+      apt-get -o Acquire::Retries=5 -o Acquire::http::No-Cache=true -o Acquire::https::No-Cache=true update && \
+      apt-get -o Acquire::Retries=5 -o Acquire::http::No-Cache=true -o Acquire::https::No-Cache=true install -y --no-install-recommends libpq5 && \
+      break; \
+      if [ "$attempt" -eq 3 ]; then \
+        echo "apt install failed after ${attempt} attempts" >&2; \
+        exit 1; \
+      fi; \
+      echo "Retrying apt install after transient apt mirror mismatch (attempt ${attempt})" >&2; \
+      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb; \
+      sleep $((attempt * 2)); \
+    done; \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
 
 # Copy Python dependencies from builder
 COPY --from=builder /root/.local /home/mluser/.local
