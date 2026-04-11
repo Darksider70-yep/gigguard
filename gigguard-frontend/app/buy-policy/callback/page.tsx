@@ -3,18 +3,22 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 export default function PaymentCallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState('Processing your payment...');
   const [error, setError] = useState('');
+  const { isLoading, token } = useAuth();
 
   useEffect(() => {
+    if (isLoading) return;
+
     const processPayment = async () => {
       const errorMsg = searchParams.get('error');
       if (errorMsg) {
-        setError(`Payment failed or was abandoned: \${errorMsg}`);
+        setError(`Payment failed or was abandoned: ${errorMsg}`);
         return;
       }
 
@@ -58,13 +62,15 @@ export default function PaymentCallbackPage() {
         );
         router.push('/buy-policy/confirmed');
       } catch (err: any) {
+        // If it's a 401, it might be that the token didn't make it to api.token yet even though isLoading is false
+        // but AuthContext calls api.setToken before setting isLoading to false.
         setError(err.message || 'Payment verification failed at backend.');
       }
     };
 
     void processPayment();
 
-  }, [searchParams, router]);
+  }, [searchParams, router, isLoading, token]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
