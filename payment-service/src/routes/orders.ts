@@ -101,8 +101,8 @@ router.post('/:id/verify', serviceAuth, async (req, res) => {
     });
     res.json(result);
   } catch (err: any) {
-    console.error('[orders] verifyOrder failed:', err.message);
-    res.status(500).json({ error: 'Verification failed', details: err.message });
+    console.error('[orders] verifyOrder failed:', err.message, err.stack);
+    res.status(500).json({ error: err.message || 'Verification failed', success: false });
   }
 });
 

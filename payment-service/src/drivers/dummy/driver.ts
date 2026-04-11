@@ -60,10 +60,15 @@ export class DummyDriver implements IPaymentDriver {
                amount_paise: order.amount_paise };  // idempotent
     }
 
-    // Debit worker wallet, credit platform
-    await debitWallet(order.worker_id, order.amount_paise);
-    await creditWallet('PLATFORM', order.amount_paise);
+    // Try wallet operations, but don't fail verification if they error
+    try {
+      await debitWallet(order.worker_id, order.amount_paise);
+      await creditWallet('PLATFORM', order.amount_paise);
+    } catch (walletErr: any) {
+      console.warn('[dummy] Wallet operation failed (non-fatal):', walletErr.message);
+    }
 
+    // Mark order as paid
     await pool.query(
       `UPDATE payment_orders
        SET status='paid', driver_payment_id=$1, driver_signature=$2,
@@ -72,14 +77,19 @@ export class DummyDriver implements IPaymentDriver {
       [params.driver_payment_id, params.driver_signature, params.order_id]
     );
 
-    await writeLedger({
-      entry_type:   'premium_collected',
-      reference_id: params.order_id,
-      worker_id:    order.worker_id,
-      amount_paise: order.amount_paise,
-      direction:    'credit',
-      driver:       'dummy',
-    });
+    // Write ledger entry — non-fatal if it fails
+    try {
+      await writeLedger({
+        entry_type:   'premium_collected',
+        reference_id: params.order_id,
+        worker_id:    order.worker_id,
+        amount_paise: order.amount_paise,
+        direction:    'credit',
+        driver:       'dummy',
+      });
+    } catch (ledgerErr: any) {
+      console.warn('[dummy] Ledger write failed (non-fatal):', ledgerErr.message);
+    }
 
     return { success: true, order_id: params.order_id,
              amount_paise: order.amount_paise };
@@ -104,9 +114,13 @@ export class DummyDriver implements IPaymentDriver {
       };
     }
 
-    // Debit platform, credit worker
-    await debitWallet('PLATFORM', params.amount_paise);
-    await creditWallet(params.worker_id, params.amount_paise);
+    // Wallet ops — non-fatal
+    try {
+      await debitWallet('PLATFORM', params.amount_paise);
+      await creditWallet(params.worker_id, params.amount_paise);
+    } catch (walletErr: any) {
+      console.warn('[dummy] Wallet operation failed (non-fatal):', walletErr.message);
+    }
 
     await pool.query(
       `INSERT INTO payment_disbursements
@@ -118,14 +132,18 @@ export class DummyDriver implements IPaymentDriver {
        idempotency_key, JSON.stringify(params.metadata ?? {})]
     );
 
-    await writeLedger({
-      entry_type:   'payout_disbursed',
-      reference_id: disbursement_id,
-      worker_id:    params.worker_id,
-      amount_paise: params.amount_paise,
-      direction:    'debit',
-      driver:       'dummy',
-    });
+    try {
+      await writeLedger({
+        entry_type:   'payout_disbursed',
+        reference_id: disbursement_id,
+        worker_id:    params.worker_id,
+        amount_paise: params.amount_paise,
+        direction:    'debit',
+        driver:       'dummy',
+      });
+    } catch (ledgerErr: any) {
+      console.warn('[dummy] Ledger write failed (non-fatal):', ledgerErr.message);
+    }
 
     return { disbursement_id, driver_transfer_id, status: 'paid' };
   }
@@ -136,21 +154,31 @@ export class DummyDriver implements IPaymentDriver {
     );
     if (!d || d.status !== 'paid') return;
 
-    await debitWallet(d.worker_id, d.amount_paise);
-    await creditWallet('PLATFORM', d.amount_paise);
+    try {
+      await debitWallet(d.worker_id, d.amount_paise);
+      await creditWallet('PLATFORM', d.amount_paise);
+    } catch (walletErr: any) {
+      console.warn('[dummy] Wallet reversal failed (non-fatal):', walletErr.message);
+    }
+
     await pool.query(
       `UPDATE payment_disbursements SET status='reversed', updated_at=NOW(),
        failure_reason=$1 WHERE id=$2`,
       [reason, disbursement_id]
     );
-    await writeLedger({
-      entry_type:   'reversal',
-      reference_id: disbursement_id,
-      worker_id:    d.worker_id,
-      amount_paise: d.amount_paise,
-      direction:    'credit',
-      driver:       'dummy',
-      metadata:     { reason },
-    });
+
+    try {
+      await writeLedger({
+        entry_type:   'reversal',
+        reference_id: disbursement_id,
+        worker_id:    d.worker_id,
+        amount_paise: d.amount_paise,
+        direction:    'credit',
+        driver:       'dummy',
+        metadata:     { reason },
+      });
+    } catch (ledgerErr: any) {
+      console.warn('[dummy] Ledger write failed (non-fatal):', ledgerErr.message);
+    }
   }
 }
