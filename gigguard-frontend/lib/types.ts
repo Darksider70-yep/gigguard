@@ -16,6 +16,7 @@ export interface WorkerProfile {
   verified?: boolean;
   verified_at?: string | null;
   created_at: string;
+  preferred_language?: string;
 }
 
 export interface InsurerProfile {
@@ -198,7 +199,7 @@ export interface AntiSpoofingAlertsResponse {
     bcs_score: number;
     bcs_tier: number;
     payout_amount: number;
-    graph_flags: any;
+    graph_flags: string[] | { ring_size_estimate: number; contributing_edges: string[]; flagged_neighbors: string[] };
     created_at: string;
   }>;
 }
@@ -298,6 +299,7 @@ export interface RegisterRequest {
   zone: string;
   avg_daily_earning: number;
   upi_vpa: string;
+  preferred_language: string;
 }
 
 export interface RegisterResponse {

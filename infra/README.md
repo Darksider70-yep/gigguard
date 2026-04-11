@@ -21,9 +21,14 @@ cp .env.example ../.env.example  # if needed
 # Build and run all services
 docker compose up --build
 
-# Or build sequentially to save RAM
-docker compose build --parallel 1
+# Or build sequentially to save RAM (Git Bash / Linux / macOS)
+COMPOSE_PARALLEL_LIMIT=1 docker compose build
 docker compose up
+
+# Or build sequentially to save RAM (PowerShell / Windows)
+# $env:COMPOSE_PARALLEL_LIMIT=1
+# docker compose build
+# docker compose up
 ```
 
 ## Services

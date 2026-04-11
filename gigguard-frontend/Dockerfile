@@ -46,6 +46,10 @@ COPY --from=build --chown=nodejs:nodejs /app/public ./public
 COPY --from=build --chown=nodejs:nodejs /app/.next-build/standalone ./
 COPY --from=build --chown=nodejs:nodejs /app/.next-build/static ./.next-build/static
 
+# next-intl requires message files and i18n config at runtime
+COPY --from=build --chown=nodejs:nodejs /app/messages ./messages
+COPY --from=build --chown=nodejs:nodejs /app/i18n ./i18n
+
 # Switch to non-root user
 USER nodejs
 

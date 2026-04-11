@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import AuthGuard from '@/components/AuthGuard';
 import CountUp from '@/components/ui/CountUp';
 import RadialGauge from '@/components/ui/RadialGauge';
@@ -27,6 +28,7 @@ function formatDate(value: string): string {
 }
 
 export default function ClaimsPage() {
+  const t = useTranslations('claims');
   const [data, setData] = useState<ClaimsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +183,7 @@ export default function ClaimsPage() {
         <div className="surface-card border-rose-500/40 p-4 text-rose-300">{error}</div>
       ) : (
         <div className="space-y-5">
-          <h1 className="text-3xl font-semibold">Claims History</h1>
+          <h1 className="text-3xl font-semibold">{t('title')}</h1>
 
           <section className="grid grid-cols-3 gap-4">
             <div className="surface-card p-4">

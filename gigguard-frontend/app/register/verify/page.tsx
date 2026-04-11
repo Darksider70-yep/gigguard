@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import OtpInput from '@/components/ui/OtpInput';
 import RegistrationStepper from '@/components/ui/RegistrationStepper';
 import { APIError, api } from '@/lib/api';
@@ -17,6 +18,7 @@ interface RegistrationContext {
   upiVpa: string;
   worker_id: string;
   avatar_seed: string;
+  preferredLanguage?: string;
 }
 
 const RESEND_SECONDS = 30;
@@ -31,6 +33,7 @@ function formatPhone(phone: string) {
 
 export default function RegisterVerifyPage() {
   const router = useRouter();
+  const t = useTranslations('auth');
   const { setWorkerLogin } = useAuth();
   const [context, setContext] = useState<RegistrationContext | null>(null);
   const [otp, setOtp] = useState('');
@@ -55,14 +58,14 @@ export default function RegisterVerifyPage() {
       setSending(true);
       try {
         await api.loginWorker(parsed.phone_number);
-        setInfo('OTP sent successfully.');
+        setInfo(t('otp_sent'));
       } catch (err) {
         if (err instanceof APIError && err.status === 0) {
-          setError('Network unavailable. Check backend connectivity.');
+          setError(t('login_error_network'));
         } else if (err instanceof APIError) {
-          setError(err.message || 'Failed to send OTP.');
+          setError(err.message || t('login_error_otp'));
         } else {
-          setError('Failed to send OTP.');
+          setError(t('login_error_otp'));
         }
       } finally {
         setSending(false);
@@ -70,7 +73,7 @@ export default function RegisterVerifyPage() {
     };
 
     void triggerOtp();
-  }, [router]);
+  }, [router, t]);
 
   useEffect(() => {
     if (countdown <= 0) {
@@ -98,17 +101,21 @@ export default function RegisterVerifyPage() {
         otp: code,
       });
 
+      // Sync locale cookie from registration language preference
+      const lang = context.preferredLanguage || 'en';
+      document.cookie = `gigguard_locale=${lang}; path=/; max-age=31536000; SameSite=Lax`;
+
       setWorkerLogin(response.token, response.worker);
 
       sessionStorage.removeItem('gigguard_registration_context');
       router.replace('/dashboard');
     } catch (err) {
       if (err instanceof APIError && err.status === 0) {
-        setError('Network unavailable. Check backend connectivity.');
+        setError(t('login_error_network'));
       } else if (err instanceof APIError) {
-        setError(err.message || 'Invalid OTP. Please try again.');
+        setError(err.message || t('login_error_otp_invalid'));
       } else {
-        setError('Invalid OTP. Please try again.');
+        setError(t('login_error_otp_invalid'));
       }
       setOtp('');
     } finally {
@@ -127,14 +134,14 @@ export default function RegisterVerifyPage() {
 
     try {
       await api.resendOtp(context.phone_number);
-      setInfo('A fresh OTP has been sent.');
+      setInfo(t('otp_sent'));
       setCountdown(RESEND_SECONDS);
       setOtp('');
     } catch (err) {
       if (err instanceof APIError) {
-        setError(err.message || 'Could not resend OTP right now.');
+        setError(err.message || t('login_error_otp'));
       } else {
-        setError('Could not resend OTP right now.');
+        setError(t('login_error_otp'));
       }
     } finally {
       setSending(false);
@@ -143,10 +150,10 @@ export default function RegisterVerifyPage() {
 
   const resendLabel = useMemo(() => {
     if (countdown > 0) {
-      return `Resend in ${countdown}s`;
+      return t('resend_in', { seconds: countdown });
     }
-    return 'Resend OTP';
-  }, [countdown]);
+    return t('resend_otp');
+  }, [countdown, t]);
 
   if (!context) {
     return null;
@@ -156,12 +163,12 @@ export default function RegisterVerifyPage() {
     <div className="mx-auto w-full max-w-2xl space-y-6">
       <section className="surface-card p-6 sm:p-7">
         <RegistrationStepper current="verify" />
-        <h1 className="mt-5 text-3xl font-semibold">Verify your number</h1>
+        <h1 className="mt-5 text-3xl font-semibold">{t('verify_title')}</h1>
       </section>
 
       <section className="surface-card space-y-6 p-6 text-center sm:p-8">
         <p className="text-3xl font-semibold tracking-wide text-amber-300">{formatPhone(context.phone_number)}</p>
-        <p className="text-sm text-secondary">We sent a 6-digit code to this number</p>
+        <p className="text-sm text-secondary">{t('otp_sent_to')}</p>
 
         <OtpInput value={otp} onChange={setOtp} onComplete={verifyOtp} disabled={verifying} />
 
@@ -183,7 +190,7 @@ export default function RegisterVerifyPage() {
           disabled={otp.length !== 6 || verifying}
           className="btn-saffron w-full px-5 py-3 text-base disabled:opacity-60"
         >
-          {verifying ? 'Verifying...' : 'Verify OTP'}
+          {verifying ? t('verifying') : t('verify_otp')}
         </button>
       </section>
     </div>

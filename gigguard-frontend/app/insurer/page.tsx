@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -353,9 +353,9 @@ export default function InsurerPage() {
                       <BCSGauge score={alert.bcs_score} size="sm" />
                     </div>
                     <ul className="mt-2 list-disc pl-5 text-xs text-secondary">
-                      {alert.graph_flags.map((flag) => (
+                      {Array.isArray(alert.graph_flags) ? alert.graph_flags.map((flag: string) => (
                         <li key={`${alert.claim_id}_${flag}`}>{flag}</li>
-                      ))}
+                      )) : <li>GNN Fraud Intelligence Event</li>}
                     </ul>
                     <div className="mt-3 flex gap-2">
                       <button

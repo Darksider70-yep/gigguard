@@ -26,7 +26,6 @@ from bandits.policy_bandit import ThompsonSamplingBandit, build_context_key
 from config import Settings, get_settings
 from db.connection import ENGINE, session_scope
 from fraud.isolation_forest import FraudScorer
-from fraud.gnn_scorer import GNNScorer
 from premium.calculator import PremiumCalculator
 from premium.zones import ZONES
 from rl.validate_shadow import validate_shadow

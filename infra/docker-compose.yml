@@ -69,7 +69,7 @@ services:
       [
         'sh',
         '-c',
-        "set -e; psql -h db -U gigguard -d gigguard -f /seed/006_phase2_schema_alignment.sql; psql -h db -U gigguard -d gigguard -f /seed/008_runtime_schema_compat.sql; psql -h db -U gigguard -d gigguard -f /seed/009_phase2_payout_idempotency_and_hex_flags.sql; psql -h db -U gigguard -d gigguard -v ON_ERROR_STOP=1 -f /seed/010_registration_fields.sql; psql -h db -U gigguard -d gigguard -f /seed/007_seed_demo_data.sql",
+        "set -e; psql -h db -U gigguard -d gigguard -f /seed/006_phase2_schema_alignment.sql; psql -h db -U gigguard -d gigguard -f /seed/008_runtime_schema_compat.sql; psql -h db -U gigguard -d gigguard -f /seed/009_phase2_payout_idempotency_and_hex_flags.sql; psql -h db -U gigguard -d gigguard -v ON_ERROR_STOP=1 -f /seed/010_registration_fields.sql; psql -h db -U gigguard -d gigguard -f /seed/011_phase3_rl_schema.sql; psql -h db -U gigguard -d gigguard -f /seed/012_add_preferred_language.sql; psql -h db -U gigguard -d gigguard -f /seed/007_seed_demo_data.sql",
       ]
     restart: 'no'
     networks:

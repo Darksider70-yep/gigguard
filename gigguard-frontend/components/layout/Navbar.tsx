@@ -1,11 +1,22 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
-import { LogOut, Shield } from 'lucide-react';
+import { Globe, LogOut, Shield } from 'lucide-react';
+import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
+import { LanguageSelector } from '@/components/LanguageSelector';
+
+function getCurrentLocale(): string {
+  if (typeof document === 'undefined') return 'en';
+  const match = document.cookie.match(/(?:^|; )gigguard_locale=([^;]*)/);
+  return match?.[1] || 'en';
+}
 
 export default function Navbar() {
+  const t = useTranslations('nav');
   const { role, worker, insurer, logout } = useAuth();
+  const [showLangPicker, setShowLangPicker] = useState(false);
 
   return (
     <nav className="sticky top-0 z-50 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-xl">
@@ -19,9 +30,9 @@ export default function Navbar() {
             {role === null ? <Link href="/">Home</Link> : null}
             {role === 'worker' ? (
               <>
-                <Link href="/dashboard" className="hover:text-white">Dashboard</Link>
-                <Link href="/buy-policy" className="hover:text-white">Buy Policy</Link>
-                <Link href="/claims" className="hover:text-white">Claims</Link>
+                <Link href="/dashboard" className="hover:text-white">{t('dashboard')}</Link>
+                <Link href="/buy-policy" className="hover:text-white">{t('buy_policy')}</Link>
+                <Link href="/claims" className="hover:text-white">{t('claims')}</Link>
               </>
             ) : null}
             {role === 'insurer' ? (
@@ -33,6 +44,33 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Language switcher for logged-in workers */}
+          {role === 'worker' ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowLangPicker((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-secondary transition hover:border-slate-600 hover:text-white"
+                title="Change language"
+              >
+                <Globe className="h-3.5 w-3.5" />
+                <span className="uppercase">{getCurrentLocale()}</span>
+              </button>
+              {showLangPicker && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowLangPicker(false)} />
+                  <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+                    <LanguageSelector
+                      variant="profile"
+                      currentLocale={getCurrentLocale()}
+                      onSelect={() => setShowLangPicker(false)}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+
           {role === 'worker' ? (
             <div className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs text-secondary">
               {worker?.name ?? 'Worker'}
@@ -51,7 +89,7 @@ export default function Navbar() {
               className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-1.5 text-sm text-secondary transition hover:border-slate-600 hover:text-white"
             >
               <LogOut className="h-4 w-4" />
-              Logout
+              {t('logout')}
             </button>
           ) : null}
         </div>
@@ -59,4 +97,3 @@ export default function Navbar() {
     </nav>
   );
 }
-

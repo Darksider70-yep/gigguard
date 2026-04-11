@@ -10,6 +10,7 @@ export interface AuthPayload {
   role: AuthRole;
   exp: number;
   iat: number;
+  preferred_language?: string;
 }
 
 export interface WorkerAuthContext {
@@ -25,6 +26,7 @@ export interface WorkerAuthContext {
   created_at: string;
   experience_tier: string | null;
   upi_vpa: string | null;
+  preferred_language: string;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -144,6 +146,7 @@ async function loadWorker(workerId: string): Promise<WorkerAuthContext | null> {
     created_at: string;
     experience_tier: string | null;
     upi_vpa: string | null;
+    preferred_language: string;
   }>(
     `SELECT
        id,
@@ -157,7 +160,8 @@ async function loadWorker(workerId: string): Promise<WorkerAuthContext | null> {
        history_multiplier,
        created_at,
        experience_tier,
-       upi_vpa
+       upi_vpa,
+       preferred_language
      FROM workers
      WHERE id = $1
      LIMIT 1`,
@@ -182,6 +186,7 @@ async function loadWorker(workerId: string): Promise<WorkerAuthContext | null> {
     created_at: worker.created_at,
     experience_tier: worker.experience_tier,
     upi_vpa: worker.upi_vpa,
+    preferred_language: worker.preferred_language ?? 'en',
   };
 }
 
@@ -267,8 +272,8 @@ export function authenticateInsurer(
 export const requireWorker = authenticateWorker;
 export const requireInsurer = authenticateInsurer;
 
-export function issueWorkerToken(workerId: string): string {
-  return signToken({ sub: workerId, role: 'worker' }, 7 * 24 * 60 * 60);
+export function issueWorkerToken(workerId: string, preferred_language: string = 'en'): string {
+  return signToken({ sub: workerId, role: 'worker', preferred_language }, 7 * 24 * 60 * 60);
 }
 
 export function issueInsurerToken(insurerId: string): string {

@@ -1,7 +1,8 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { MapPin, ShieldCheck, TrendingUp } from 'lucide-react';
 import AuthGuard from '@/components/AuthGuard';
 import { APIError, api } from '@/lib/api';
@@ -10,6 +11,7 @@ const INR = '\u20B9';
 
 export default function BuyPolicyStepOnePage() {
   const router = useRouter();
+  const t = useTranslations('buy_policy');
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [quote, setQuote] = useState<PremiumQuoteResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,7 +80,7 @@ export default function BuyPolicyStepOnePage() {
         <div className="surface-card border-rose-500/40 p-4 text-rose-300">{error}</div>
       ) : worker && quote ? (
         <div className="space-y-5">
-          <h1 className="text-3xl font-semibold">Buy policy</h1>
+          <h1 className="text-3xl font-semibold">{t('title')}</h1>
           <div className="grid grid-cols-5 gap-5">
             <section className="surface-card col-span-2 p-5">
               <div className="flex items-center gap-4">
@@ -100,7 +102,7 @@ export default function BuyPolicyStepOnePage() {
             </section>
 
             <section className="surface-card col-span-3 p-5">
-              <h3 className="text-xl font-semibold">What you are buying</h3>
+              <h3 className="text-xl font-semibold">{t('what_is_covered')}</h3>
               <p className="mt-1 text-sm text-secondary">Coverage preview for all trigger types in your active zone.</p>
 
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">

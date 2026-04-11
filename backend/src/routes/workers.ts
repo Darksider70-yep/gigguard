@@ -37,6 +37,7 @@ interface WorkerRow {
   verified: boolean;
   verified_at: string | null;
   created_at: string;
+  preferred_language: string;
 }
 
 function normalizeCity(value: string): string | null {
@@ -135,6 +136,7 @@ function mapWorkerRow(row: WorkerRow) {
     verified: Boolean(row.verified),
     verified_at: row.verified_at,
     created_at: row.created_at,
+    preferred_language: row.preferred_language,
   };
 }
 
@@ -157,7 +159,8 @@ async function fetchWorkerByPhone(phoneNumber: string): Promise<WorkerRow | null
       avatar_seed,
       verified,
       verified_at,
-      created_at
+      created_at,
+      preferred_language
     FROM workers
     WHERE phone_number = $1
     LIMIT 1`,
@@ -216,6 +219,11 @@ router.post('/register', async (req: AuthenticatedRequest, res: Response) => {
     const zone = String(req.body?.zone || '').trim();
     const avgDailyEarning = Number(req.body?.avg_daily_earning);
     const upiVpa = String(req.body?.upi_vpa || '').trim();
+    let preferredLanguage = String(req.body?.preferred_language || 'en').toLowerCase();
+    
+    if (!['en', 'hi', 'ta', 'te', 'kn', 'mr'].includes(preferredLanguage)) {
+      preferredLanguage = 'en';
+    }
 
     if (!name) {
       return res.status(400).json({ message: 'name is required' });
@@ -285,9 +293,10 @@ router.post('/register', async (req: AuthenticatedRequest, res: Response) => {
         avatar_seed,
         verified,
         created_at,
-        updated_at
+        updated_at,
+        preferred_language
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,FALSE,NOW(),NOW()
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,FALSE,NOW(),NOW(),$16
       )`,
       [
         workerId,
@@ -305,6 +314,7 @@ router.post('/register', async (req: AuthenticatedRequest, res: Response) => {
         fallback,
         deviceFingerprint,
         avatarSeed,
+        preferredLanguage
       ]
     );
 
@@ -421,7 +431,7 @@ router.post('/verify-otp', async (req, res: Response) => {
     );
 
     const refreshedWorker = await fetchWorkerByPhone(phoneNumber);
-    const token = issueWorkerToken(worker.id);
+    const token = issueWorkerToken(worker.id, refreshedWorker?.preferred_language || 'en');
 
     return res.status(200).json({
       token,
@@ -557,4 +567,26 @@ router.get('/:id/gnn-score', authenticateInsurer, async (req: AuthenticatedReque
 });
 
 export default router;
+
+router.patch('/language', requireWorker, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const VALID_LOCALES = ['en', 'hi', 'ta', 'te', 'kn', 'mr'];
+    const { preferred_language } = req.body;
+
+    if (!VALID_LOCALES.includes(preferred_language)) {
+      return res.status(400).json({ error: 'Invalid locale' });
+    }
+
+    await query(
+      'UPDATE workers SET preferred_language = $1, updated_at = NOW() WHERE id = $2',
+      [preferred_language, req.worker!.id]
+    );
+
+    const token = issueWorkerToken(req.worker!.id, preferred_language);
+
+    return res.json({ status: 'updated', preferred_language, jwt_token: token });
+  } catch {
+    return res.status(500).json({ message: 'Failed to update preferred language' });
+  }
+});
 

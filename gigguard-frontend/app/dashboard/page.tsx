@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -6,6 +6,7 @@ import AuthGuard from '@/components/AuthGuard';
 import ClaimStatusBar from '@/components/ui/ClaimStatusBar';
 import CountUp from '@/components/ui/CountUp';
 import PremiumFormula from '@/components/ui/PremiumFormula';
+import { useTranslations } from 'next-intl';
 import TriggerBadge from '@/components/ui/TriggerBadge';
 import { APIError, api } from '@/lib/api';
 import { ActivePolicyResponse, ClaimsResponse, PolicyHistoryResponse, PremiumQuoteResponse, WorkerProfile } from '@/lib/types';
@@ -22,6 +23,7 @@ const WAVE = '\uD83D\uDC4B';
 type Tab = 'dashboard' | 'policies' | 'claims';
 
 export default function DashboardPage() {
+  const t = useTranslations('dashboard');
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [activePolicy, setActivePolicy] = useState<ActivePolicyResponse | null>(null);
   const [claims, setClaims] = useState<ClaimsResponse | null>(null);
@@ -112,7 +114,7 @@ export default function DashboardPage() {
         <div className="space-y-5">
           <section className="surface-card animate-fade-in-up delay-0 flex items-center justify-between p-5">
             <div>
-              <h1 className="text-3xl font-semibold">{`Good evening, ${worker?.name ?? 'Worker'} ${WAVE}`}</h1>
+              <h1 className="text-3xl font-semibold">{t('greeting', { name: worker?.name ?? 'Worker' })} {WAVE}</h1>
               <div className="mt-2 flex items-center gap-2 text-sm">
                 <span className="status-pill bg-amber-500/20 text-amber-300">{worker?.platform ?? '-'}</span>
                 <span className="text-secondary">{worker?.zone ?? '-'}, {worker?.city ?? '-'}</span>
@@ -148,7 +150,7 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-5 gap-5">
             <section className="surface-card animate-fade-in-up delay-200 col-span-3 p-5">
-              <h3 className="text-lg font-semibold">Active policy</h3>
+              <h3 className="text-lg font-semibold">{t('active_policy_title')}</h3>
               {activePolicy?.has_active_policy && activePolicy.policy ? (
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
@@ -207,7 +209,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <p className="mt-3 text-sm text-secondary">No active policy found for this week.</p>
+                <p className="mt-3 text-sm text-secondary">{t('no_policy_body')}</p>
               )}
             </section>
 

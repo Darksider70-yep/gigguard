@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import OtpInput from '@/components/ui/OtpInput';
 import PhoneInput from '@/components/ui/PhoneInput';
 import { APIError, api } from '@/lib/api';
@@ -20,6 +21,7 @@ function prettyPhone(phone: string) {
 
 export default function LoginPage() {
   const router = useRouter();
+  const t = useTranslations('auth');
   const { role, isLoading, setWorkerLogin } = useAuth();
   const [phoneDigits, setPhoneDigits] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -55,7 +57,7 @@ export default function LoginPage() {
     setInfo(null);
 
     if (!/^\d{10}$/.test(phoneDigits)) {
-      setError('Enter a valid 10-digit phone number.');
+      setError(t('login_error_invalid'));
       return;
     }
 
@@ -67,15 +69,15 @@ export default function LoginPage() {
       setPhoneNumber(fullPhone);
       setShowOtp(true);
       setOtp('');
-      setInfo('OTP sent successfully.');
+      setInfo(t('otp_sent'));
       startCountdown();
     } catch (err) {
       if (err instanceof APIError && err.status === 404) {
-        setError('No worker account found for this number. Register first.');
+        setError(t('login_error_not_found'));
       } else if (err instanceof APIError) {
-        setError(err.message || 'Failed to send OTP.');
+        setError(err.message || t('login_error_otp'));
       } else {
-        setError('Failed to send OTP.');
+        setError(t('login_error_otp'));
       }
     } finally {
       setBusy(false);
@@ -93,13 +95,20 @@ export default function LoginPage() {
 
     try {
       const response = await api.verifyOtp({ phone_number: phoneNumber, otp: code });
+
+      // Sync locale cookie from worker's saved preference
+      const workerLang = response.worker?.preferred_language;
+      if (workerLang) {
+        document.cookie = `gigguard_locale=${workerLang}; path=/; max-age=31536000; SameSite=Lax`;
+      }
+
       setWorkerLogin(response.token, response.worker);
       router.replace('/dashboard');
     } catch (err) {
       if (err instanceof APIError) {
-        setError(err.message || 'Invalid OTP.');
+        setError(err.message || t('login_error_otp_invalid'));
       } else {
-        setError('Invalid OTP.');
+        setError(t('login_error_otp_invalid'));
       }
       setOtp('');
     } finally {
@@ -120,13 +129,13 @@ export default function LoginPage() {
     try {
       await api.resendOtp(phoneNumber);
       setOtp('');
-      setInfo('New OTP sent.');
+      setInfo(t('otp_sent'));
       startCountdown();
     } catch (err) {
       if (err instanceof APIError) {
-        setError(err.message || 'Could not resend OTP.');
+        setError(err.message || t('login_error_otp'));
       } else {
-        setError('Could not resend OTP.');
+        setError(t('login_error_otp'));
       }
     } finally {
       setBusy(false);
@@ -136,8 +145,8 @@ export default function LoginPage() {
   return (
     <div className="mx-auto w-full max-w-xl space-y-6">
       <section className="surface-card space-y-3 p-6 sm:p-7">
-        <h1 className="text-3xl font-semibold">Worker Login</h1>
-        <p className="text-sm text-secondary">Use OTP login to access your GigGuard dashboard and buy policy flow.</p>
+        <h1 className="text-3xl font-semibold">{t('login_title')}</h1>
+        <p className="text-sm text-secondary">{t('login_subtitle')}</p>
       </section>
 
       <section className="surface-card space-y-5 p-6 sm:p-7">
@@ -146,17 +155,17 @@ export default function LoginPage() {
             <PhoneInput
               value={phoneDigits}
               onChange={setPhoneDigits}
-              helperText="We'll send a 6-digit OTP to this number"
+              helperText={t('otp_helper')}
               onBlur={() => undefined}
             />
             <button type="button" onClick={sendOtp} disabled={busy} className="btn-saffron w-full px-5 py-3 text-base disabled:opacity-60">
-              {busy ? 'Sending OTP...' : 'Send OTP'}
+              {busy ? t('sending_otp') : t('send_otp')}
             </button>
           </>
         ) : (
           <div className="space-y-4 text-center">
             <p className="text-2xl font-semibold text-amber-300">{prettyPhone(phoneNumber)}</p>
-            <p className="text-sm text-secondary">Enter the 6-digit code sent to your phone.</p>
+            <p className="text-sm text-secondary">{t('enter_otp')}</p>
             <OtpInput value={otp} onChange={setOtp} onComplete={verifyOtp} disabled={busy} />
             <button
               type="button"
@@ -164,7 +173,7 @@ export default function LoginPage() {
               disabled={countdown > 0 || busy}
               className="text-sm text-amber-300 transition hover:text-amber-200 disabled:cursor-not-allowed disabled:text-slate-500"
             >
-              {countdown > 0 ? `Resend in ${countdown}s` : 'Resend OTP'}
+              {countdown > 0 ? t('resend_in', { seconds: countdown }) : t('resend_otp')}
             </button>
             <button
               type="button"
@@ -172,7 +181,7 @@ export default function LoginPage() {
               disabled={otp.length !== 6 || busy}
               className="btn-saffron w-full px-5 py-3 text-base disabled:opacity-60"
             >
-              {busy ? 'Verifying...' : 'Verify OTP'}
+              {busy ? t('verifying') : t('verify_otp')}
             </button>
           </div>
         )}
@@ -181,9 +190,9 @@ export default function LoginPage() {
         {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
         <p className="text-sm text-secondary">
-          Don't have an account?{' '}
+          {t('have_account')}{' '}
           <Link href="/register" className="text-amber-300 hover:text-amber-200">
-            Register free
+            {t('register_link')}
           </Link>
         </p>
       </section>

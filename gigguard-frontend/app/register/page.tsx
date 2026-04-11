@@ -3,12 +3,14 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import PlatformToggle from '@/components/ui/PlatformToggle';
 import PhoneInput from '@/components/ui/PhoneInput';
 import RegistrationStepper from '@/components/ui/RegistrationStepper';
 import ZoneSelect from '@/components/ui/ZoneSelect';
 import { APIError, api } from '@/lib/api';
 import { CITIES } from '@/lib/zones';
+import { LanguageSelector } from '@/components/LanguageSelector';
 
 interface FormState {
   name: string;
@@ -18,6 +20,7 @@ interface FormState {
   zone: string;
   avgDailyEarning: string;
   upiVpa: string;
+  preferredLanguage: string;
 }
 
 type FormField = keyof FormState;
@@ -30,6 +33,7 @@ const INITIAL_FORM: FormState = {
   zone: '',
   avgDailyEarning: '',
   upiVpa: '',
+  preferredLanguage: 'en',
 };
 
 const INR = '\u20B9';
@@ -73,6 +77,7 @@ function validate(form: FormState) {
 
 export default function RegisterPage() {
   const router = useRouter();
+  const t = useTranslations('onboarding');
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [touched, setTouched] = useState<Partial<Record<FormField, boolean>>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -119,6 +124,7 @@ export default function RegisterPage() {
         zone: form.zone,
         avg_daily_earning: Number(form.avgDailyEarning),
         upi_vpa: form.upiVpa.trim(),
+        preferred_language: form.preferredLanguage,
       });
 
       const avatarSeed = `${normalizeSeedName(form.name)}${form.phone.slice(-4)}`;
@@ -152,8 +158,8 @@ export default function RegisterPage() {
     <div className="mx-auto w-full max-w-3xl space-y-6">
       <section className="surface-card p-6 sm:p-7">
         <RegistrationStepper current="details" />
-        <h1 className="mt-5 text-3xl font-semibold">Create your worker account</h1>
-        <p className="mt-2 text-sm text-secondary">Register once and activate weekly protection when you buy your first policy.</p>
+        <h1 className="mt-5 text-3xl font-semibold">{t('create_title')}</h1>
+        <p className="mt-2 text-sm text-secondary">{t('create_subtitle')}</p>
       </section>
 
       <form onSubmit={onSubmit} className="surface-card space-y-5 p-6 sm:p-7">
@@ -285,12 +291,23 @@ export default function RegisterPage() {
               <p className="mt-1 text-xs text-slate-400">Used for automatic payouts when triggered</p>
             )}
           </div>
+
+          <div className="sm:col-span-2 mt-4 pt-4 border-t border-slate-800">
+            <h2 className="text-xl font-semibold mb-1">{t('language_title')}</h2>
+            <p className="text-sm text-slate-400">{t('language_subtitle')}</p>
+            <LanguageSelector
+              variant="onboarding"
+              currentLocale={form.preferredLanguage}
+              onSelect={(locale) => updateField('preferredLanguage', locale)}
+            />
+            <p className="mt-2 text-xs text-slate-500">{t('language_change_later')}</p>
+          </div>
         </div>
 
         {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
         <button type="submit" disabled={submitting} className="btn-saffron w-full px-5 py-3 text-base disabled:opacity-60">
-          {submitting ? 'Creating account...' : 'Continue ?'}
+          {submitting ? t('creating_account') : t('continue_button')}
         </button>
       </form>
     </div>

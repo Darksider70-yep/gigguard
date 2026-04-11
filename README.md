@@ -6,10 +6,11 @@
 
 ![Built for Guidewire DEVTrails 2026](https://img.shields.io/badge/Built%20for-Guidewire%20DEVTrails%202026-blue)
 ![Phase-2](https://img.shields.io/badge/Phase-2%20Complete-blue)
-![Phase-3](https://img.shields.io/badge/Phase--3-Starting%205%20Apr-orange)
+![Phase-3](https://img.shields.io/badge/Phase--3-In%20Progress-orange)
 ![Tests](https://img.shields.io/badge/Tests-61%2F61-brightgreen)
 ![Build](https://img.shields.io/badge/Build-Passing-brightgreen)
 ![Pandemic](https://img.shields.io/badge/Pandemic%20Protection-Phase%203-purple)
+![Multilingual](https://img.shields.io/badge/Multilingual-6%20Languages-blueviolet)
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -216,6 +217,7 @@ Comprehensive guides for all Phase 2 features:
 | [RL Premium Engine](docs/RL_PREMIUM_ENGINE.md) | SAC algorithm, state-action-reward, nightly training, shadow evaluation |
 | [GNN Fraud Detection](docs/GNN_FRAUD_DETECTION.md) | Graph schema, synthetic data generation, GraphSAGE model, Phase 3 prep |
 | [Security Hardening](docs/SECURITY_HARDENING.md) | JWT auth, payout dedup, cell tower verification, audit logging |
+| [Multilingual Support](docs/MULTILINGUAL_SUPPORT.md) | Cookie-based i18n, translation tiers, adding languages, CI validation |
 
 ---
 
@@ -228,6 +230,7 @@ Comprehensive guides for all Phase 2 features:
 | RL Premium (Shadow) | ✅ Live (shadow only) | Evaluating | Deploy live to replace formula |
 | GNN Fraud Detection | ✅ Schema ready, training done | Not live yet | Deploy live, replace Isolation Forest |
 | Security Hardening | ✅ Live | Prevents fraud + data tampering | Strengthen with GNN live |
+| **Multilingual Support** | **✅ Infrastructure live** | **6 languages, Hindi complete** | **Complete remaining Tier 1 translations** |
 
 ---
 
@@ -339,11 +342,15 @@ In Phase 3, all sources use mock webhooks identical in structure to the curfew/s
 
 ---
 
-### 3.5 Multilingual Support
+### 3.5 Multilingual Support ✅ (Implemented)
+
+> **Status:** Infrastructure complete. English + Hindi fully translated. Tamil, Telugu, Kannada, Marathi have Tier 2 translations with Tier 1 strings awaiting professional translation.
+>
+> **Documentation:** [Multilingual Support Guide](docs/MULTILINGUAL_SUPPORT.md)
 
 #### Why This Matters More Than It Sounds
 
-The GigGuard worker dashboard is currently English-only. The workers it protects are not. A Zomato delivery partner in Chennai reads Tamil. A Swiggy partner in Hyderabad reads Telugu. A Mumbai rider who completed school in a vernacular medium reads Hindi or Marathi, not English.
+The GigGuard worker dashboard was English-only. The workers it protects are not. A Zomato delivery partner in Chennai reads Tamil. A Swiggy partner in Hyderabad reads Telugu. A Mumbai rider who completed school in a vernacular medium reads Hindi or Marathi, not English.
 
 This is not a cosmetic problem. When a ₹640 flood payout is pending and the claim status says "Under Review — Behavioral Coherence Score: 34/100. Cell tower mismatch detected. A human reviewer will contact you within 4 hours." — that sentence is incomprehensible to the worker it is trying to reassure. The result is a support call, a panicked message to their manager, or a loss of trust in the platform entirely.
 
@@ -444,13 +451,16 @@ ALTER TABLE workers
 -- Values: 'en', 'hi', 'ta', 'te', 'kn', 'mr'
 ```
 
-**Phase 3 Implementation Plan:**
-- **Day 1:** Install `next-intl`, configure middleware, create `en.json` from existing string literals
-- **Day 2–3:** Translate Tier 1 critical strings to all 5 languages (professional translation)
-- **Day 4:** Add `preferred_language` to worker schema + JWT. Language selector in registration flow.
-- **Day 5:** Wire `next-intl` to worker dashboard, claim status messages, payout notifications
-- **Day 6:** Build `POST /ml-service/explain-claim-status` with cached language-aware explanations
-- **Day 7:** Integration tests — verify every Tier 1 string has a translation in all 5 languages. Fail build if any key is missing.
+**Implementation Status:**
+- ✅ `next-intl` configured with cookie-based locale resolution
+- ✅ `en.json` source of truth with 11 namespaces, 150+ keys
+- ✅ `hi.json` fully translated (Tier 1 + Tier 2)
+- ✅ `preferred_language` column + JWT claim + PATCH endpoint
+- ✅ Language selector in registration flow + navbar dropdown
+- ✅ Locale cookie synced on login/registration
+- ✅ `check:translations` CI validation script
+- ⏳ Tamil, Telugu, Kannada, Marathi Tier 1 strings pending professional translation
+- ⏳ `POST /ml-service/explain-claim-status` endpoint planned for Phase 3 completion
 
 ---
 
@@ -660,7 +670,7 @@ Beyond the core engine, we have a strategic plan to implement advanced features 
 
 | Layer                | Technology             | Purpose                                                    |
 |----------------------|------------------------|------------------------------------------------------------|
-| **Frontend**         | Next.js 14, TypeScript | Worker onboarding, policy management, and viewing claims.    |
+| **Frontend**         | Next.js 14, TypeScript, next-intl | Worker onboarding, policy management, multilingual UI.     |
 | **Backend**          | Node.js, Express, TS   | Core business logic, API gateway, DB management, trigger polling. |
 | **Machine Learning** | Python, Flask, Scikit  | Premium calculation and fraud detection ML models.         |
 | **Database**         | PostgreSQL             | Storing all persistent data (workers, policies, claims).   |
