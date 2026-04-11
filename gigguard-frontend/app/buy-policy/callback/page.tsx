@@ -16,8 +16,10 @@ export default function PaymentCallbackPage() {
     if (isLoading) return;
 
     const processPayment = async () => {
+      console.log('[callback] Starting processPayment', { isLoading, hasToken: !!token });
       const errorMsg = searchParams.get('error');
       if (errorMsg) {
+        console.error('[callback] Error in params:', errorMsg);
         setError(`Payment failed or was abandoned: ${errorMsg}`);
         return;
       }
@@ -26,6 +28,8 @@ export default function PaymentCallbackPage() {
       const driver_payment_id = searchParams.get('razorpay_payment_id');
       const driver_order_id = searchParams.get('razorpay_order_id');
       const driver_signature = searchParams.get('razorpay_signature');
+
+      console.log('[callback] Params received:', { payment_order_id, driver_payment_id, driver_order_id, driver_signature });
 
       if (!payment_order_id || !driver_payment_id || !driver_order_id || !driver_signature) {
         setError('Missing payment verification details.');
@@ -40,6 +44,8 @@ export default function PaymentCallbackPage() {
         const quote = JSON.parse(quoteRaw);
         const worker = JSON.parse(workerRaw || '{}');
 
+        console.log('[callback] Calling purchasePolicy...', { worker_id: worker.id, quote_id: quote.id });
+
         // Note: For dummy flow, we must determine standard tier logic as we can't fully map everything backward cleanly
         // if we didn't save the selectedTier inside session. For safety, we will pull it from quote if missing.
         const purchase = await api.purchasePolicy({
@@ -51,6 +57,8 @@ export default function PaymentCallbackPage() {
           coverage_amount: 440, // Default fallback
           recommended_arm: quote.recommended_arm, context_key: quote.context_key, arm_accepted: true,
         });
+
+        console.log('[callback] Purchase complete:', purchase);
 
         sessionStorage.setItem(
           'buy_policy_purchase',

@@ -224,20 +224,24 @@ export async function authenticateWorker(
 ): Promise<Response | void> {
   const token = getBearerToken(req);
   if (!token) {
+    console.log('[auth] 401: No Bearer token found in headers');
     return unauthorized(res);
   }
 
   const payload = decodeAuthToken(token);
   if (!payload) {
+    console.log('[auth] 401: Token decoding failed (invalid signature or format)');
     return unauthorized(res);
   }
 
   if (payload.role !== 'worker') {
+    console.log(`[auth] 403: Role mismatch. Expected worker, got ${payload.role}`);
     return forbidden(res);
   }
 
   const worker = await loadWorker(payload.sub);
   if (!worker) {
+    console.log(`[auth] 401: Worker not found in database for ID: ${payload.sub}`);
     return unauthorized(res);
   }
 
