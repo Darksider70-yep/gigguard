@@ -3,9 +3,7 @@ import { config } from './config';
 import workersRouter from './routes/workers';
 import policiesRouter from './routes/policies';
 import claimsRouter from './routes/claims';
-import payoutsRouter from './routes/payouts';
 import insurerRouter from './routes/insurer';
-import razorpayRouter from './routes/razorpay';
 import triggersRouter from './routes/triggers';
 import healthRouter from './routes/health';
 import adminRouter from './routes/admin';
@@ -63,8 +61,9 @@ export function createApp() {
     return next();
   });
 
-  app.use('/payouts', payoutsRouter);
+  // Webhooks need raw body for signature verification sometimes (though moved now)
   app.use('/webhooks', webhooksRouter);
+  
   app.use(express.json({ limit: '2mb' }));
 
   app.use(healthRouter);
@@ -73,7 +72,6 @@ export function createApp() {
   app.use('/policies', policiesRouter);
   app.use('/claims', claimsRouter);
   app.use('/insurer', insurerRouter);
-  app.use('/razorpay', razorpayRouter);
   app.use('/triggers', triggersRouter);
   app.use(adminRouter);
 

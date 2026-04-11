@@ -185,26 +185,40 @@ export default function BuyPolicyQuotePage() {
     setIsPaying(true);
 
     try {
-      const order = await api.createOrder(Math.round(selectedTier.premium) * 100);
-      const purchase = await openCheckout(order);
+      const order = await api.createOrder(selectedTier.arm, selectedTier.coverage, Math.round(selectedTier.premium));
+      
+      const { checkout_data, order_id } = order;
+      
+      if (checkout_data.driver === 'dummy') {
+        window.location.href = checkout_data.checkout_url;
+        return;
+      }
 
-      sessionStorage.setItem(
-        'buy_policy_purchase',
-        JSON.stringify({
-          ...purchase,
-          zone: worker.zone || quote.worker.zone,
-          city: worker.city,
-        })
-      );
+      if (checkout_data.driver === 'razorpay') {
+        const purchase = await openCheckout({
+          order_id: checkout_data.razorpay_order_id,
+          amount: Math.round(selectedTier.premium) * 100,
+          currency: 'INR',
+          key_id: checkout_data.key_id
+        });
 
-      router.push('/buy-policy/confirmed');
+        sessionStorage.setItem(
+          'buy_policy_purchase',
+          JSON.stringify({
+            ...purchase,
+            zone: worker.zone || quote.worker.zone,
+            city: worker.city,
+          })
+        );
+        router.push('/buy-policy/confirmed');
+      }
+
     } catch (err) {
       if (err instanceof APIError && err.status === 0) {
         setError('Network unavailable. Check backend and retry.');
       } else {
         setError('Payment could not be completed. Try again.');
       }
-    } finally {
       setIsPaying(false);
     }
   };

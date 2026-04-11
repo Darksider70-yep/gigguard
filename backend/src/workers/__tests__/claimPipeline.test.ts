@@ -20,12 +20,11 @@ jest.mock('../../services/mlService', () => ({
   },
 }));
 
-jest.mock('../../services/razorpayService', () => ({
-  razorpayService: {
-    createPayout: jest.fn(),
+jest.mock('../../services/paymentClient', () => ({
+  paymentClient: {
+    createDisbursement: jest.fn(),
     createOrder: jest.fn(),
-    verifyPaymentSignature: jest.fn(),
-    verifyWebhookSignature: jest.fn(),
+    verifyOrder: jest.fn(),
   },
 }));
 
@@ -41,7 +40,7 @@ jest.mock('../../lib/logger', () => ({
 import { query, withTransaction } from '../../db';
 import { claimValidationQueue, payoutQueue } from '../../queues';
 import { mlService } from '../../services/mlService';
-import { razorpayService } from '../../services/razorpayService';
+import { paymentClient } from '../../services/paymentClient';
 import { processClaimCreationJob } from '../claimCreation';
 import { processClaimValidationJob } from '../claimValidation';
 import { processPayoutCreationJob } from '../payoutCreation';
@@ -53,7 +52,7 @@ const mockWithTransaction = withTransaction as jest.MockedFunction<typeof withTr
 const mockClaimValidationQueue = claimValidationQueue as jest.Mocked<typeof claimValidationQueue>;
 const mockPayoutQueue = payoutQueue as jest.Mocked<typeof payoutQueue>;
 const mockMlService = mlService as jest.Mocked<typeof mlService>;
-const mockRazorpayService = razorpayService as jest.Mocked<typeof razorpayService>;
+const mockPaymentClient = paymentClient as jest.Mocked<typeof paymentClient>;
 const mockLogger = logger as jest.Mocked<typeof logger>;
 
 describe('Claim pipeline workers', () => {
@@ -438,9 +437,9 @@ describe('Claim pipeline workers', () => {
   describe('payoutCreation worker', () => {
     beforeEach(() => {
       (config as any).USE_MOCK_PAYOUT = true;
-      mockRazorpayService.createPayout.mockResolvedValue({
-        payout_id: 'pay_mock_1',
-        status: 'processed',
+      (paymentClient.createDisbursement as jest.Mock).mockResolvedValue({
+        disbursement_id: 'pay_mock_1',
+        status: 'paid',
       });
     });
 
@@ -518,7 +517,7 @@ describe('Claim pipeline workers', () => {
 
       await processPayoutCreationJob({ claim_id: 'claim-1' });
 
-      expect(mockRazorpayService.createPayout).not.toHaveBeenCalled();
+      expect(paymentClient.createDisbursement).not.toHaveBeenCalled();
     });
 
     test('logs error and returns if worker has no upi_vpa', async () => {
@@ -542,7 +541,7 @@ describe('Claim pipeline workers', () => {
       await processPayoutCreationJob({ claim_id: 'claim-1' });
 
       expect(mockLogger.error).toHaveBeenCalled();
-      expect(mockRazorpayService.createPayout).not.toHaveBeenCalled();
+      expect(paymentClient.createDisbursement).not.toHaveBeenCalled();
     });
 
     test('skips duplicate payout when existing payout is processing', async () => {
@@ -572,7 +571,7 @@ describe('Claim pipeline workers', () => {
         reason: 'duplicate',
         existing_payout_id: 'payout-existing',
       });
-      expect(mockRazorpayService.createPayout).not.toHaveBeenCalled();
+      expect(mockPaymentClient.createDisbursement).not.toHaveBeenCalled();
     });
   });
 });

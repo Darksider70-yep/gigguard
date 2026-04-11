@@ -188,10 +188,10 @@ class GigGuardAPI {
     return this.request(`/claims/${id}`);
   }
 
-  createOrder(amount: number) {
-    return this.request<RazorpayOrderResponse>('/razorpay/create-order', {
+  createOrder(coverage_tier: number, coverage_amount: number, premium_paid: number) {
+    return this.request<any>('/policies/create-order', {
       method: 'POST',
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify({ coverage_tier, coverage_amount, premium_paid }),
     });
   }
 

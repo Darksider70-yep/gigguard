@@ -1,0 +1,25 @@
+{
+  "name": "gigguard-payment-service",
+  "version": "1.0.0",
+  "description": "Standalone payment microservice for GigGuard",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "express": "^4.17.1",
+    "nanoid": "^3.3.6",
+    "pg": "^8.7.1",
+    "razorpay": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.13",
+    "@types/node": "^16.0.0",
+    "@types/pg": "^8.6.1",
+    "ts-node-dev": "^1.1.8",
+    "typescript": "^4.4.4"
+  }
+}

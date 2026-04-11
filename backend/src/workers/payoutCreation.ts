@@ -1,6 +1,6 @@
 import { Job, Worker } from 'bullmq';
 import { query } from '../db';
-import { razorpayService } from '../services/razorpayService';
+import { paymentClient } from '../services/paymentClient';
 import { redisConnection } from '../queues';
 import { config } from '../config';
 import { logger } from '../lib/logger';
@@ -116,11 +116,11 @@ export async function processPayoutCreationJob(
     }
   }
 
-  const result = await razorpayService.createPayout({
-    amount: finalAmount,
-    upi_vpa,
-    worker_name,
-    claim_id,
+  const result: any = await paymentClient.createDisbursement({
+    amount_paise: finalAmount * 100,
+    upi_address: upi_vpa,
+    worker_id: worker_id,
+    claim_id: claim_id,
   });
 
   await query(
@@ -130,8 +130,8 @@ export async function processPayoutCreationJob(
          processed_at = CASE WHEN $2::varchar='paid' THEN NOW() ELSE NULL END
      WHERE id=$3`,
     [
-      result.payout_id,
-      result.status === 'processed' ? 'paid' : 'processing',
+      result.driver_transfer_id || result.disbursement_id,
+      result.status === 'processed' || result.status === 'paid' ? 'paid' : 'processing',
       payoutId,
     ]
   );
@@ -141,7 +141,7 @@ export async function processPayoutCreationJob(
     worker_id,
     amount: finalAmount,
     upi_vpa,
-    razorpay_payout_id: result.payout_id,
+    razorpay_payout_id: result.driver_transfer_id || result.disbursement_id,
   });
 
   if (config.USE_MOCK_PAYOUT) {
@@ -159,7 +159,7 @@ export async function processPayoutCreationJob(
     );
   }
 
-  return { payout_id: result.payout_id, amount: finalAmount };
+  return { payout_id: result.driver_transfer_id || result.disbursement_id, amount: finalAmount };
 }
 
 export const payoutCreationWorker =

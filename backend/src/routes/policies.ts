@@ -8,9 +8,48 @@ import { mlService } from '../services/mlService';
 import { weatherService } from '../services/weatherService';
 import { premiumService } from '../services/premiumService';
 import { policyService } from '../services/policyService';
-import { razorpayService } from '../services/razorpayService';
+import { paymentClient } from '../services/paymentClient';
 
 const router = Router();
+
+// --- Schemas ---
+
+const purchasePolicySchema = z.object({
+  razorpay_payment_id: z.string().optional(),
+  razorpay_order_id: z.string().optional(),
+  razorpay_signature: z.string().optional(),
+  payment_order_id: z.string().optional(),
+  premium_paid: z.number(),
+  coverage_amount: z.number(),
+  recommended_arm: z.number().int().min(0).max(3).optional(),
+  selected_arm: z.number().int().min(0).max(3).optional(),
+  context_key: z.string().optional(),
+  arm_accepted: z.boolean().optional(),
+});
+
+const banditUpdateSchema = z.object({
+  context_key: z.string().min(1),
+  arm: z.number().int().min(0).max(3),
+  reward: z.union([z.literal(0), z.literal(1)]),
+});
+
+const sessionExitSchema = z.object({
+  context_key: z.string().min(1),
+  arm: z.number().int().min(0).max(3),
+});
+
+// --- Helpers ---
+
+function normalizeContextCity(city: string): string {
+  return city.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function contextMatchesWorker(contextKey: string, worker: { platform: string; city: string }): boolean {
+  const expectedPrefix = `${worker.platform}_${normalizeContextCity(worker.city)}_`;
+  return contextKey.startsWith(expectedPrefix);
+}
+
+// --- Routes ---
 
 router.get('/premium', authenticateWorker, async (req, res) => {
   const worker = req.worker!;
@@ -111,51 +150,28 @@ router.get('/premium', authenticateWorker, async (req, res) => {
   });
 });
 
-const purchasePolicySchema = z.object({
-  razorpay_payment_id: z.string(),
-  razorpay_order_id: z.string(),
-  razorpay_signature: z.string(),
-  premium_paid: z.number(),
-  coverage_amount: z.number(),
-  recommended_arm: z.number().int().min(0).max(3).optional(),
-  selected_arm: z.number().int().min(0).max(3).optional(),
-  context_key: z.string().optional(),
-  arm_accepted: z.boolean().optional(),
-});
-
-const banditUpdateSchema = z.object({
-  context_key: z.string().min(1),
-  arm: z.number().int().min(0).max(3),
-  reward: z.union([z.literal(0), z.literal(1)]),
-});
-
-const sessionExitSchema = z.object({
-  context_key: z.string().min(1),
-  arm: z.number().int().min(0).max(3),
-});
-
-function normalizeContextCity(city: string): string {
-  return city.trim().toLowerCase().replace(/\s+/g, '_');
-}
-
-function contextMatchesWorker(contextKey: string, worker: { platform: string; city: string }): boolean {
-  const expectedPrefix = `${worker.platform}_${normalizeContextCity(worker.city)}_`;
-  return contextKey.startsWith(expectedPrefix);
-}
-
 router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (req, res) => {
   const worker = req.worker!;
   const body = req.body as z.infer<typeof purchasePolicySchema>;
 
-  const valid = razorpayService.verifyPaymentSignature(
-    body.razorpay_order_id,
-    body.razorpay_payment_id,
-    body.razorpay_signature
-  );
+  let valid = false;
+  if (body.payment_order_id && body.razorpay_payment_id && body.razorpay_order_id && body.razorpay_signature) {
+    try {
+      const result = await paymentClient.verifyOrder(body.payment_order_id, {
+        driver_payment_id: body.razorpay_payment_id,
+        driver_order_id: body.razorpay_order_id,
+        driver_signature: body.razorpay_signature
+      });
+      valid = (result as any).success;
+    } catch (err) {
+      valid = false;
+    }
+  }
+
   if (!valid) {
     return res.status(400).json({
       code: 'INVALID_PAYMENT_SIGNATURE',
-      message: 'Payment verification failed',
+      message: 'Payment verification failed or missing variables',
     });
   }
 
@@ -189,11 +205,13 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
       RETURNING *`,
       [
         worker.id,
-        worker.zone,
         weekStart,
         weekEnd,
         body.premium_paid,
         body.coverage_amount,
+        worker.zone_multiplier,
+        1.0, // weather_multiplier placeholder or fetch if needed
+        worker.history_multiplier,
         body.recommended_arm ?? null,
         body.arm_accepted ?? null,
         body.context_key ?? null,
@@ -347,6 +365,27 @@ router.get('/history', authenticateWorker, async (req, res) => {
     total: parseInt(countRows[0].count, 10),
     page,
   });
+});
+
+router.post('/create-order', authenticateWorker, validateBody(z.object({
+  coverage_tier: z.number(),
+  coverage_amount: z.number(),
+  premium_paid: z.number()
+})), async (req, res) => {
+  try {
+    const worker = req.worker!;
+    const { weekStart } = premiumService.getWeekBounds();
+    const result = await paymentClient.createOrder({
+      worker_id: worker.id,
+      amount_paise: req.body.premium_paid * 100,
+      coverage_tier: req.body.coverage_tier,
+      coverage_amount: req.body.coverage_amount,
+      idempotency_key: `${worker.id}:${weekStart}`
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

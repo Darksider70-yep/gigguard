@@ -48,6 +48,7 @@ The services communicate via REST APIs to perform their functions:
 2.  **Backend (Node.js/Express):** The central nervous system of the platform. It serves the main API, manages user and policy data, and runs the crucial **Trigger Monitor**—a cron job that polls external APIs to detect disruption events.
 3.  **ML Service (Python/Flask):** This service houses our machine learning models. When the Backend needs to calculate a premium or assess risk, it sends a request to this service, which returns the result. This isolates complex AI logic from the core business application.
 4.  **Database (PostgreSQL):** The single source of truth for all persistent data, including worker profiles, policy details, disruption events, and claim statuses.
+5.  **Payment Service (Node.js/Express):** A standalone microservice handling all financial gateways. Completely isolates Razorpay endpoints and Dummy mode drivers into abstract layers so the main backend avoids processor coupling.
 
 > For a deeper technical dive, including the full database schema and API design, see the [**Architecture Document**](docs/System_architecture.docx) and the [**ER Model**](docs/GigGuard_ER_Model.docx).
 

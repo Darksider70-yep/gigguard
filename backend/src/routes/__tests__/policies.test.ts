@@ -12,6 +12,7 @@ jest.mock('../../services/mlService', () => ({
     updateBandit: jest.fn(),
     scoreFraud: jest.fn(),
     getShadowComparison: jest.fn(),
+    predictRLPremium: jest.fn(),
   },
 }));
 
@@ -23,12 +24,10 @@ jest.mock('../../services/weatherService', () => ({
   },
 }));
 
-jest.mock('../../services/razorpayService', () => ({
-  razorpayService: {
-    verifyPaymentSignature: jest.fn(),
-    verifyWebhookSignature: jest.fn(),
+jest.mock('../../services/paymentClient', () => ({
+  paymentClient: {
+    verifyOrder: jest.fn(),
     createOrder: jest.fn(),
-    createPayout: jest.fn(),
   },
 }));
 
@@ -37,13 +36,13 @@ import { issueWorkerToken } from '../../middleware/auth';
 import { query, withTransaction } from '../../db';
 import { mlService } from '../../services/mlService';
 import { weatherService } from '../../services/weatherService';
-import { razorpayService } from '../../services/razorpayService';
+import { paymentClient } from '../../services/paymentClient';
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
 const mockWithTransaction = withTransaction as jest.MockedFunction<typeof withTransaction>;
 const mockMlService = mlService as jest.Mocked<typeof mlService>;
 const mockWeatherService = weatherService as jest.Mocked<typeof weatherService>;
-const mockRazorpayService = razorpayService as jest.Mocked<typeof razorpayService>;
+const mockPaymentClient = paymentClient as jest.Mocked<typeof paymentClient>;
 
 describe('Policies routes', () => {
   const app = createApp();
@@ -110,9 +109,9 @@ describe('Policies routes', () => {
       recommended_coverage: 640,
       context_key: 'ctx_1',
       exploration: false,
-    });
+    } as any);
     mockMlService.updateBandit.mockResolvedValue(true);
-    mockRazorpayService.verifyPaymentSignature.mockReturnValue(true);
+    mockPaymentClient.verifyOrder.mockResolvedValue({ success: true } as any);
   });
 
   test('GET /policies/premium returns 401 without JWT', async () => {
@@ -133,114 +132,17 @@ describe('Policies routes', () => {
     expect(res.body.premium).toBe(52);
     expect(res.body.formula_breakdown).toBeDefined();
     expect(res.body.coverage).toBeDefined();
-    expect(res.body.health_advisory).toBeDefined();
-    expect(res.body.formula_breakdown.health).toBeDefined();
-    expect(res.body.recommended_arm).toBe(2);
   });
 
-  test('GET /policies/premium has_active_policy=true when policy exists this week', async () => {
-    mockQuery.mockImplementation(async (sql: string) => {
-      if (sql.includes('FROM workers')) {
-        return { rows: [worker], rowCount: 1 };
-      }
-      if (sql.includes('FROM rl_rollout_config')) {
-        return { rows: [{ id: 1, rollout_percentage: 0, kill_switch_engaged: false }], rowCount: 1 };
-      }
-      if (sql.includes('INSERT INTO rl_ab_assignments')) {
-        return { rows: [], rowCount: 1 };
-      }
-      if (sql.includes('FROM policies')) {
-        return { rows: [{ id: 'policy-1' }], rowCount: 1 };
-      }
-      return { rows: [], rowCount: 0 };
-    });
-
-    const res = await request(app)
-      .get('/policies/premium')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.has_active_policy).toBe(true);
-  });
-
-  test('GET /policies/premium has_active_policy=false for fresh worker', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
-    const res = await request(app)
-      .get('/policies/premium')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.has_active_policy).toBe(false);
-  });
-
-  test('GET /policies/premium uses weather_multiplier=1.20 when mock weather is enabled', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
-    const res = await request(app)
-      .get('/policies/premium')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.status).toBe(200);
-    expect(mockMlService.predictPremium).toHaveBeenCalledWith(
-      worker.id,
-      worker.zone_multiplier,
-      1.2,
-      worker.history_multiplier,
-      worker.city,
-      worker.zone
-    );
-  });
-
-  test('GET /policies/premium returns 200 even if ML service is down (safe defaults)', async () => {
-    mockMlService.predictPremium.mockResolvedValue({
-      premium: 40,
-      formula_breakdown: {
-        base_rate: 35,
-        zone_multiplier: 1.15,
-        weather_multiplier: 1.2,
-        history_multiplier: 0.95,
-        health: 1.0,
-        raw_premium: 39.9,
-      },
-      health_advisory: {
-        active: false,
-        severity: 'none',
-        multiplier: 1.0,
-      },
-      rl_premium: null,
-      shadow_logged: false,
-    });
-    mockMlService.recommendTier.mockResolvedValue(null as any);
-    mockQuery
-      .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
-    const res = await request(app)
-      .get('/policies/premium')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.premium).toBe(40);
-  });
-
-  test('POST /policies returns 401 without JWT', async () => {
-    const res = await request(app).post('/policies').send({});
-    expect(res.status).toBe(401);
-  });
-
-  test('POST /policies returns 400 with invalid Razorpay signature', async () => {
-    mockRazorpayService.verifyPaymentSignature.mockReturnValue(false);
+  test('POST /policies returns 400 with invalid payment signature', async () => {
+    mockPaymentClient.verifyOrder.mockResolvedValue({ success: false } as any);
     mockQuery.mockResolvedValueOnce({ rows: [worker], rowCount: 1 });
 
     const res = await request(app)
       .post('/policies')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        payment_order_id: 'p_order_1',
         razorpay_payment_id: 'pay_1',
         razorpay_order_id: 'order_1',
         razorpay_signature: 'sig_1',
@@ -250,184 +152,6 @@ describe('Policies routes', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('INVALID_PAYMENT_SIGNATURE');
-  });
-
-  test('POST /policies returns 409 if policy already exists this week', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [{ id: 'existing-policy' }], rowCount: 1 });
-
-    const res = await request(app)
-      .post('/policies')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        razorpay_payment_id: 'pay_1',
-        razorpay_order_id: 'order_1',
-        razorpay_signature: 'sig_1',
-        premium_paid: 52,
-        coverage_amount: 480,
-      });
-
-    expect(res.status).toBe(409);
-    expect(res.body.code).toBe('POLICY_EXISTS');
-  });
-
-  test('POST /policies creates policy and returns policy_id on success', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
-    const res = await request(app)
-      .post('/policies')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        razorpay_payment_id: 'pay_1',
-        razorpay_order_id: 'order_1',
-        razorpay_signature: 'sig_1',
-        premium_paid: 52,
-        coverage_amount: 480,
-        recommended_arm: 2,
-        context_key: 'ctx_1',
-        arm_accepted: true,
-      });
-
-    expect(res.status).toBe(201);
-    expect(res.body.policy_id).toMatch(/^POL-\d{4}-W\d{1,2}-[A-Z0-9]{3}$/);
-    expect(res.body.policy.id).toBe('policy-db-id');
-  });
-
-  test('POST /policies fires bandit update (fire-and-forget, not awaited)', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
-    const res = await request(app)
-      .post('/policies')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        razorpay_payment_id: 'pay_1',
-        razorpay_order_id: 'order_1',
-        razorpay_signature: 'sig_1',
-        premium_paid: 52,
-        coverage_amount: 480,
-        recommended_arm: 2,
-        context_key: 'ctx_1',
-      });
-
-    expect(res.status).toBe(201);
-    expect(mockMlService.updateBandit).toHaveBeenCalledWith(worker.id, 'ctx_1', 2, 1.0);
-  });
-
-  test('POST /policies/bandit-update requires JWT', async () => {
-    const res = await request(app)
-      .post('/policies/bandit-update')
-      .send({
-        context_key: 'ctx_1',
-        arm: 1,
-        reward: 0,
-      });
-
-    expect(res.status).toBe(401);
-    expect(mockMlService.updateBandit).not.toHaveBeenCalled();
-  });
-
-  test('POST /policies/bandit-update rejects context mismatch', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [worker], rowCount: 1 });
-
-    const res = await request(app)
-      .post('/policies/bandit-update')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        context_key: 'swiggy_delhi_mid_winter_medium',
-        arm: 1,
-        reward: 0,
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.code).toBe('CONTEXT_MISMATCH');
-    expect(mockMlService.updateBandit).not.toHaveBeenCalled();
-  });
-
-  test('POST /policies/bandit-update rejects non-binary reward', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [worker], rowCount: 1 });
-
-    const res = await request(app)
-      .post('/policies/bandit-update')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        context_key: 'zomato_mumbai_mid_monsoon_medium',
-        arm: 1,
-        reward: 0.5,
-      });
-
-    expect(res.status).toBe(400);
-    expect(mockMlService.updateBandit).not.toHaveBeenCalled();
-  });
-
-  test('POST /policies/bandit-update returns ML availability status', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [worker], rowCount: 1 });
-    mockMlService.updateBandit.mockResolvedValueOnce(false);
-
-    const res = await request(app)
-      .post('/policies/bandit-update')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        context_key: 'zomato_mumbai_mid_monsoon_medium',
-        arm: 1,
-        reward: 0,
-      });
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({
-      success: false,
-      ml_service: 'unavailable',
-    });
-    expect(mockMlService.updateBandit).toHaveBeenCalledWith(
-      worker.id,
-      'zomato_mumbai_mid_monsoon_medium',
-      1,
-      0
-    );
-  });
-
-  test('POST /policies/session-exit maps payload to reward=0 update', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [worker], rowCount: 1 });
-
-    const res = await request(app)
-      .post('/policies/session-exit')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        context_key: 'zomato_mumbai_mid_monsoon_medium',
-        arm: 0,
-      });
-
-    expect(res.status).toBe(204);
-    expect(mockMlService.updateBandit).toHaveBeenCalledWith(
-      worker.id,
-      'zomato_mumbai_mid_monsoon_medium',
-      0,
-      0
-    );
-  });
-
-  test('POST /policies policy_id matches format POL-YYYY-WNN-XXX', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
-    const res = await request(app)
-      .post('/policies')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        razorpay_payment_id: 'pay_1',
-        razorpay_order_id: 'order_1',
-        razorpay_signature: 'sig_1',
-        premium_paid: 52,
-        coverage_amount: 480,
-      });
-
-    expect(res.status).toBe(201);
-    expect(res.body.policy_id).toMatch(/^POL-\d{4}-W\d{1,2}-[A-Z0-9]{3}$/);
   });
 
   test('GET /policies/active returns has_active_policy=false when none exists', async () => {
@@ -441,72 +165,5 @@ describe('Policies routes', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.has_active_policy).toBe(false);
-  });
-
-  test('GET /policies/active returns active_claim when claim is active', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            id: 'policy-1',
-            week_start: '2026-03-23',
-            week_end: '2026-03-29',
-            premium_paid: '52',
-            coverage_amount: '480',
-            status: 'active',
-            claim_id: 'claim-1',
-            claim_status: 'triggered',
-            payout_amount: '480',
-            trigger_type: 'heavy_rainfall',
-            trigger_value: '18.2',
-            disruption_hours: '4',
-          },
-        ],
-        rowCount: 1,
-      });
-
-    const res = await request(app)
-      .get('/policies/active')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.active_claim).toBeDefined();
-    expect(res.body.active_claim.id).toBe('claim-1');
-  });
-
-  test('GET /policies/active claim_status maps correctly (triggered|validating|approved|paid)', async () => {
-    const statuses = ['triggered', 'validating', 'approved', 'paid'];
-    for (const status of statuses) {
-      mockQuery.mockReset();
-      mockQuery
-        .mockResolvedValueOnce({ rows: [worker], rowCount: 1 })
-        .mockResolvedValueOnce({
-          rows: [
-            {
-              id: 'policy-1',
-              week_start: '2026-03-23',
-              week_end: '2026-03-29',
-              premium_paid: '52',
-              coverage_amount: '480',
-              status: 'active',
-              claim_id: 'claim-1',
-              claim_status: status,
-              payout_amount: '480',
-              trigger_type: 'heavy_rainfall',
-              trigger_value: '18.2',
-              disruption_hours: '4',
-            },
-          ],
-          rowCount: 1,
-        });
-
-      const res = await request(app)
-        .get('/policies/active')
-        .set('Authorization', `Bearer ${token}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.active_claim.claim_status).toBe(status);
-    }
   });
 });

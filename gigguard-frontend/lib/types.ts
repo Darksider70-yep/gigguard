@@ -146,9 +146,9 @@ export interface RazorpayOrderResponse {
 }
 
 export interface PurchasePolicyBody {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
+  razorpay_payment_id?: string; payment_order_id?: string;
+  razorpay_order_id?: string;
+  razorpay_signature?: string;
   premium_paid: number;
   coverage_amount: number;
   recommended_arm: number;
@@ -166,7 +166,7 @@ export interface PurchasePolicyResponse {
     premium_paid: number;
     coverage_amount: number;
     status: string;
-    razorpay_payment_id: string;
+    razorpay_payment_id?: string; payment_order_id?: string;
   };
   message: string;
 }

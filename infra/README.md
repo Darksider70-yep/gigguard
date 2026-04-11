@@ -40,6 +40,7 @@ docker compose up
 | `db-seed` | — | — | Runs once, then exits |
 | `ml-service` | 5001 | 5001 | `GET /health` |
 | `backend` | 4000 | 4000 | `GET /health` |
+| `payment-service` | 5002 | 5002 | `GET /health` |
 | `frontend` | 3000 | 3000 | HTTP status check |
 
 ## Memory Limits
@@ -62,8 +63,10 @@ Key variables:
 |----------|----------|---------|
 | `POSTGRES_PASSWORD` | No | `gigguard_dev` |
 | `JWT_SECRET` | Yes (prod) | `gigguard_dev_jwt_secret` |
-| `RAZORPAY_KEY_ID` | Yes | — |
-| `RAZORPAY_KEY_SECRET` | Yes | — |
+| `PAYMENT_DRIVER` | No | `dummy` |
+| `PAYMENT_SERVICE_KEY` | Yes (internal) | `super_secret_internal_key_that_is_at_least_32_chars_long` |
+| `RAZORPAY_KEY_ID` | Yes (if Razorpay) | — |
+| `RAZORPAY_KEY_SECRET` | Yes (if Razorpay) | — |
 | `CORS_ORIGIN` | No | `http://localhost:3000` |
 | `INSURER_LOGIN_SECRET` | No | `change_me_insurer_secret` |
 
