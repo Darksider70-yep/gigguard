@@ -2,21 +2,23 @@ import { z } from 'zod';
 
 export const registerSchema = z.object({
   body: z.object({
-    name: z.string().min(2, 'Name must be at least 2 characters'),
-    phone_number: z.string().regex(/^[6-9]\d{9}$/, 'Invalid Indian phone number'),
-    city: z.string().min(2, 'City is required'),
+    name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+    phone_number: z.string().trim().regex(/^(\+91|91)?[6-9]\d{9}$/, 'Invalid Indian phone number'),
+    city: z.string().trim().min(2, 'City is required'),
     platform: z.enum(['zomato', 'swiggy']),
-    upi_vpa: z.string().optional(),
-    avg_daily_earning: z.number().min(0).optional(),
-  }),
+    zone: z.string().trim().min(2, 'Zone is required'),
+    upi_vpa: z.string().trim().optional(),
+    avg_daily_earning: z.coerce.number().min(0).optional(),
+    preferred_language: z.enum(['en', 'hi', 'ta', 'te', 'kn', 'mr']).default('en'),
+  }).passthrough(),
 });
 
 export const loginSchema = z.object({
   body: z.object({
     role: z.enum(['worker', 'insurer']),
-    phone_number: z.string().regex(/^[6-9]\d{9}$/, 'Invalid Indian phone number').optional(),
-    secret: z.string().optional(),
-  }).refine(data => {
+    phone_number: z.string().trim().regex(/^(\+91|91)?[6-9]\d{9}$/, 'Invalid Indian phone number').optional(),
+    secret: z.string().trim().optional(),
+  }).passthrough().refine(data => {
     if (data.role === 'worker' && !data.phone_number) return false;
     if (data.role === 'insurer' && !data.secret) return false;
     return true;
@@ -27,7 +29,7 @@ export const loginSchema = z.object({
 
 export const verifyOtpSchema = z.object({
   body: z.object({
-    phone_number: z.string().regex(/^[6-9]\d{9}$/, 'Invalid Indian phone number'),
+    phone_number: z.string().regex(/^(\+91|91)?[6-9]\d{9}$/, 'Invalid Indian phone number'),
     otp: z.string().length(6, 'OTP must be 6 digits'),
   }),
 });

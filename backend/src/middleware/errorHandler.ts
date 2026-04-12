@@ -35,6 +35,7 @@ export function globalErrorHandler(
       path: req.path,
       status,
       code,
+      details: err.details,
     });
   }
 
