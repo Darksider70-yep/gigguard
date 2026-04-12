@@ -199,8 +199,8 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
         zone, recommended_arm, arm_accepted, context_key,
         razorpay_order_id, razorpay_payment_id, ab_cohort, pricing_source
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
-                (SELECT cohort FROM rl_ab_assignments WHERE worker_id = $1::text LIMIT 1),
-                (CASE WHEN (SELECT cohort FROM rl_ab_assignments WHERE worker_id = $1::text LIMIT 1) = 'B' THEN 'rl' ELSE 'formula' END))
+                (SELECT cohort FROM rl_ab_assignments WHERE worker_id = $12 LIMIT 1),
+                (CASE WHEN (SELECT cohort FROM rl_ab_assignments WHERE worker_id = $12 LIMIT 1) = 'B' THEN 'rl' ELSE 'formula' END))
       RETURNING *`,
       [
         worker.id,
@@ -214,6 +214,7 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
         body.context_key ?? null,
         body.razorpay_order_id,
         body.razorpay_payment_id,
+        worker.id, // $12: specifically for subqueries to avoid type conflict with $1
       ]
     );
     return result.rows[0];
