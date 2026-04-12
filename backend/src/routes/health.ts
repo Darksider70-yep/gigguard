@@ -7,7 +7,7 @@ const router = Router();
 
 router.get('/', async (req, res) => {
   const health: any = {
-    status: 'live',
+    status: 'ok',
     timestamp: new Date().toISOString(),
     services: {
       database: { status: 'unknown' },

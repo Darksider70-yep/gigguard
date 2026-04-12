@@ -79,7 +79,8 @@ services:
       psql -h db -U gigguard -d gigguard -v ON_ERROR_STOP=1 -f /seed/010_registration_fields.sql;
       psql -h db -U gigguard -d gigguard -f /seed/011_phase3_rl_schema.sql; psql -h
       db -U gigguard -d gigguard -f /seed/012_add_preferred_language.sql; psql -h
-      db -U gigguard -d gigguard -f /seed/013_pandemic_trigger.sql; psql -h db -U
+      db -U gigguard -d gigguard -f /seed/013_pandemic_trigger.sql; psql -h
+      db -U gigguard -d gigguard -f /seed/014_audit_fixes.sql; psql -h db -U
       gigguard -d gigguard -f /seed/007_seed_demo_data.sql
     restart: 'no'
     networks:
