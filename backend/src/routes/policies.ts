@@ -195,13 +195,12 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
   const policy = await withTransaction(async (client) => {
     const result = await client.query(
       `INSERT INTO policies (
-        worker_id, week_start, week_end, weekly_premium, premium_paid,
-        coverage_amount, zone_multiplier, weather_multiplier,
-        history_multiplier, recommended_arm, arm_accepted, context_key,
+        worker_id, week_start, week_end, premium_paid, coverage_amount,
+        zone, recommended_arm, arm_accepted, context_key,
         razorpay_order_id, razorpay_payment_id, ab_cohort, pricing_source
-      ) VALUES ($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
-                (SELECT cohort FROM rl_ab_assignments WHERE worker_id = $1 LIMIT 1),
-                (CASE WHEN (SELECT cohort FROM rl_ab_assignments WHERE worker_id = $1 LIMIT 1) = 'B' THEN 'rl' ELSE 'formula' END))
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+                (SELECT cohort FROM rl_ab_assignments WHERE worker_id = $1::text LIMIT 1),
+                (CASE WHEN (SELECT cohort FROM rl_ab_assignments WHERE worker_id = $1::text LIMIT 1) = 'B' THEN 'rl' ELSE 'formula' END))
       RETURNING *`,
       [
         worker.id,
@@ -209,9 +208,7 @@ router.post('/', authenticateWorker, validateBody(purchasePolicySchema), async (
         weekEnd,
         body.premium_paid,
         body.coverage_amount,
-        worker.zone_multiplier,
-        1.0, // weather_multiplier placeholder or fetch if needed
-        worker.history_multiplier,
+        worker.zone,
         body.recommended_arm ?? null,
         body.arm_accepted ?? null,
         body.context_key ?? null,
