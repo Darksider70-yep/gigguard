@@ -34,10 +34,46 @@ except ImportError:
         except Exception as exc:  # pragma: no cover - environment fallback
             print(f"[seed_db] warning: h3 install failed ({exc}); using deterministic fallback home_hex_id")
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "ml-service"))
+ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from premium.zones import ZONES  # noqa: E402
+# Embedded ZONES data to avoid module import issues in standalone script
+ZONES: List[Dict[str, object]] = [
+    # Mumbai
+    {"zone_id": "MUM-AND-W", "zone": "Andheri West", "city": "Mumbai", "lat": 19.1136, "lng": 72.8697, "zone_multiplier": 1.40},
+    {"zone_id": "MUM-AND-E", "zone": "Andheri East", "city": "Mumbai", "lat": 19.1197, "lng": 72.8799, "zone_multiplier": 1.30},
+    {"zone_id": "MUM-BAN", "zone": "Bandra", "city": "Mumbai", "lat": 19.0596, "lng": 72.8295, "zone_multiplier": 1.35},
+    {"zone_id": "MUM-DAH", "zone": "Dahisar", "city": "Mumbai", "lat": 19.2494, "lng": 72.8567, "zone_multiplier": 1.20},
+    {"zone_id": "MUM-KUR", "zone": "Kurla", "city": "Mumbai", "lat": 19.0726, "lng": 72.8789, "zone_multiplier": 1.25},
+    {"zone_id": "MUM-THN", "zone": "Thane", "city": "Mumbai", "lat": 19.2183, "lng": 72.9781, "zone_multiplier": 1.15},
+    # Delhi
+    {"zone_id": "DEL-CON", "zone": "Connaught Place", "city": "Delhi", "lat": 28.6315, "lng": 77.2167, "zone_multiplier": 1.30},
+    {"zone_id": "DEL-LAJ", "zone": "Lajpat Nagar", "city": "Delhi", "lat": 28.5677, "lng": 77.2430, "zone_multiplier": 1.25},
+    {"zone_id": "DEL-ROH", "zone": "Rohini", "city": "Delhi", "lat": 28.7410, "lng": 77.0674, "zone_multiplier": 1.20},
+    {"zone_id": "DEL-DWA", "zone": "Dwarka", "city": "Delhi", "lat": 28.5921, "lng": 77.0460, "zone_multiplier": 1.15},
+    {"zone_id": "DEL-SAK", "zone": "Saket", "city": "Delhi", "lat": 28.5245, "lng": 77.2066, "zone_multiplier": 1.10},
+    {"zone_id": "DEL-NOI", "zone": "Noida Sector 18", "city": "Delhi", "lat": 28.5679, "lng": 77.3260, "zone_multiplier": 1.05},
+    # Chennai
+    {"zone_id": "CHE-TNA", "zone": "T. Nagar", "city": "Chennai", "lat": 13.0418, "lng": 80.2341, "zone_multiplier": 1.10},
+    {"zone_id": "CHE-ADY", "zone": "Adyar", "city": "Chennai", "lat": 13.0012, "lng": 80.2565, "zone_multiplier": 1.15},
+    {"zone_id": "CHE-ANN", "zone": "Anna Nagar", "city": "Chennai", "lat": 13.0850, "lng": 80.2101, "zone_multiplier": 1.05},
+    {"zone_id": "CHE-VEL", "zone": "Velachery", "city": "Chennai", "lat": 12.9815, "lng": 80.2180, "zone_multiplier": 1.20},
+    {"zone_id": "CHE-PON", "zone": "Porur", "city": "Chennai", "lat": 13.0358, "lng": 80.1572, "zone_multiplier": 1.00},
+    {"zone_id": "CHE-CHR", "zone": "Chromepet", "city": "Chennai", "lat": 12.9516, "lng": 80.1462, "zone_multiplier": 0.95},
+    # Bangalore
+    {"zone_id": "BLR-KOR", "zone": "Koramangala", "city": "Bangalore", "lat": 12.9352, "lng": 77.6245, "zone_multiplier": 1.20},
+    {"zone_id": "BLR-IND", "zone": "Indiranagar", "city": "Bangalore", "lat": 12.9784, "lng": 77.6408, "zone_multiplier": 1.10},
+    {"zone_id": "BLR-WHI", "zone": "Whitefield", "city": "Bangalore", "lat": 12.9698, "lng": 77.7499, "zone_multiplier": 1.00},
+    {"zone_id": "BLR-ELE", "zone": "Electronic City", "city": "Bangalore", "lat": 12.8399, "lng": 77.6770, "zone_multiplier": 0.95},
+    {"zone_id": "BLR-JAY", "zone": "Jayanagar", "city": "Bangalore", "lat": 12.9299, "lng": 77.5826, "zone_multiplier": 1.05},
+    {"zone_id": "BLR-MAL", "zone": "Malleswaram", "city": "Bangalore", "lat": 13.0035, "lng": 77.5673, "zone_multiplier": 0.90},
+    # Hyderabad
+    {"zone_id": "HYD-BAN", "zone": "Banjara Hills", "city": "Hyderabad", "lat": 17.4156, "lng": 78.4347, "zone_multiplier": 0.95},
+    {"zone_id": "HYD-HIT", "zone": "HITEC City", "city": "Hyderabad", "lat": 17.4435, "lng": 78.3772, "zone_multiplier": 0.90},
+    {"zone_id": "HYD-SEC", "zone": "Secunderabad", "city": "Hyderabad", "lat": 17.4399, "lng": 78.4983, "zone_multiplier": 1.00},
+    {"zone_id": "HYD-KUK", "zone": "Kukatpally", "city": "Hyderabad", "lat": 17.4849, "lng": 78.3994, "zone_multiplier": 1.05},
+    {"zone_id": "HYD-CHI", "zone": "Charminar", "city": "Hyderabad", "lat": 17.3616, "lng": 78.4747, "zone_multiplier": 1.10},
+    {"zone_id": "HYD-LBN", "zone": "LB Nagar", "city": "Hyderabad", "lat": 17.3478, "lng": 78.5519, "zone_multiplier": 1.00},
+]
 
 FIRST_NAMES = [
     "Aarav", "Arjun", "Vikram", "Rahul", "Amit", "Suresh", "Rajesh",
@@ -59,11 +95,11 @@ LAST_NAMES = [
 ]
 
 CITY_DISTRIBUTION = {
-    "Mumbai": {"total": 30, "zomato": 15, "swiggy": 15, "mean": 750, "std": 80, "low": 500, "high": 1000},
-    "Delhi": {"total": 25, "zomato": 13, "swiggy": 12, "mean": 700, "std": 90, "low": 500, "high": 950},
-    "Chennai": {"total": 25, "zomato": 12, "swiggy": 13, "mean": 800, "std": 75, "low": 550, "high": 1050},
-    "Bangalore": {"total": 22, "zomato": 11, "swiggy": 11, "mean": 850, "std": 85, "low": 600, "high": 1100},
-    "Hyderabad": {"total": 18, "zomato": 9, "swiggy": 9, "mean": 680, "std": 80, "low": 480, "high": 900},
+    "Mumbai": {"total": 25, "zomato": 12, "swiggy": 13, "mean": 750, "std": 80, "low": 500, "high": 1000},
+    "Delhi": {"total": 20, "zomato": 10, "swiggy": 10, "mean": 700, "std": 90, "low": 500, "high": 950},
+    "Chennai": {"total": 20, "zomato": 10, "swiggy": 10, "mean": 800, "std": 75, "low": 550, "high": 1050},
+    "Bangalore": {"total": 20, "zomato": 10, "swiggy": 10, "mean": 850, "std": 85, "low": 600, "high": 1100},
+    "Hyderabad": {"total": 15, "zomato": 7, "swiggy": 8, "mean": 680, "std": 80, "low": 480, "high": 900},
 }
 
 SEED_EVENTS = [
@@ -431,12 +467,32 @@ def _insert_bandit_state(cur) -> None:
     )
 
 
+def generate_markdown_doc(workers: List[WorkerRecord]) -> None:
+    doc_path = Path("workers_data.md")
+
+    lines = [
+        "# Seeded Workers Data",
+        f"\nGenerated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        "\n| Name | Worker ID | Platform | City | Zone | Avg Daily Earning |",
+        "| :--- | :--- | :--- | :--- | :--- | :--- |",
+    ]
+
+    for w in sorted(workers, key=lambda x: x.name):
+        lines.append(
+            f"| {w.name} | `{w.id}` | {w.platform.capitalize()} | {w.city} | {w.zone} | ₹{w.avg_daily_earning} |"
+        )
+
+    with open(doc_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    print(f"Documentation generated at: {doc_path}")
+
+
 def main() -> None:
     db_url = _db_url()
     now = datetime.now(timezone.utc).replace(microsecond=0)
 
     workers = build_workers(now)
-    assert len(workers) == 120
+    assert len(workers) == 100
 
     policy_rows, policy_lookup = build_policies(workers, now)
     event_rows, event_meta = build_events(now)
@@ -579,6 +635,7 @@ def main() -> None:
                     )
 
         print("Seed complete OK")
+        generate_markdown_doc(workers)
     finally:
         conn.close()
 
