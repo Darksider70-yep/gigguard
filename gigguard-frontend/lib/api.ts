@@ -164,6 +164,17 @@ class GigGuardAPI {
     return this.request<PremiumQuoteResponse>('/policies/premium');
   }
 
+  getNotifications() {
+    return this.request<{ notifications: any[] }>('/workers/notifications');
+  }
+
+  updateProfile(body: { name?: string; upi_vpa?: string; preferred_language?: string }) {
+    return this.request<{ success: boolean; message: string }>('/workers/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
   getActivePolicy() {
     return this.request<ActivePolicyResponse>('/policies/active');
   }
@@ -185,7 +196,14 @@ class GigGuardAPI {
   }
 
   getClaimById(id: string) {
-    return this.request(`/claims/${id}`);
+    return this.request<any>(`/claims/${id}`);
+  }
+
+  appealClaim(id: string, reason: string) {
+    return this.request<{ success: boolean; message: string }>(`/claims/${id}/appeal`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
   }
 
   createOrder(coverage_tier: number, coverage_amount: number, premium_paid: number) {
@@ -206,6 +224,10 @@ class GigGuardAPI {
     }
     search.set('limit', String(limit));
     return this.request<DisruptionEventsResponse>(`/insurer/disruption-events?${search.toString()}`);
+  }
+
+  getInsurerTriggers() {
+    return this.request<{ triggers: any[] }>('/insurer/triggers');
   }
 
   getPublicDisruptionEvents(status = 'active', limit = 1) {

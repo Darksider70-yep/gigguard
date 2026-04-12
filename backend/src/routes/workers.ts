@@ -7,6 +7,9 @@ import { query } from '../db';
 import { AuthenticatedRequest, authenticateInsurer, issueInsurerToken, issueWorkerToken, requireWorker } from '../middleware/auth';
 import { mlService } from '../services/mlService';
 import { otpService } from '../services/otpService';
+import { asyncRoute } from '../middleware/errorHandler';
+import { validate } from '../middleware/validate';
+import { registerSchema, loginSchema, verifyOtpSchema } from '../schemas/auth.schema';
 
 const router = Router();
 
@@ -143,24 +146,12 @@ function mapWorkerRow(row: WorkerRow) {
 async function fetchWorkerByPhone(phoneNumber: string): Promise<WorkerRow | null> {
   const result = await query<WorkerRow>(
     `SELECT
-      id,
-      name,
-      phone_number,
-      platform,
-      city,
-      zone,
-      home_hex_id::text,
-      hex_is_centroid_fallback,
-      avg_daily_earning::text,
-      zone_multiplier,
-      history_multiplier,
-      experience_tier,
-      upi_vpa,
-      avatar_seed,
-      verified,
-      verified_at,
-      created_at,
-      preferred_language
+      id, name, phone_number, platform, city, zone,
+      home_hex_id::text, hex_is_centroid_fallback,
+      avg_daily_earning::text, zone_multiplier,
+      history_multiplier, experience_tier, upi_vpa,
+      avatar_seed, verified, verified_at,
+      created_at, preferred_language
     FROM workers
     WHERE phone_number = $1
     LIMIT 1`,
@@ -210,336 +201,245 @@ async function resolveInsurerProfile(): Promise<InsurerProfileRow> {
   return fallback;
 }
 
-router.post('/register', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/register', validate(registerSchema), asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
+  const name = String(req.body?.name || '').trim();
+  const phoneNumber = getRequestPhone(req.body);
+  const platform = String(req.body?.platform || '').toLowerCase();
+  const city = normalizeCity(String(req.body?.city || ''));
+  const zone = String(req.body?.zone || '').trim();
+  const avgDailyEarning = Number(req.body?.avg_daily_earning);
+  const upiVpa = String(req.body?.upi_vpa || '').trim();
+  let preferredLanguage = String(req.body?.preferred_language || 'en').toLowerCase();
+  
+  if (!['en', 'hi', 'ta', 'te', 'kn', 'mr'].includes(preferredLanguage)) {
+    preferredLanguage = 'en';
+  }
+
+  if (!name) return res.status(400).json({ message: 'name is required' });
+  if (!phoneNumber) return res.status(400).json({ message: 'phone_number must be a valid +91 number' });
+  if (!['zomato', 'swiggy'].includes(platform)) return res.status(400).json({ message: 'platform must be zomato or swiggy' });
+  if (!city) return res.status(400).json({ message: 'city is required' });
+  if (!zone) return res.status(400).json({ message: 'zone is required' });
+  if (!Number.isFinite(avgDailyEarning) || avgDailyEarning < 200 || avgDailyEarning > 5000) {
+    return res.status(400).json({ message: 'avg_daily_earning must be between 200 and 5000' });
+  }
+
+  const atCount = (upiVpa.match(/@/g) || []).length;
+  if (atCount !== 1) return res.status(400).json({ message: 'upi_vpa must contain exactly one @ symbol' });
+
+  const existingWorker = await query<{ id: string }>(
+    `SELECT id::text FROM workers WHERE phone_number = $1 LIMIT 1`,
+    [phoneNumber]
+  );
+
+  if (existingWorker.rows[0]) {
+    return res.status(409).json({
+      message: 'This phone number is already registered',
+      code: 'PHONE_ALREADY_REGISTERED',
+    });
+  }
+
+  const zoneData = getZoneByName(zone, city);
+  if (!zoneData) return res.status(400).json({ message: 'Invalid zone for selected city' });
+
+  const workerId = randomUUID();
+  const zoneMultiplier = Number(zoneData.zone_multiplier);
+  const { homeHexId, fallback } = resolveHomeHex(city, Number(zoneData.lat), Number(zoneData.lng));
+  const deviceFingerprint = getDeviceFingerprint(req);
+  const avatarSeed = computeAvatarSeed(name, phoneNumber);
+
+  await mlService.predictPremium(workerId, zoneMultiplier, 1.0, 1.0, city, zone);
+
+  await query(
+    `INSERT INTO workers (
+      id, name, phone_number, platform, city, zone,
+      avg_daily_earning, zone_multiplier, history_multiplier,
+      upi_vpa, experience_tier, home_hex_id, hex_is_centroid_fallback,
+      device_fingerprint, avatar_seed, verified, created_at, updated_at,
+      preferred_language
+    ) VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,FALSE,NOW(),NOW(),$16
+    )`,
+    [workerId, name, phoneNumber, platform, city, zone, avgDailyEarning, zoneMultiplier, 1.0, upiVpa, 'new', homeHexId, fallback, deviceFingerprint, avatarSeed, preferredLanguage]
+  );
+
   try {
-    const name = String(req.body?.name || '').trim();
-    const phoneNumber = getRequestPhone(req.body);
-    const platform = String(req.body?.platform || '').toLowerCase();
-    const city = normalizeCity(String(req.body?.city || ''));
-    const zone = String(req.body?.zone || '').trim();
-    const avgDailyEarning = Number(req.body?.avg_daily_earning);
-    const upiVpa = String(req.body?.upi_vpa || '').trim();
-    let preferredLanguage = String(req.body?.preferred_language || 'en').toLowerCase();
-    
-    if (!['en', 'hi', 'ta', 'te', 'kn', 'mr'].includes(preferredLanguage)) {
-      preferredLanguage = 'en';
-    }
+    await otpService.issueOtp(phoneNumber, workerId);
+  } catch {
+    return res.status(503).json({ message: 'OTP service unavailable', code: 'OTP_UNAVAILABLE' });
+  }
 
-    if (!name) {
-      return res.status(400).json({ message: 'name is required' });
-    }
-    if (!phoneNumber) {
-      return res.status(400).json({ message: 'phone_number must be a valid +91 number' });
-    }
-    if (!['zomato', 'swiggy'].includes(platform)) {
-      return res.status(400).json({ message: 'platform must be zomato or swiggy' });
-    }
-    if (!city) {
-      return res.status(400).json({ message: 'city is required' });
-    }
-    if (!zone) {
-      return res.status(400).json({ message: 'zone is required' });
-    }
-    if (!Number.isFinite(avgDailyEarning) || avgDailyEarning < 200 || avgDailyEarning > 5000) {
-      return res.status(400).json({ message: 'avg_daily_earning must be between 200 and 5000' });
-    }
+  return res.status(201).json({
+    message: 'OTP sent',
+    worker_id: workerId,
+    phone_number: phoneNumber,
+  });
+}));
 
-    const atCount = (upiVpa.match(/@/g) || []).length;
-    if (atCount !== 1) {
-      return res.status(400).json({ message: 'upi_vpa must contain exactly one @ symbol' });
+router.post('/login', validate(loginSchema), asyncRoute(async (req, res: Response) => {
+  const role = String(req.body?.role || 'worker').toLowerCase();
+
+  if (role === 'insurer') {
+    if (config.insurerLoginSecret && req.body?.secret !== config.insurerLoginSecret) {
+      return res.status(401).json({ message: 'Invalid insurer credentials' });
     }
+    const insurer = await resolveInsurerProfile();
+    const token = issueInsurerToken(insurer.id);
+    return res.status(200).json({ token, role: 'insurer', insurer });
+  }
 
-    const existingWorker = await query<{ id: string }>(
-      `SELECT id::text FROM workers WHERE phone_number = $1 LIMIT 1`,
-      [phoneNumber]
-    );
+  const phoneNumber = getRequestPhone(req.body);
+  if (!phoneNumber) return res.status(400).json({ message: 'phone_number is required' });
 
-    if (existingWorker.rows[0]) {
-      return res.status(409).json({
-        message: 'This phone number is already registered',
-        code: 'PHONE_ALREADY_REGISTERED',
-      });
-    }
+  const worker = await fetchWorkerByPhone(phoneNumber);
+  if (!worker) {
+    return res.status(404).json({
+      message: 'Worker account not found for this phone number',
+      code: 'WORKER_NOT_FOUND',
+    });
+  }
 
-    const zoneData = getZoneByName(zone, city);
-    if (!zoneData) {
-      return res.status(400).json({ message: 'Invalid zone for selected city' });
-    }
+  try {
+    await otpService.issueOtp(phoneNumber, worker.id);
+  } catch {
+    return res.status(503).json({ message: 'OTP service unavailable', code: 'OTP_UNAVAILABLE' });
+  }
 
-    const workerId = randomUUID();
-    const zoneMultiplier = Number(zoneData.zone_multiplier);
-    const { homeHexId, fallback } = resolveHomeHex(city, Number(zoneData.lat), Number(zoneData.lng));
-    const deviceFingerprint = getDeviceFingerprint(req);
-    const avatarSeed = computeAvatarSeed(name, phoneNumber);
+  return res.status(200).json({
+    message: 'OTP sent',
+    phone_number: phoneNumber,
+  });
+}));
 
-    await mlService.predictPremium(workerId, zoneMultiplier, 1.0, 1.0, city, zone);
+router.post('/verify-otp', validate(verifyOtpSchema), asyncRoute(async (req, res: Response) => {
+  const phoneNumber = getRequestPhone(req.body);
+  const otp = String(req.body?.otp || '').trim();
 
-    await query(
-      `INSERT INTO workers (
-        id,
-        name,
-        phone_number,
-        platform,
-        city,
-        zone,
-        avg_daily_earning,
-        zone_multiplier,
-        history_multiplier,
-        upi_vpa,
-        experience_tier,
-        home_hex_id,
-        hex_is_centroid_fallback,
-        device_fingerprint,
-        avatar_seed,
-        verified,
-        created_at,
-        updated_at,
-        preferred_language
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,FALSE,NOW(),NOW(),$16
-      )`,
-      [
-        workerId,
-        name,
-        phoneNumber,
-        platform,
-        city,
-        zone,
-        avgDailyEarning,
-        zoneMultiplier,
-        1.0,
-        upiVpa,
-        'new',
-        homeHexId,
-        fallback,
-        deviceFingerprint,
-        avatarSeed,
-        preferredLanguage
-      ]
-    );
+  if (!phoneNumber) return res.status(400).json({ message: 'phone_number is required' });
+  if (!/^\d{6}$/.test(otp)) return res.status(400).json({ message: 'otp must be a 6-digit code' });
 
+  const worker = await fetchWorkerByPhone(phoneNumber);
+  if (!worker) return res.status(404).json({ message: 'Worker account not found', code: 'WORKER_NOT_FOUND' });
+
+  let isOtpValid = false;
+  if (config.IS_DEMO_MODE && otp === '000000') {
+    isOtpValid = true;
+  } else {
     try {
-      await otpService.issueOtp(phoneNumber, workerId);
+      const result = await otpService.verifyOtp(phoneNumber, otp);
+      isOtpValid = result.valid;
     } catch {
       return res.status(503).json({ message: 'OTP service unavailable', code: 'OTP_UNAVAILABLE' });
     }
-
-    return res.status(201).json({
-      message: 'OTP sent',
-      worker_id: workerId,
-      phone: phoneNumber,
-      phone_number: phoneNumber,
-    });
-  } catch (error: any) {
-    if (error?.code === '23505') {
-      return res.status(409).json({
-        message: 'This phone number is already registered',
-        code: 'PHONE_ALREADY_REGISTERED',
-      });
-    }
-    return res.status(500).json({ message: 'Failed to register worker' });
   }
-});
 
-router.post('/login', async (req, res: Response) => {
+  if (!isOtpValid) return res.status(401).json({ message: 'Invalid or expired OTP' });
+
+  await query(
+    `UPDATE workers SET verified = TRUE, verified_at = COALESCE(verified_at, NOW()), updated_at = NOW() WHERE id = $1`,
+    [worker.id]
+  );
+
+  const refreshedWorker = await fetchWorkerByPhone(phoneNumber);
+  const token = issueWorkerToken(worker.id, refreshedWorker?.preferred_language || 'en');
+
+  return res.status(200).json({
+    token,
+    worker: refreshedWorker ? mapWorkerRow(refreshedWorker) : mapWorkerRow(worker),
+  });
+}));
+
+router.post('/resend-otp', asyncRoute(async (req, res: Response) => {
+  const phoneNumber = getRequestPhone(req.body);
+  if (!phoneNumber) return res.status(400).json({ message: 'phone_number is required' });
+
+  const worker = await fetchWorkerByPhone(phoneNumber);
+  if (!worker) return res.status(404).json({ message: 'Worker not found', code: 'WORKER_NOT_FOUND' });
+
   try {
-    const role = String(req.body?.role || 'worker').toLowerCase();
-
-    if (role === 'insurer') {
-      if (config.insurerLoginSecret && req.body?.secret !== config.insurerLoginSecret) {
-        return res.status(401).json({ message: 'Invalid insurer credentials' });
-      }
-
-      const insurer = await resolveInsurerProfile();
-      const token = issueInsurerToken(insurer.id);
-      return res.status(200).json({ token, role: 'insurer', insurer });
-    }
-
-    const phoneNumber = getRequestPhone(req.body);
-    if (!phoneNumber) {
-      return res.status(400).json({ message: 'phone_number is required' });
-    }
-
-    const worker = await fetchWorkerByPhone(phoneNumber);
-    if (!worker) {
-      return res.status(404).json({
-        message: 'Worker account not found for this phone number',
-        code: 'WORKER_NOT_FOUND',
-      });
-    }
-
-    try {
-      await otpService.issueOtp(phoneNumber, worker.id);
-    } catch {
-      return res.status(503).json({ message: 'OTP service unavailable', code: 'OTP_UNAVAILABLE' });
-    }
-
-    return res.status(200).json({
-      message: 'OTP sent',
-      phone: phoneNumber,
-      phone_number: phoneNumber,
-    });
+    const allowed = await otpService.canResend(phoneNumber);
+    if (!allowed) return res.status(429).json({ message: 'Resend limit reached', code: 'OTP_RESEND_LIMIT_EXCEEDED' });
+    await otpService.issueOtp(phoneNumber, worker.id);
   } catch {
-    return res.status(500).json({ message: 'Login failed' });
+    return res.status(503).json({ message: 'OTP service unavailable', code: 'OTP_UNAVAILABLE' });
   }
-});
 
-router.post('/verify-otp', async (req, res: Response) => {
-  try {
-    const phoneNumber = getRequestPhone(req.body);
-    const otp = String(req.body?.otp || '').trim();
+  return res.status(200).json({ message: 'OTP sent', phone_number: phoneNumber });
+}));
 
-    if (!phoneNumber) {
-      return res.status(400).json({ message: 'phone_number is required' });
-    }
-    if (!/^\d{6}$/.test(otp)) {
-      return res.status(400).json({ message: 'otp must be a 6-digit code' });
-    }
+router.get('/me', requireWorker, asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
+  const workerId = req.user!.id;
+  const result = await query<WorkerRow>(
+    `SELECT
+      id, name, phone_number, platform, city, zone,
+      home_hex_id::text, hex_is_centroid_fallback,
+      avg_daily_earning::text, zone_multiplier, history_multiplier,
+      experience_tier, upi_vpa, avatar_seed, verified,
+      verified_at, created_at, preferred_language
+    FROM workers
+    WHERE id = $1
+    LIMIT 1`,
+    [workerId]
+  );
 
-    const worker = await fetchWorkerByPhone(phoneNumber);
-    if (!worker) {
-      return res.status(404).json({
-        message: 'Worker account not found for this phone number',
-        code: 'WORKER_NOT_FOUND',
-      });
-    }
+  if (!result.rows[0]) return res.status(404).json({ message: 'Worker not found' });
+  return res.status(200).json(mapWorkerRow(result.rows[0]));
+}));
 
-    let isOtpValid = false;
+router.patch('/profile', requireWorker, asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
+  const workerId = req.user!.id;
+  const { name, upi_vpa, preferred_language } = req.body;
 
-    if (config.IS_DEMO_MODE && otp === '000000') {
-      isOtpValid = true;
-    } else {
-      try {
-        const result = await otpService.verifyOtp(phoneNumber, otp);
-        isOtpValid = result.valid;
-      } catch {
-        return res.status(503).json({ message: 'OTP service unavailable', code: 'OTP_UNAVAILABLE' });
-      }
-    }
+  const updates: string[] = [];
+  const values: any[] = [];
+  let idx = 1;
 
-    if (!isOtpValid) {
-      return res.status(401).json({ message: 'Invalid or expired OTP' });
-    }
-
-    await query(
-      `UPDATE workers
-       SET verified = TRUE,
-           verified_at = COALESCE(verified_at, NOW()),
-           updated_at = NOW()
-       WHERE id = $1`,
-      [worker.id]
-    );
-
-    const refreshedWorker = await fetchWorkerByPhone(phoneNumber);
-    const token = issueWorkerToken(worker.id, refreshedWorker?.preferred_language || 'en');
-
-    return res.status(200).json({
-      token,
-      worker: refreshedWorker ? mapWorkerRow(refreshedWorker) : mapWorkerRow(worker),
-    });
-  } catch {
-    return res.status(500).json({ message: 'OTP verification failed' });
+  if (name) {
+    updates.push(`name = $${idx++}`);
+    values.push(name);
   }
-});
-
-router.post('/resend-otp', async (req, res: Response) => {
-  try {
-    const phoneNumber = getRequestPhone(req.body);
-    if (!phoneNumber) {
-      return res.status(400).json({ message: 'phone_number is required' });
-    }
-
-    const worker = await fetchWorkerByPhone(phoneNumber);
-    if (!worker) {
-      return res.status(404).json({
-        message: 'Worker account not found for this phone number',
-        code: 'WORKER_NOT_FOUND',
-      });
-    }
-
-    try {
-      const allowed = await otpService.canResend(phoneNumber);
-      if (!allowed) {
-        return res.status(429).json({
-          message: 'Resend limit reached. Try again later.',
-          code: 'OTP_RESEND_LIMIT_EXCEEDED',
-        });
-      }
-
-      await otpService.issueOtp(phoneNumber, worker.id);
-    } catch {
-      return res.status(503).json({ message: 'OTP service unavailable', code: 'OTP_UNAVAILABLE' });
-    }
-
-    return res.status(200).json({
-      message: 'OTP sent',
-      phone: phoneNumber,
-      phone_number: phoneNumber,
-    });
-  } catch {
-    return res.status(500).json({ message: 'Could not resend OTP' });
+  if (upi_vpa) {
+    updates.push(`upi_vpa = $${idx++}`);
+    values.push(upi_vpa);
   }
-});
-
-router.get('/me', requireWorker, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const workerId = req.user!.id;
-
-    const result = await query<WorkerRow>(
-      `SELECT
-        id,
-        name,
-        phone_number,
-        platform,
-        city,
-        zone,
-        home_hex_id::text,
-        hex_is_centroid_fallback,
-        avg_daily_earning::text,
-        zone_multiplier,
-        history_multiplier,
-        experience_tier,
-        upi_vpa,
-        avatar_seed,
-        verified,
-        verified_at,
-        created_at
-      FROM workers
-      WHERE id = $1
-      LIMIT 1`,
-      [workerId]
-    );
-
-    if (!result.rows[0]) {
-      return res.status(404).json({ message: 'Worker not found' });
-    }
-
-    return res.status(200).json(mapWorkerRow(result.rows[0]));
-  } catch {
-    return res.status(500).json({ message: 'Failed to fetch worker profile' });
+  if (preferred_language) {
+    updates.push(`preferred_language = $${idx++}`);
+    values.push(preferred_language);
   }
-});
 
+  if (updates.length === 0) return res.status(400).json({ message: 'No fields to update' });
 
-router.get('/:id/gnn-score', authenticateInsurer, async (req: AuthenticatedRequest, res: Response) => {
-  try {
+  values.push(workerId);
+  await query(`UPDATE workers SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx}`, values);
+  return res.json({ success: true, message: 'Profile updated' });
+}));
+
+router.get('/notifications', requireWorker, asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
+  return res.json({
+    notifications: [
+      { id: '1', title: 'Policy Active', message: 'Your policy for this week is now active.', type: 'policy', read: false, created_at: new Date().toISOString() },
+      { id: '2', title: 'Welcome', message: 'Protect your income with GigGuard.', type: 'system', read: true, created_at: new Date(Date.now() - 86400000).toISOString() }
+    ]
+  });
+}));
+
+router.patch('/language', requireWorker, asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
+    const VALID_LOCALES = ['en', 'hi', 'ta', 'te', 'kn', 'mr'];
+    const { preferred_language } = req.body;
+    if (!VALID_LOCALES.includes(preferred_language)) return res.status(400).json({ error: 'Invalid locale' });
+
+    await query('UPDATE workers SET preferred_language = $1, updated_at = NOW() WHERE id = $2', [preferred_language, req.user!.id]);
+    const token = issueWorkerToken(req.user!.id, preferred_language);
+    return res.json({ status: 'updated', preferred_language, jwt_token: token });
+}));
+
+router.get('/:id/gnn-score', authenticateInsurer, asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
     const workerId = req.params.id;
-    
-    const { rows } = await query(
-      `SELECT w.gnn_fraud_score, w.zone
-       FROM workers w
-       WHERE w.id = $1`,
-      [workerId]
-    );
-    
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'Worker not found' });
-    }
+    const { rows } = await query(`SELECT w.gnn_fraud_score, w.zone FROM workers w WHERE w.id = $1`, [workerId]);
+    if (rows.length === 0) return res.status(404).json({ message: 'Worker not found' });
     
     const worker = rows[0];
     const gnnScore = Number(worker.gnn_fraud_score || 0);
-    
-    // fetch neighbors
     const { rows: edgeRows } = await query(
       `SELECT target_type, target_id FROM graph_edges WHERE source_type = 'worker' AND source_id = $1
        UNION
@@ -561,32 +461,6 @@ router.get('/:id/gnn-score', authenticateInsurer, async (req: AuthenticatedReque
       recommendation,
       trust_score: Math.max(0, 1.0 - gnnScore)
     });
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: 'Failed to fetch GNN score' });
-  }
-});
+}));
 
 export default router;
-
-router.patch('/language', requireWorker, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const VALID_LOCALES = ['en', 'hi', 'ta', 'te', 'kn', 'mr'];
-    const { preferred_language } = req.body;
-
-    if (!VALID_LOCALES.includes(preferred_language)) {
-      return res.status(400).json({ error: 'Invalid locale' });
-    }
-
-    await query(
-      'UPDATE workers SET preferred_language = $1, updated_at = NOW() WHERE id = $2',
-      [preferred_language, req.worker!.id]
-    );
-
-    const token = issueWorkerToken(req.worker!.id, preferred_language);
-
-    return res.json({ status: 'updated', preferred_language, jwt_token: token });
-  } catch {
-    return res.status(500).json({ message: 'Failed to update preferred language' });
-  }
-});
-

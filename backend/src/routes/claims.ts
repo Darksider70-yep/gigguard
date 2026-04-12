@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { query } from '../db';
 import { authenticateWorker } from '../middleware/auth';
+import { asyncRoute } from '../middleware/errorHandler';
 
 const router = Router();
 
-router.get('/', authenticateWorker, async (req, res) => {
-  const workerId = req.worker!.id;
+router.get('/', authenticateWorker, asyncRoute(async (req, res) => {
+  const workerId = req.user!.id;
 
   const { rows: claims } = await query<{
     id: string;
@@ -81,15 +82,15 @@ router.get('/', authenticateWorker, async (req, res) => {
 
   res.json({
     stats: {
-      total_paid_out: Math.round(Number(stats[0].total_paid_out)),
-      claims_this_month: parseInt(stats[0].claims_this_month, 10),
-      paid_streak: parseInt(stats[0].total_paid_count, 10),
+      total_paid_out: stats[0] ? Math.round(Number(stats[0].total_paid_out)) : 0,
+      claims_this_month: stats[0] ? parseInt(stats[0].claims_this_month, 10) : 0,
+      paid_streak: stats[0] ? parseInt(stats[0].total_paid_count, 10) : 0,
     },
     claims: enrichedClaims,
   });
-});
+}));
 
-router.get('/:id', authenticateWorker, async (req, res) => {
+router.get('/:id', authenticateWorker, asyncRoute(async (req, res) => {
   const { rows } = await query<{
     [key: string]: any;
   }>(
@@ -99,7 +100,7 @@ router.get('/:id', authenticateWorker, async (req, res) => {
      LEFT JOIN disruption_events de ON de.id = c.disruption_event_id
      LEFT JOIN payouts pay ON pay.claim_id = c.id
      WHERE c.id = $1 AND c.worker_id = $2`,
-    [req.params.id, req.worker!.id]
+    [req.params.id, req.user!.id]
   );
 
   if (rows.length === 0) {
@@ -121,7 +122,42 @@ router.get('/:id', authenticateWorker, async (req, res) => {
       claim.disruption_hours != null ? Number(claim.disruption_hours) : claim.disruption_hours,
     fraud_score: claim.fraud_score != null ? Number(claim.fraud_score) : claim.fraud_score,
   });
-});
+}));
+
+router.post('/:id/appeal', authenticateWorker, asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  const workerId = req.user!.id;
+
+  if (!reason || reason.length < 10) {
+    return res.status(400).json({ message: 'Appeal reason must be at least 10 characters' });
+  }
+
+  const { rows } = await query(
+    `SELECT id, status FROM claims WHERE id = $1 AND worker_id = $2`,
+    [id, workerId]
+  );
+
+  if (rows.length === 0) {
+    return res.status(404).json({ message: 'Claim not found' });
+  }
+
+  const claim = rows[0];
+  if (claim.status !== 'denied' && claim.status !== 'under_review') {
+    return res.status(400).json({ message: 'Only denied or under_review claims can be appealed' });
+  }
+
+  await query(
+    `UPDATE claims 
+     SET status = 'under_review', 
+         notes = CONCAT(COALESCE(notes, ''), '\n', 'Worker Appeal at ', NOW(), ': ', $1),
+         updated_at = NOW()
+     WHERE id = $2`,
+    [reason, id]
+  );
+
+  res.json({ success: true, message: 'Appeal submitted and claim is now under review' });
+}));
 
 function flagToHumanReadable(flag: string): string {
   const map: Record<string, string> = {

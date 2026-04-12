@@ -1,24 +1,24 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --bg-base: #0a0e1a;
-  --bg-surface: #111827;
-  --bg-elevated: #1a2235;
-  --accent-saffron: #f59e0b;
-  --accent-saffron-dim: #92400e;
-  --accent-green: #10b981;
-  --accent-red: #ef4444;
-  --accent-blue: #3b82f6;
-  --accent-purple: #8b5cf6;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #475569;
-  --border: #1e293b;
-  --border-bright: #334155;
+  --bg-base: #060607;
+  --bg-surface: #0E0E10;
+  --bg-elevated: #161619;
+  --accent-saffron: #F59E0B;
+  --accent-saffron-dim: rgba(245, 158, 11, 0.15);
+  --accent-green: #10B981;
+  --accent-red: #EF4444;
+  --accent-blue: #3B82F6;
+  --accent-purple: #8B5CF6;
+  --text-primary: #F9FAFB;
+  --text-secondary: #D1D5DB;
+  --text-muted: #6B7280;
+  --border: #27272A;
+  --border-bright: #3F3F46;
 }
 
 * {
@@ -28,12 +28,13 @@
 html,
 body {
   min-height: 100%;
+  color-scheme: dark;
 }
 
 body {
   background:
-    radial-gradient(circle at 12% 18%, rgba(245, 158, 11, 0.08), transparent 36%),
-    radial-gradient(circle at 86% 8%, rgba(59, 130, 246, 0.08), transparent 34%),
+    radial-gradient(circle at 0% 0%, rgba(245, 158, 11, 0.05), transparent 40%),
+    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.05), transparent 40%),
     var(--bg-base);
   color: var(--text-primary);
   font-family: 'Sora', sans-serif;

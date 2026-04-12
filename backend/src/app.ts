@@ -15,6 +15,7 @@ import { claimCreationWorker } from './workers/claimCreation';
 import { claimValidationWorker } from './workers/claimValidation';
 import { payoutCreationWorker } from './workers/payoutCreation';
 import { logger } from './lib/logger';
+import { globalErrorHandler } from './middleware/errorHandler';
 
 let backgroundStarted = false;
 
@@ -66,7 +67,7 @@ export function createApp() {
   
   app.use(express.json({ limit: '2mb' }));
 
-  app.use(healthRouter);
+  app.use('/health', healthRouter);
 
   app.use('/workers', workersRouter);
   app.use('/policies', policiesRouter);
@@ -78,17 +79,7 @@ export function createApp() {
   // Legacy compatibility paths from Phase 1.
   app.use('/api/policies', policiesRouter);
 
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    logger.error('API', 'request_failed', {
-      method: req.method,
-      path: req.originalUrl,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    if (res.headersSent) {
-      return next(err);
-    }
-    return res.status(500).json({ message: 'Internal server error' });
-  });
+  app.use(globalErrorHandler);
 
   app.use((_req, res) => {
     return res.status(404).json({ message: 'Route not found' });

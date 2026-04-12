@@ -1,38 +1,55 @@
 import { Router } from 'express';
 import { query } from '../db';
-import { config } from '../config';
-import { weatherBudget } from '../services/weatherService';
+import { mlService } from '../services/mlService';
+import { paymentClient } from '../services/paymentClient';
 
 const router = Router();
 
-router.get('/health', async (_req, res) => {
-  const mlCheck = async (): Promise<Response> => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 500);
-    try {
-      return await fetch(`${config.ML_SERVICE_URL}/health`, {
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timer);
+router.get('/', async (req, res) => {
+  const health: any = {
+    status: 'live',
+    timestamp: new Date().toISOString(),
+    services: {
+      database: { status: 'unknown' },
+      ml_service: { status: 'unknown' },
+      payment_service: { status: 'unknown' },
     }
   };
 
-  const checks = await Promise.allSettled([query('SELECT 1'), mlCheck()]);
-  const dbOk = checks[0].status === 'fulfilled';
-  const mlOk = checks[1].status === 'fulfilled' && checks[1].value.ok;
+  // Check DB
+  try {
+    const start = Date.now();
+    await query('SELECT 1');
+    health.services.database = { status: 'live', latency: `${Date.now() - start}ms` };
+  } catch (err) {
+    health.services.database = { status: 'down', error: (err as Error).message };
+    health.status = 'degraded';
+  }
 
-  const status = dbOk ? 'ok' : 'degraded';
+  // Check ML Service
+  try {
+    const start = Date.now();
+    const mlLive = await mlService.checkHealth();
+    health.services.ml_service = { status: mlLive ? 'live' : 'down', latency: `${Date.now() - start}ms` };
+    if (!mlLive) health.status = 'degraded';
+  } catch {
+    health.services.ml_service = { status: 'down' };
+    health.status = 'degraded';
+  }
 
-  res.status(dbOk ? 200 : 503).json({
-    status,
-    db: dbOk ? 'connected' : 'error',
-    ml_service: mlOk ? 'connected' : 'unavailable',
-    redis: 'connected',
-    weather_budget: weatherBudget.getStatus(),
-    uptime_seconds: Math.floor(process.uptime()),
-    timestamp: new Date().toISOString(),
-  });
+  // Check Payment Service
+  try {
+    const start = Date.now();
+    const paymentLive = await paymentClient.checkHealth();
+    health.services.payment_service = { status: paymentLive ? 'live' : 'down', latency: `${Date.now() - start}ms` };
+    if (!paymentLive) health.status = 'degraded';
+  } catch {
+    health.services.payment_service = { status: 'down' };
+    health.status = 'degraded';
+  }
+
+  const statusCode = health.status === 'down' ? 503 : 200;
+  res.status(statusCode).json(health);
 });
 
 export default router;

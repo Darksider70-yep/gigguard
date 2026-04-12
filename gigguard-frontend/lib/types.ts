@@ -114,6 +114,7 @@ export interface ClaimItem {
   payout_amount: number;
   disruption_hours: number;
   status: string;
+  notes: string | null;
   created_at: string;
   paid_at: string | null;
   razorpay_ref: string | null;

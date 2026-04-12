@@ -6,16 +6,9 @@ import { payoutQueue } from '../queues';
 import { mlService } from '../services/mlService';
 import { config } from '../config';
 import { weatherBudget } from '../services/weatherService';
+import { asyncRoute } from '../middleware/errorHandler';
 
 const router = Router();
-
-type AsyncRoute = (req: Request, res: Response, next: NextFunction) => Promise<void | Response>;
-
-function asyncRoute(handler: AsyncRoute) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
-  };
-}
 
 function flagToHumanReadable(flag: string): string {
   const map: Record<string, string> = {
@@ -272,20 +265,13 @@ router.get('/workers', authenticateInsurer, asyncRoute(async (req, res) => {
 
   const sql = `
     SELECT
-      w.id::text,
-      w.name,
-      w.platform,
-      w.city,
-      w.zone,
-      w.home_hex_id::text,
-      COALESCE(w.hex_is_centroid_fallback, false) as hex_is_centroid_fallback,
-      w.avg_daily_earning::text,
-      w.zone_multiplier::text,
-      w.history_multiplier::text,
-      w.experience_tier,
-      w.upi_vpa,
-      w.created_at
+      w.id::text, w.name, w.platform, w.city, w.zone,
+      w.home_hex_id::text, COALESCE(w.hex_is_centroid_fallback, false) as hex_is_centroid_fallback,
+      w.avg_daily_earning::text, w.zone_multiplier::text, w.history_multiplier::text,
+      w.experience_tier, w.upi_vpa, w.created_at,
+      COUNT(p.id) FILTER (WHERE p.status = 'active') as active_policies_count
     FROM workers w
+    LEFT JOIN policies p ON p.worker_id = w.id
     WHERE ($1 = '' OR LOWER(w.city) = LOWER($1))
       AND ($2 = '' OR LOWER(w.platform) = LOWER($2))
       AND (
@@ -294,6 +280,7 @@ router.get('/workers', authenticateInsurer, asyncRoute(async (req, res) => {
         OR LOWER(COALESCE(w.zone, '')) LIKE $4
         OR LOWER(w.city) LIKE $4
       )
+    GROUP BY w.id
     ORDER BY w.created_at DESC
     LIMIT $5 OFFSET $6
   `;
@@ -321,6 +308,7 @@ router.get('/workers', authenticateInsurer, asyncRoute(async (req, res) => {
     avg_daily_earning: Number(row.avg_daily_earning ?? 0),
     zone_multiplier: Number(row.zone_multiplier ?? 1),
     history_multiplier: Number(row.history_multiplier ?? 1),
+    active_policies_count: parseInt(row.active_policies_count || '0', 10),
   }));
 
   return res.json({
@@ -328,6 +316,26 @@ router.get('/workers', authenticateInsurer, asyncRoute(async (req, res) => {
     total: parseInt(countResult.rows[0]?.count ?? '0', 10),
     page,
     limit,
+  });
+}));
+
+router.get('/triggers', authenticateInsurer, asyncRoute(async (req, res) => {
+  const { rows } = await query(`
+    SELECT id, trigger_type, city, zone, trigger_value, 
+           trigger_threshold as threshold, status, event_start,
+           affected_workers_count, total_payout_amount
+    FROM disruption_events
+    ORDER BY event_start DESC
+    LIMIT 50
+  `);
+  
+  res.json({
+    triggers: rows.map(r => ({
+      ...r,
+      trigger_value: Number(r.trigger_value),
+      threshold: Number(r.threshold),
+      total_payout_amount: Math.round(Number(r.total_payout_amount || 0))
+    }))
   });
 }));
 

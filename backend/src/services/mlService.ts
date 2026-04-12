@@ -1,6 +1,7 @@
 import { config } from '../config';
 import { logger } from '../lib/logger';
 import { formulaPremium, GRACEFUL_DEFAULTS } from './gracefulDefaults';
+import { CircuitBreaker } from '../lib/circuitBreaker';
 
 export interface PremiumResponse {
   premium: number;
@@ -48,69 +49,79 @@ export interface BanditRecommendation {
 class MLService {
   private baseUrl: string;
   private timeout: number;
+  private breaker: CircuitBreaker;
 
   constructor() {
     this.baseUrl = config.ML_SERVICE_URL;
     this.timeout = config.ML_SERVICE_TIMEOUT_MS;
+    this.breaker = new CircuitBreaker({
+      name: 'ML_SERVICE',
+      failureThreshold: 5,
+      resetTimeoutMs: 30000, // 30 seconds
+    });
   }
 
   private async post<T>(path: string, body: object): Promise<T | null> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeout);
-    try {
-      const res = await fetch(`${this.baseUrl}${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        throw new Error(`ML service ${path} returned ${res.status}`);
-      }
-      return (await res.json()) as T;
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        logger.warn('MLService', 'timeout', {
-          endpoint: path,
-          timeout_ms: this.timeout,
+    return this.breaker.execute(async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeout);
+      try {
+        const res = await fetch(`${this.baseUrl}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
         });
-      } else {
-        logger.warn('MLService', 'unavailable', {
-          endpoint: path,
-          error: err instanceof Error ? err.message : String(err),
-        });
+        if (!res.ok) {
+          throw new Error(`ML service ${path} returned ${res.status}`);
+        }
+        return (await res.json()) as T;
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          logger.warn('MLService', 'timeout', {
+            endpoint: path,
+            timeout_ms: this.timeout,
+          });
+        } else {
+          logger.warn('MLService', 'unavailable', {
+            endpoint: path,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        throw err; // Re-throw to trigger circuit breaker
+      } finally {
+        clearTimeout(timer);
       }
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
+    }, null);
   }
 
   private async get<T>(path: string): Promise<T | null> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeout);
-    try {
-      const res = await fetch(`${this.baseUrl}${path}`, { signal: controller.signal });
-      if (!res.ok) {
-        throw new Error(`ML service GET ${path} returned ${res.status}`);
+    return this.breaker.execute(async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeout);
+      try {
+        const res = await fetch(`${this.baseUrl}${path}`, { signal: controller.signal });
+        if (!res.ok) {
+          throw new Error(`ML service GET ${path} returned ${res.status}`);
+        }
+        return (await res.json()) as T;
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          logger.warn('MLService', 'timeout', {
+            endpoint: path,
+            timeout_ms: this.timeout,
+          });
+        } else {
+          logger.warn('MLService', 'unavailable', {
+            endpoint: path,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        throw err; // Re-throw to trigger circuit breaker
+      } finally {
+        clearTimeout(timer);
       }
-      return (await res.json()) as T;
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        logger.warn('MLService', 'timeout', {
-          endpoint: path,
-          timeout_ms: this.timeout,
-        });
-      } else {
-        logger.warn('MLService', 'unavailable', {
-          endpoint: path,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
+    }, null);
   }
 
   async predictPremium(
@@ -244,6 +255,18 @@ class MLService {
 
   async getShadowComparison(): Promise<Record<string, unknown> | null> {
     return this.get<Record<string, unknown>>('/shadow-comparison');
+  }
+
+  async checkHealth(): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${this.baseUrl}/health`, { signal: controller.signal });
+      clearTimeout(timer);
+      return res.ok;
+    } catch {
+      return false;
+    }
   }
 }
 

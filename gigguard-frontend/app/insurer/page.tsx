@@ -3,9 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import AuthGuard from '@/components/AuthGuard';
-import StatCard from '@/components/ui/StatCard';
-import TriggerBadge from '@/components/ui/TriggerBadge';
-import BCSGauge from '@/components/ui/BCSGauge';
 import { useDataRefresh } from '@/hooks/useDataRefresh';
 import { APIError, api } from '@/lib/api';
 import {
@@ -18,6 +15,27 @@ import {
   ZoneRiskMatrixResponse,
   InsurerPayoutsResponse,
 } from '@/lib/types';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { AmountDisplay } from '@/components/ui/AmountDisplay';
+import { 
+  ShieldCheck, 
+  Zap, 
+  Search, 
+  ChevronRight, 
+  Activity, 
+  AlertCircle, 
+  Globe, 
+  Cpu, 
+  History,
+  TrendingUp,
+  MapPin,
+  CheckCircle2,
+  XCircle,
+  Clock
+} from 'lucide-react';
+import BCSGauge from '@/components/ui/BCSGauge';
+import TriggerBadge from '@/components/ui/TriggerBadge';
 
 interface DashboardBundle {
   dashboard: InsurerDashboardResponse;
@@ -26,26 +44,7 @@ interface DashboardBundle {
   alerts: AntiSpoofingAlertsResponse['alerts'];
   shadow: ShadowComparisonResponse;
   payouts: InsurerPayoutsResponse;
-}
-const INR = '\u20B9';
-
-function formatInr(value: number): string {
-  return `\u20B9${Math.round(value).toLocaleString('en-IN')}`;
-}
-
-function formatTime(value: string): string {
-  return new Date(value).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function riskClass(multiplier: number): string {
-  if (multiplier > 1.2) return 'bg-rose-500/20 text-rose-200 border-rose-500/30';
-  if (multiplier >= 1.0) return 'bg-amber-500/20 text-amber-200 border-amber-500/30';
-  return 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30';
+  triggers: any[];
 }
 
 export default function InsurerPage() {
@@ -60,13 +59,14 @@ export default function InsurerPage() {
     const currentDate = new Date();
     const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
 
-    const [dashboard, events, zones, alerts, shadow, payouts] = await Promise.all([
+    const [dashboard, events, zones, alerts, shadow, payouts, triggersData] = await Promise.all([
       api.getInsurerDashboard(),
       api.getDisruptionEvents(undefined, 20),
       api.getZoneRiskMatrix(),
       api.getAntiSpoofingAlerts(),
       api.getShadowComparison(),
       api.getInsurerPayouts({ month: currentMonth, page: 1, limit: 1000 }),
+      api.getInsurerTriggers(),
     ]);
 
     return {
@@ -76,117 +76,58 @@ export default function InsurerPage() {
       alerts: alerts.alerts,
       shadow,
       payouts,
+      triggers: triggersData.triggers,
     };
   };
 
-  const { data, loading, error, lastUpdated, refresh } = useDataRefresh(fetchBundle, 30000, true);
+  const { data, loading, error, lastUpdated, refresh } = useDataRefresh(fetchBundle, 15000, true);
 
   useEffect(() => {
     let active = true;
-
     const loadStatus = async () => {
       try {
         const payload = await api.getPlatformStatus();
-        if (!active) {
-          return;
-        }
+        if (!active) return;
         setStatus(payload);
         setStatusError(null);
       } catch (err) {
-        if (!active) {
-          return;
-        }
-        setStatusError(err instanceof Error ? err.message : 'Status unavailable');
+        if (!active) return;
+        setStatusError('Status engine unreachable');
       }
     };
-
     void loadStatus();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!toast) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => setToast(null), 2200);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
-  useEffect(() => {
-    if (!eventsFlash) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => setEventsFlash(false), 1800);
-    return () => window.clearTimeout(timer);
-  }, [eventsFlash]);
+    return () => { active = false; };
+  }, [lastUpdated]);
 
   const approveClaim = async (claimId: string) => {
-    const password = window.prompt('Enter your insurer password to approve claim:')?.trim() ?? '';
-    if (!password) {
-      return;
-    }
-
     try {
       const response = await api.approveClaim(claimId);
-      setToast(`Approved. Payout ${formatInr(response.payout_amount)}`);
+      setToast(`Approved. Payout ${Math.round(response.payout_amount)}`);
       await refresh();
       setEventsFlash(true);
-    } catch (err) {
-      if (err instanceof APIError && err.status === 0) {
-        setToast('Network unavailable');
-      } else {
-        setToast('Approve action failed');
-      }
+    } catch {
+      setToast('Approve action failed');
     }
   };
 
   const denyClaim = async (claimId: string) => {
-    const password = window.prompt('Enter your insurer password to deny claim:')?.trim() ?? '';
-    if (!password) {
-      return;
-    }
-
-    const reason = window.prompt('Reason for denial')?.trim() ?? '';
-    if (!reason) {
-      return;
-    }
-
+    const reason = window.prompt('Enter reason for denial:');
+    if (!reason) return;
     try {
       await api.denyClaim(claimId, reason);
       setToast('Claim denied');
       await refresh();
       setEventsFlash(true);
-    } catch (err) {
-      if (err instanceof APIError && err.status === 0) {
-        setToast('Network unavailable');
-      } else {
-        setToast('Deny action failed');
-      }
+    } catch {
+      setToast('Deny action failed');
     }
   };
 
   const simulateTrigger = async () => {
     setSimulating(true);
     setSimSteps([]);
-
-    const pushStep = (label: string, delay: number) =>
-      new Promise<void>((resolve) => {
-        window.setTimeout(() => {
-          setSimSteps((prev) => [...prev, label]);
-          resolve();
-        }, delay);
-      });
-
     try {
-      await pushStep('Creating disruption event...', 0);
-      await pushStep('Finding affected workers...', 800);
-      await pushStep('Enqueueing claims...', 800);
-
+      setSimSteps(['Initializing disruption event...', 'Analyzing affected workers...', 'Calculating parametric payouts...']);
       const payload: SimulateTriggerBody = {
         trigger_type: 'heavy_rainfall',
         city: 'mumbai',
@@ -195,216 +136,270 @@ export default function InsurerPage() {
         lat: 19.1364,
         lng: 72.8296,
       };
-
-      const result = (await api.simulateTrigger(payload)) as {
-        affected_workers?: number;
-      };
-
-      await pushStep(`Done. ${result.affected_workers ?? 0} workers affected.`, 800);
+      const result = (await api.simulateTrigger(payload)) as any;
+      setSimSteps(prev => [...prev, `Success. ${result.affected_workers ?? 0} workers notified.`]);
       await refresh();
       setEventsFlash(true);
     } catch {
-      setSimSteps((prev) => [...prev, 'Simulation failed. Check service logs.']);
+      setSimSteps(prev => [...prev, 'Simulation failed']);
     } finally {
       setSimulating(false);
     }
   };
 
   const stats = data?.dashboard.stats;
-  const events = useMemo(() => data?.events ?? [], [data]);
-  const zones = useMemo(() => data?.zones ?? [], [data]);
-  const alerts = useMemo(() => data?.alerts ?? [], [data]);
+  const events = data?.events ?? [];
+  const zones = data?.zones ?? [];
+  const alerts = data?.alerts ?? [];
+  const triggers = data?.triggers ?? [];
 
   return (
     <AuthGuard allowedRoles={['insurer']}>
-      {loading && !data ? (
-        <div className="space-y-3">
-          <div className="skeleton h-24 rounded-xl" />
-          <div className="skeleton h-40 rounded-xl" />
-          <div className="skeleton h-56 rounded-xl" />
-        </div>
-      ) : error ? (
-        <div className="surface-card border-rose-500/40 p-4 text-rose-300">{error}</div>
-      ) : data && stats ? (
-        <div className="space-y-6">
-          <div className="flex items-end justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold">Insurer Command Center</h1>
-              <p className="text-sm text-secondary">Real-time operations for triggers, fraud review, and payouts.</p>
-            </div>
-            <p className="text-xs text-muted">
-              Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString('en-IN') : '---'}
-            </p>
-          </div>
-
-          {toast ? <div className="surface-card border-amber-500/40 p-3 text-sm text-amber-200">{toast}</div> : null}
-
-          <section className="grid grid-cols-7 gap-3">
-            <StatCard label="Total Workers" value={stats.total_workers} href="/insurer/workers" accent="default" subtitle="Tracked workers" />
-            <StatCard label="Active Policies" value={stats.active_policies} href="/insurer/policies" accent="green" subtitle="Weekly active" />
-            <StatCard label="Payouts This Month" value={stats.payouts_this_month} prefix={INR} href="/insurer/payouts" accent="saffron" />
-            <StatCard label="Flagged Claims" value={stats.flagged_claims} href="/insurer/flagged" accent="red" subtitle="Needs review" />
-            <StatCard label="Loss Ratio" value={Math.round(stats.loss_ratio * 100)} suffix="%" href="/insurer/analytics" accent="blue" />
-            <StatCard
-              label="Coverage Area"
-              value={stats.coverage_area.zones}
-              suffix=" zones"
-              href="/insurer/coverage"
-              accent="default"
-              subtitle={`${stats.coverage_area.cities} cities`}
-            />
-            <StatCard label="Average Premium" value={stats.average_premium} prefix={INR} href="/insurer/analytics" accent="saffron" />
-          </section>
-
-          <section className="grid grid-cols-5 gap-5">
-            <div className={`surface-card col-span-3 overflow-hidden p-4 ${eventsFlash ? 'data-flash shake-on-update' : ''}`}>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Disruption Events</h2>
-                <span className="text-xs text-secondary">Refreshing every 30s...</span>
+      <div className="max-w-[1600px] mx-auto space-y-8 pb-20">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 animate-fade-in-up">
+           <div className="space-y-1">
+              <div className="flex items-center gap-2 mb-1">
+                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400">System Live & Synchronized</span>
               </div>
-              <table className="w-full border-separate border-spacing-y-2 text-sm">
-                <thead className="text-xs uppercase tracking-[0.1em] text-muted">
-                  <tr>
-                    <th className="text-left">Trigger</th>
-                    <th className="text-left">Value</th>
-                    <th className="text-left">Affected</th>
-                    <th className="text-left">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((event) => (
-                    <tr key={event.id} className="table-row-hover rounded-lg border border-slate-800 bg-slate-900/40">
-                      <td className="px-2 py-2">
-                        <TriggerBadge triggerType={event.trigger_type} size="sm" />
-                        <p className="mt-1 text-xs text-secondary">{event.zone}, {event.city}</p>
-                        <p className="text-xs text-muted">{formatTime(event.event_start)}</p>
-                      </td>
-                      <td className="px-2 py-2 font-mono-data">{event.trigger_value ?? '-'} (&gt; {event.threshold})</td>
-                      <td className="px-2 py-2">
-                        <Link href="/insurer/workers" className="font-mono-data text-amber-300 hover:text-amber-200">
-                          {event.affected_worker_count} workers
-                        </Link>
-                        <p className="text-xs text-secondary">{formatInr(event.total_payout)}</p>
-                      </td>
-                      <td className="px-2 py-2">
-                        {event.status === 'active' ? (
-                          <span className="status-pill badge-live inline-flex items-center gap-2">
-                            <span className="live-dot" />
-                            LIVE
-                          </span>
-                        ) : (
-                          <span className="status-pill badge-paid">Processed</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="col-span-2 space-y-4">
-              <div className="surface-card p-4">
-                <h3 className="text-lg font-semibold">Zone Risk Matrix</h3>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {zones.slice(0, 16).map((zone) => (
-                    <Link
-                      key={`${zone.city}_${zone.zone}`}
-                      href={`/insurer/coverage?zone=${encodeURIComponent(zone.zone)}`}
-                      className={`rounded-full border px-2 py-1 text-xs ${riskClass(zone.zone_multiplier)}`}
-                    >
-                      {zone.zone} x{zone.zone_multiplier.toFixed(2)}
-                    </Link>
-                  ))}
-                </div>
+              <h1 className="text-4xl font-black tracking-tight text-white uppercase italic">Insurer Command Center</h1>
+              <p className="text-text-secondary">Unified operations for risk intelligence, fraud reviews, and parametric disbursements.</p>
+           </div>
+           
+           <GlassCard className="p-3 flex items-center gap-6 border-white/5 bg-white/[0.02]">
+              <div className="text-right">
+                 <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Last Sync</p>
+                 <p className="font-monoData text-sm text-accent-saffron">{lastUpdated?.toLocaleTimeString('en-IN')}</p>
               </div>
+              <button 
+                onClick={() => refresh()}
+                className="p-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all"
+              >
+                <Activity size={18} className="text-text-secondary" />
+              </button>
+           </GlassCard>
+        </header>
 
-              <div className="surface-card border-dashed border-amber-500/40 p-4">
-                <h3 className="text-lg font-semibold">Simulate Trigger</h3>
-                <p className="mt-1 text-sm text-secondary">Heavy Rainfall / Mumbai / Andheri West</p>
-                <button
-                  type="button"
-                  onClick={simulateTrigger}
-                  disabled={simulating}
-                  className="btn-saffron mt-3 w-full px-3 py-2 disabled:opacity-60"
-                >
-                  Simulate Event
-                </button>
-                <div className="mt-3 space-y-1 text-xs text-secondary">
-                  {simSteps.map((step) => (
-                    <p key={step}>{step}</p>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="grid grid-cols-2 gap-5">
-            <div className="surface-card p-4">
-              <h3 className="text-lg font-semibold">Anti-Spoofing Alerts</h3>
-              <div className="mt-3 space-y-3">
-                {alerts.length === 0 ? <p className="text-sm text-secondary">No active alerts</p> : null}
-                {alerts.map((alert) => (
-                  <article key={alert.claim_id} className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-semibold">{alert.worker_name}</p>
-                        <p className="text-xs text-secondary">{alert.zone}, {alert.city}</p>
-                      </div>
-                      <BCSGauge score={alert.bcs_score} size="sm" />
+        {stats && (
+          <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 animate-fade-in-up delay-100">
+             {[
+               { label: 'Fleet Strength', val: stats.total_workers, icon: Globe, href: '/insurer/workers' },
+               { label: 'Active Policies', val: stats.active_policies, icon: ShieldCheck, href: '/insurer/policies', variant: 'success' },
+               { label: 'Monthly Payouts', val: stats.payouts_this_month, icon: Zap, href: '/insurer/payouts', prefix: '₹', variant: 'saffron' },
+               { label: 'Flagged Claims', val: stats.flagged_claims, icon: AlertCircle, href: '/insurer/flagged', variant: 'error' },
+               { label: 'Net Loss Ratio', val: (stats.loss_ratio * 100).toFixed(1), icon: TrendingUp, suffix: '%', href: '/insurer/analytics' },
+               { label: 'Global Reach', val: stats.coverage_area.zones, icon: MapPin, suffix: ' Zones', href: '/insurer/coverage' },
+               { label: 'Avg Premium', val: stats.average_premium, icon: History, prefix: '₹' },
+             ].map((s, i) => (
+               <GlassCard key={i} interactive className="p-4 group">
+                  <Link href={s.href || '#'} className="block space-y-3">
+                    <div className="flex items-center justify-between">
+                       <div className={`p-2 rounded-lg bg-white/5 ${s.variant === 'success' ? 'text-emerald-400' : s.variant === 'saffron' ? 'text-accent-saffron' : s.variant === 'error' ? 'text-rose-400' : 'text-text-muted'} group-hover:scale-110 transition-transform`}>
+                          <s.icon size={16} />
+                       </div>
+                       <ChevronRight size={14} className="text-text-muted opacity-0 group-hover:opacity-100 transition-all" />
                     </div>
-                    <ul className="mt-2 list-disc pl-5 text-xs text-secondary">
-                      {Array.isArray(alert.graph_flags) ? alert.graph_flags.map((flag: string) => (
-                        <li key={`${alert.claim_id}_${flag}`}>{flag}</li>
-                      )) : <li>GNN Fraud Intelligence Event</li>}
-                    </ul>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => void approveClaim(alert.claim_id)}
-                        className="rounded bg-emerald-500/20 px-3 py-1 text-xs text-emerald-200"
-                        type="button"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => void denyClaim(alert.claim_id)}
-                        className="rounded bg-rose-500/20 px-3 py-1 text-xs text-rose-200"
-                        type="button"
-                      >
-                        Deny
-                      </button>
+                    <div>
+                       <p className="text-[10px] text-text-muted font-bold uppercase tracking-tighter">{s.label}</p>
+                       <p className="text-xl font-monoData font-bold leading-none mt-1">
+                          {s.prefix}{s.val}{s.suffix}
+                       </p>
                     </div>
-                  </article>
-                ))}
-              </div>
-            </div>
+                  </Link>
+               </GlassCard>
+             ))}
+          </section>
+        )}
 
-            <div className="surface-card p-4">
-              <h3 className="text-lg font-semibold">Live Service Health</h3>
-              {statusError ? <p className="mt-2 text-sm text-rose-300">{statusError}</p> : null}
-              {status ? (
-                <div className="mt-4 space-y-3">
-                  {status.services.map((svc) => (
-                    <div key={svc.id} className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{svc.name}</span>
-                      <div className="flex items-center gap-2">
-                        <span className={`h-2 w-2 rounded-full ${svc.status === 'live' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]'}`} />
-                        <span className={`text-xs uppercase tracking-wider ${svc.status === 'live' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {svc.status.toUpperCase()}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+           {/* Main Feed */}
+           <div className="lg:col-span-8 space-y-8 animate-fade-in-up delay-200">
+              <GlassCard className={`p-0 overflow-hidden ${eventsFlash ? 'data-flash' : ''}`}>
+                 <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                    <h2 className="text-xl font-bold flex items-center gap-2 uppercase italic tracking-tighter">
+                      <Zap size={20} className="text-accent-saffron" /> Live Disruption Feed
+                    </h2>
+                    <StatusBadge variant="saffron" dot>Real-time</StatusBadge>
+                 </div>
+                 
+                 <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left border-collapse">
+                       <thead className="bg-white/[0.02] text-[10px] font-black uppercase tracking-widest text-text-muted">
+                          <tr>
+                             <th className="px-6 py-4">Trigger / Node</th>
+                             <th className="px-6 py-4">Intensity</th>
+                             <th className="px-6 py-4">Impact Scope</th>
+                             <th className="px-6 py-4">Status</th>
+                             <th className="px-6 py-4"></th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-white/5">
+                          {events.length === 0 ? (
+                            <tr><td colSpan={5} className="px-6 py-12 text-center text-text-muted italic">No active disruption events detected.</td></tr>
+                          ) : events.map((event) => (
+                             <tr key={event.id} className="hover:bg-white/[0.02] transition-colors group">
+                                <td className="px-6 py-4">
+                                   <div className="flex items-center gap-3">
+                                      <TriggerBadge triggerType={event.trigger_type} size="sm" />
+                                      <div>
+                                         <p className="font-bold text-white">{event.zone}</p>
+                                         <p className="text-[10px] text-text-muted uppercase font-bold">{event.city}</p>
+                                      </div>
+                                   </div>
+                                </td>
+                                <td className="px-6 py-4 font-monoData">
+                                   <span className="text-white font-bold">{event.trigger_value}</span>
+                                   <span className="text-text-muted text-xs ml-1">/{event.threshold}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                   <p className="font-bold text-accent-saffron">{event.affected_worker_count} Workers</p>
+                                   <AmountDisplay amount={event.total_payout} size="sm" className="text-text-muted" />
+                                </td>
+                                <td className="px-6 py-4">
+                                   {event.status === 'active' ? (
+                                     <StatusBadge variant="error" dot>Active</StatusBadge>
+                                   ) : (
+                                     <StatusBadge variant="neutral">Processed</StatusBadge>
+                                   )}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                   <button className="p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <ChevronRight size={16} className="text-text-muted" />
+                                   </button>
+                                </td>
+                             </tr>
+                          ))}
+                       </tbody>
+                    </table>
+                 </div>
+              </GlassCard>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                 <GlassCard className="p-6">
+                    <div className="flex items-center justify-between mb-6">
+                       <h3 className="font-bold uppercase tracking-tight italic flex items-center gap-2">
+                         <Search size={18} className="text-accent-blue" /> Anti-Spoofing Queue
+                       </h3>
+                       <Link href="/insurer/flagged" className="text-[10px] font-bold text-accent-blue uppercase hover:underline">View All</Link>
+                    </div>
+                    <div className="space-y-4">
+                       {alerts.length === 0 ? (
+                         <div className="py-8 text-center text-text-muted italic border border-dashed border-white/10 rounded-2xl">Queue clear. All claims verified.</div>
+                       ) : alerts.slice(0, 3).map((alert) => (
+                         <div key={alert.claim_id} className="p-4 bg-white/5 border border-white/5 rounded-2xl space-y-4">
+                            <div className="flex justify-between items-start">
+                               <div>
+                                  <p className="font-bold text-white leading-none">{alert.worker_name}</p>
+                                  <p className="text-[10px] text-text-muted uppercase mt-1">{alert.zone}, {alert.city}</p>
+                               </div>
+                               <BCSGauge score={alert.bcs_score} size="sm" />
+                            </div>
+                            <div className="flex gap-2">
+                               <button onClick={() => approveClaim(alert.claim_id)} className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase py-2 rounded-xl transition-all">Approve</button>
+                               <button onClick={() => denyClaim(alert.claim_id)} className="flex-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-[10px] font-black uppercase py-2 rounded-xl transition-all">Reject</button>
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                 </GlassCard>
+
+                 <GlassCard className="p-6">
+                    <div className="flex items-center justify-between mb-6">
+                       <h3 className="font-bold uppercase tracking-tight italic flex items-center gap-2">
+                         <Activity size={18} className="text-accent-saffron" /> Trigger Governance
+                       </h3>
+                    </div>
+                    <div className="space-y-4">
+                       <p className="text-xs text-text-secondary leading-relaxed">
+                          Force trigger events for emergency overrides or stress testing the parametric pipeline.
+                       </p>
+                       <div className="p-4 bg-amber-500/10 border border-dashed border-amber-500/30 rounded-2xl space-y-3">
+                          <div className="flex items-center justify-between">
+                             <p className="text-[10px] font-black text-amber-200 uppercase tracking-widest">Manual Override Test</p>
+                             <Zap size={14} className="text-amber-400 animate-pulse" />
+                          </div>
+                          <button 
+                            disabled={simulating}
+                            onClick={simulateTrigger}
+                            className="w-full bg-accent-saffron hover:bg-amber-400 text-bg-base font-black py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
+                          >
+                             {simulating ? <span className="animate-spin w-4 h-4 border-2 border-bg-base border-t-transparent rounded-full" /> : 'Simulate Major Rainfall'}
+                          </button>
+                          <div className="space-y-1">
+                             {simSteps.map((s, i) => <p key={i} className="text-[10px] text-amber-100/60 font-monoData"> {'>'} {s}</p>)}
+                          </div>
+                       </div>
+                    </div>
+                 </GlassCard>
+              </div>
+           </div>
+
+           {/* Sidebar Controls */}
+           <div className="lg:col-span-4 space-y-8 animate-fade-in-up delay-300">
+              <GlassCard className="p-6">
+                 <h3 className="font-bold uppercase tracking-tight mb-6 flex items-center gap-2">
+                   <Cpu size={18} className="text-accent-purple" /> Service Health Monitor
+                 </h3>
+                 <div className="space-y-5">
+                    {statusError ? (
+                      <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-400 text-xs text-center">{statusError}</div>
+                    ) : status?.services.map((svc) => (
+                      <div key={svc.id} className="flex items-center justify-between p-3 bg-white/[0.03] rounded-xl border border-white/5">
+                        <div className="flex items-center gap-3">
+                           <div className={`w-2 h-2 rounded-full ${svc.status === 'live' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.4)]' : 'bg-rose-400 animate-pulse'}`} />
+                           <span className="text-sm font-bold text-text-secondary">{svc.name}</span>
+                        </div>
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${svc.status === 'live' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {svc.status}
                         </span>
                       </div>
+                    ))}
+                    <div className="flex justify-between items-center px-1">
+                       <p className="text-[9px] text-text-muted font-bold uppercase tracking-[0.2em]">Next Check In 15s</p>
+                       <p className="text-[9px] text-text-muted font-bold uppercase tracking-[0.2em]">{lastUpdated?.toLocaleTimeString()}</p>
                     </div>
-                  ))}
-                  <p className="mt-4 border-t border-slate-800 pt-2 text-[10px] uppercase tracking-widest text-muted">
-                    Last Health Check: {new Date(status.checked_at).toLocaleTimeString('en-IN')}
-                  </p>
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-secondary italic">Monitoring system connectivity...</p>
-              )}
-            </div>
-          </section>
+                 </div>
+              </GlassCard>
+
+              <GlassCard className="p-6">
+                 <h3 className="font-bold uppercase tracking-tight mb-6 flex items-center gap-2">
+                   <Zap size={18} className="text-accent-saffron" /> Trigger Nodes (Active)
+                 </h3>
+                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {triggers.length === 0 ? (
+                      <p className="text-xs text-text-muted italic text-center py-4">Loading active triggers...</p>
+                    ) : triggers.map((trigger: any) => (
+                      <div key={trigger.id} className="p-3 bg-white/5 border border-white/5 rounded-xl space-y-2">
+                         <div className="flex justify-between items-start">
+                            <TriggerBadge triggerType={trigger.type} size="sm" />
+                            <span className="text-[10px] font-monoData text-text-muted">{trigger.status}</span>
+                         </div>
+                         <div className="flex justify-between items-end">
+                            <div>
+                               <p className="text-xs font-bold text-white">{trigger.zone}</p>
+                               <p className="text-[10px] text-text-muted uppercase font-medium">{trigger.city}</p>
+                            </div>
+                            <div className="text-right">
+                               <p className="text-[10px] text-text-muted font-bold uppercase">Threshold</p>
+                               <p className="text-xs font-monoData text-accent-saffron">{trigger.threshold}</p>
+                            </div>
+                         </div>
+                      </div>
+                    ))}
+                 </div>
+              </GlassCard>
+           </div>
         </div>
-      ) : null}
+
+        {toast && (
+          <div className="fixed bottom-8 right-8 animate-fade-in-up z-50">
+             <GlassCard className="px-6 py-3 bg-accent-saffron text-bg-base border-none shadow-2xl flex items-center gap-3">
+                <CheckCircle2 size={20} />
+                <span className="font-black text-sm uppercase tracking-tight">{toast}</span>
+             </GlassCard>
+          </div>
+        )}
+      </div>
     </AuthGuard>
   );
 }
