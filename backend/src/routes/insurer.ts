@@ -544,12 +544,13 @@ router.get('/workers/:id/policies', authenticateInsurer, asyncRoute(async (req, 
 router.get('/workers/:id/claims', authenticateInsurer, asyncRoute(async (req, res) => {
   const workerId = req.params.id;
   const { rows } = await query(
-    `SELECT id, trigger_type, trigger_value, city, zone,
-            payout_amount::text as payout_amount, disruption_hours,
-            status, created_at, paid_at
-     FROM claims
-     WHERE worker_id = $1::uuid
-     ORDER BY created_at DESC`,
+    `SELECT c.id, c.trigger_type, c.trigger_value, w.city, w.zone,
+            c.payout_amount::text as payout_amount, c.disruption_hours,
+            c.status, c.created_at, c.paid_at
+     FROM claims c
+     JOIN workers w ON w.id = c.worker_id
+     WHERE c.worker_id = $1::uuid
+     ORDER BY c.created_at DESC`,
     [workerId]
   );
 
