@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useMemo } from 'react';
 import AuthGuard from '@/components/AuthGuard';
@@ -95,13 +95,13 @@ export default function InsurerAnalyticsPage() {
               <h3 className="text-lg font-semibold">Shadow comparison</h3>
               <div className="mt-4 space-y-2 text-sm text-secondary">
                 <p>
-                  Formula premium: <span className="font-mono-data text-white">{`${INR}${Math.round(data.shadow.mean_formula_premium)}`}</span>
+                  Formula premium: <span className="font-mono-data text-white">{`${INR}${Math.round(data.shadow.mean_formula_premium ?? 0)}`}</span>
                 </p>
                 <p>
-                  RL premium: <span className="font-mono-data text-white">{`${INR}${Math.round(data.shadow.mean_rl_premium)}`}</span>
+                  RL premium: <span className="font-mono-data text-white">{`${INR}${Math.round(data.shadow.mean_rl_premium ?? 0)}`}</span>
                 </p>
                 <p>
-                  Delta: <span className="font-mono-data text-amber-300">{`${INR}${Math.round(data.shadow.avg_delta)} avg`}</span>
+                  Delta: <span className="font-mono-data text-amber-300">{`${INR}${Math.round(data.shadow.avg_delta ?? 0)} avg`}</span>
                 </p>
                 <p>
                   RL Premium Engine Status:{' '}
@@ -109,7 +109,7 @@ export default function InsurerAnalyticsPage() {
                 </p>
                 <p>
                   Comparisons logged:{' '}
-                  <span className="font-mono-data text-white">{data.shadow.total_logged.toLocaleString('en-IN')}</span>
+                  <span className="font-mono-data text-white">{(data.shadow.total_logged ?? 0).toLocaleString('en-IN')}</span>
                 </p>
               </div>
             </div>

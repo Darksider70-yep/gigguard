@@ -427,11 +427,20 @@ router.get('/shadow-comparison', authenticateInsurer, asyncRoute(async (_req, re
   if (shadowCache && Date.now() - shadowCache.ts < SHADOW_CACHE_TTL) {
     return res.json(shadowCache.data);
   }
-  const data = await mlService.getShadowComparison();
-  if (data) {
+  const raw = await mlService.getShadowComparison();
+  if (raw && !raw.error) {
+    const data = {
+      total_logged: Number(raw.total_rows || 0),
+      mean_formula_premium: Number(raw.avg_formula_premium || 0),
+      mean_rl_premium: Number(raw.avg_rl_premium || 0),
+      rl_lower_count: Number(raw.rl_wins || 0),
+      rl_higher_count: Number(raw.formula_wins || 0),
+      avg_delta: Number(raw.avg_abs_diff || 0)
+    };
     shadowCache = { data, ts: Date.now() };
+    return res.json(data);
   }
-  res.json(data ?? { error: 'ML service unavailable' });
+  res.json({ error: 'ML service unavailable' });
 }));
 
 router.get('/api-budget', authenticateInsurer, (_req, res) => {
