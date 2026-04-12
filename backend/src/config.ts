@@ -48,6 +48,7 @@ export const config = {
 
   ML_SERVICE_URL: getStringEnv('ML_SERVICE_URL', 'http://localhost:5001'),
   ML_SERVICE_TIMEOUT_MS: getNumberEnv('ML_SERVICE_TIMEOUT_MS', getNumberEnv('ML_TIMEOUT_MS', 500)),
+  PAYMENT_SERVICE_URL: getStringEnv('PAYMENT_SERVICE_URL', 'http://localhost:5002'),
 
   OPENWEATHERMAP_API_KEY,
   OPENWEATHERMAP_BASE_URL,
@@ -92,6 +93,7 @@ export const config = {
   healthWebhookSecret: getStringEnv('HEALTH_WEBHOOK_SECRET', ''),
   razorpayAccountNumber: getStringEnv('RAZORPAY_ACCOUNT_NUMBER', ''),
   redisUrl: getStringEnv('REDIS_URL', 'redis://localhost:6379'),
+  paymentServiceUrl: getStringEnv('PAYMENT_SERVICE_URL', 'http://localhost:5002'),
   insurerLoginSecret: getStringEnv('INSURER_LOGIN_SECRET', ''),
   featurePandemicTriggerEnabled: getBooleanEnv('FEATURE_PANDEMIC_TRIGGER_ENABLED', true),
 } as const;

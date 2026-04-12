@@ -10,7 +10,7 @@ import {
   LoginResponse,
   OtpChallengeResponse,
   OtpRequest,
-  Phase2ChecklistResponse,
+  PlatformStatusResponse,
   PolicyHistoryResponse,
   PremiumQuoteResponse,
   PurchasePolicyBody,
@@ -275,9 +275,17 @@ class GigGuardAPI {
     query.set('limit', String(params?.limit ?? 50));
     return this.request<InsurerPayoutsResponse>(`/insurer/payouts?${query.toString()}`);
   }
+  
+  getWorkerPolicies(workerId: string) {
+    return this.request<{ policies: PolicyHistoryResponse['policies'] }>(`/insurer/workers/${workerId}/policies`);
+  }
 
-  getPhase2Checklist() {
-    return this.request<Phase2ChecklistResponse>('/insurer/phase2-checklist');
+  getWorkerClaims(workerId: string) {
+    return this.request<{ claims: ClaimsResponse['claims'] }>(`/insurer/workers/${workerId}/claims`);
+  }
+
+  getPlatformStatus() {
+    return this.request<PlatformStatusResponse>('/insurer/platform-status');
   }
 
   banditUpdate(context_key: string, arm: number, reward: number) {

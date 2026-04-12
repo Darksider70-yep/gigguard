@@ -12,7 +12,7 @@ import {
   AntiSpoofingAlertsResponse,
   DisruptionEventsResponse,
   InsurerDashboardResponse,
-  Phase2ChecklistResponse,
+  PlatformStatusResponse,
   ShadowComparisonResponse,
   SimulateTriggerBody,
   ZoneRiskMatrixResponse,
@@ -52,8 +52,8 @@ export default function InsurerPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [simSteps, setSimSteps] = useState<string[]>([]);
-  const [checklist, setChecklist] = useState<Phase2ChecklistResponse | null>(null);
-  const [checklistError, setChecklistError] = useState<string | null>(null);
+  const [status, setStatus] = useState<PlatformStatusResponse | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [eventsFlash, setEventsFlash] = useState(false);
 
   const fetchBundle = async (): Promise<DashboardBundle> => {
@@ -84,23 +84,23 @@ export default function InsurerPage() {
   useEffect(() => {
     let active = true;
 
-    const loadChecklist = async () => {
+    const loadStatus = async () => {
       try {
-        const payload = await api.getPhase2Checklist();
+        const payload = await api.getPlatformStatus();
         if (!active) {
           return;
         }
-        setChecklist(payload);
-        setChecklistError(null);
+        setStatus(payload);
+        setStatusError(null);
       } catch (err) {
         if (!active) {
           return;
         }
-        setChecklistError(err instanceof Error ? err.message : 'Checklist unavailable');
+        setStatusError(err instanceof Error ? err.message : 'Status unavailable');
       }
     };
 
-    void loadChecklist();
+    void loadStatus();
 
     return () => {
       active = false;
@@ -379,24 +379,27 @@ export default function InsurerPage() {
             </div>
 
             <div className="surface-card p-4">
-              <h3 className="text-lg font-semibold">Phase 2 Status</h3>
-              {checklistError ? <p className="mt-2 text-sm text-rose-300">{checklistError}</p> : null}
-              {checklist ? (
-                <div className="mt-3 space-y-2 text-sm">
-                  <p>
-                    Overall:{' '}
-                    <span className={checklist.phase2_complete ? 'text-emerald-300' : 'text-amber-300'}>
-                      {checklist.phase2_complete ? 'Complete' : 'Partial'}
-                    </span>
+              <h3 className="text-lg font-semibold">Live Service Health</h3>
+              {statusError ? <p className="mt-2 text-sm text-rose-300">{statusError}</p> : null}
+              {status ? (
+                <div className="mt-4 space-y-3">
+                  {status.services.map((svc) => (
+                    <div key={svc.id} className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{svc.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2 w-2 rounded-full ${svc.status === 'live' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]'}`} />
+                        <span className={`text-xs uppercase tracking-wider ${svc.status === 'live' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {svc.status.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="mt-4 border-t border-slate-800 pt-2 text-[10px] uppercase tracking-widest text-muted">
+                    Last Health Check: {new Date(status.checked_at).toLocaleTimeString('en-IN')}
                   </p>
-                  <p>H3 geospatial: {checklist.features.h3_geospatial.status}</p>
-                  <p>Bandit: {checklist.features.contextual_bandit.status}</p>
-                  <p>RL shadow: {checklist.features.rl_shadow_mode.status}</p>
-                  <p>Fraud model: {checklist.features.fraud_detection.model}</p>
-                  <p>Checked at: {new Date(checklist.checked_at).toLocaleString('en-IN')}</p>
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-secondary">Loading checklist...</p>
+                <p className="mt-2 text-sm text-secondary italic">Monitoring system connectivity...</p>
               )}
             </div>
           </section>

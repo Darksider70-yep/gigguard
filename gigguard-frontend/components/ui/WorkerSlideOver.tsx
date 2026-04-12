@@ -1,15 +1,14 @@
-﻿'use client';
+'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ClaimsResponse, PolicyHistoryResponse, WorkerProfile } from '@/lib/types';
 import BCSGauge from './BCSGauge';
+import { api } from '@/lib/api';
 
 interface WorkerSlideOverProps {
   open: boolean;
   onClose: () => void;
   worker: WorkerProfile | null;
-  policies?: PolicyHistoryResponse['policies'];
-  claims?: ClaimsResponse['claims'];
 }
 
 type TabKey = 'overview' | 'policies' | 'claims' | 'risk';
@@ -19,11 +18,42 @@ export default function WorkerSlideOver({
   open,
   onClose,
   worker,
-  policies = [],
-  claims = [],
 }: WorkerSlideOverProps) {
   const [tab, setTab] = useState<TabKey>('overview');
+  const [loading, setLoading] = useState(false);
+  const [policies, setPolicies] = useState<PolicyHistoryResponse['policies']>([]);
+  const [claims, setClaims] = useState<ClaimsResponse['claims']>([]);
+
   const tabs: TabKey[] = ['overview', 'policies', 'claims', 'risk'];
+
+  useEffect(() => {
+    if (!worker?.id || !open) {
+      setPolicies([]);
+      setClaims([]);
+      return;
+    }
+
+    let active = true;
+    const fetchHistory = async () => {
+      try {
+        setLoading(true);
+        const [pRes, cRes] = await Promise.all([
+          api.getWorkerPolicies(worker.id),
+          api.getWorkerClaims(worker.id)
+        ]);
+        if (!active) return;
+        setPolicies(pRes.policies);
+        setClaims(cRes.claims);
+      } catch (err) {
+        console.error('Failed to fetch worker history:', err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void fetchHistory();
+    return () => { active = false; };
+  }, [worker?.id, open]);
 
   const riskScore = Math.round(Math.min(100, ((worker?.zone_multiplier ?? 1) / 1.6) * 100));
 
@@ -66,7 +96,12 @@ export default function WorkerSlideOver({
         </div>
 
         <div className="mt-5 space-y-3 text-sm text-secondary">
-          {tab === 'overview' ? (
+          {loading ? (
+            <div className="flex h-40 flex-col items-center justify-center gap-2">
+              <span className="loading-spinner h-8 w-8 text-amber-500/50" />
+              <p className="text-secondary animate-pulse italic">Fetching historical records...</p>
+            </div>
+          ) : tab === 'overview' ? (
             <>
               <p>
                 City: <span className="text-white">{worker?.city ?? '-'}</span>

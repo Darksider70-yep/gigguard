@@ -522,15 +522,73 @@ router.get('/gnn-dashboard', authenticateInsurer, asyncRoute(async (_req, res) =
   });
 }));
 
-router.get('/phase2-checklist', authenticateInsurer, asyncRoute(async (_req, res) => {
+router.get('/workers/:id/policies', authenticateInsurer, asyncRoute(async (req, res) => {
+  const workerId = req.params.id;
+  const { rows } = await query(
+    `SELECT id, week_start, week_end, status, premium_paid::text, coverage_amount::text, purchased_at
+     FROM policies
+     WHERE worker_id = $1::uuid
+     ORDER BY purchased_at DESC`,
+    [workerId]
+  );
+
+  const policies = rows.map(r => ({
+    ...r,
+    premium_paid: Number(r.premium_paid),
+    coverage_amount: Number(r.coverage_amount)
+  }));
+
+  res.json({ policies });
+}));
+
+router.get('/workers/:id/claims', authenticateInsurer, asyncRoute(async (req, res) => {
+  const workerId = req.params.id;
+  const { rows } = await query(
+    `SELECT id, trigger_type, trigger_value, city, zone,
+            payout_amount::text as payout_amount, disruption_hours,
+            status, created_at, paid_at
+     FROM claims
+     WHERE worker_id = $1::uuid
+     ORDER BY created_at DESC`,
+    [workerId]
+  );
+
+  const claims = rows.map(r => ({
+    ...r,
+    payout_amount: Number(r.payout_amount)
+  }));
+
+  res.json({ claims });
+}));
+
+router.get('/platform-status', authenticateInsurer, asyncRoute(async (_req, res) => {
+  const checkService = async (url: string): Promise<'live' | 'down'> => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 800);
+    try {
+      const resp = await fetch(`${url}/health`, { signal: controller.signal });
+      return resp.ok ? 'live' : 'down';
+    } catch {
+      return 'down';
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
+  const [dbRes, mlStatus, payStatus] = await Promise.allSettled([
+    query('SELECT 1'),
+    checkService(config.ML_SERVICE_URL),
+    checkService(config.PAYMENT_SERVICE_URL)
+  ]);
+
   res.json({
-    phase2_complete: true,
-    features: {
-      h3_geospatial: { status: 'active', resolution: 7 },
-      contextual_bandit: { status: 'active', engine: 'lin_ucb' },
-      rl_shadow_mode: { status: 'active', agent: 'sac' },
-      fraud_detection: { model: 'GraphSAGE + Isolation Forest', layers: 3 }
-    },
+    services: [
+      { id: 'backend', name: 'Core Engine', status: 'live' },
+      { id: 'database', name: 'PostgreSQL', status: dbRes.status === 'fulfilled' ? 'live' : 'down' },
+      { id: 'redis', name: 'Queue/Cache', status: 'live' }, // Assume live if backend is running (ioredis connects on start)
+      { id: 'ml-service', name: 'ML/Fraud AI', status: mlStatus.status === 'fulfilled' ? mlStatus.value : 'down' },
+      { id: 'payment-service', name: 'Payment Gateway', status: payStatus.status === 'fulfilled' ? payStatus.value : 'down' }
+    ],
     checked_at: new Date().toISOString()
   });
 }));

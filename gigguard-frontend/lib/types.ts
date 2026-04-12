@@ -267,16 +267,14 @@ export interface InsurerPayoutsResponse {
   limit: number;
 }
 
-export interface Phase2ChecklistResponse {
-  phase2_complete: boolean;
-  features: {
-    h3_geospatial: { status: string; workers_with_h3: number; workers_precise: number };
-    contextual_bandit: { status: string; initialised: boolean };
-    rl_shadow_mode: { status: string; shadow_log_rows: number };
-    fraud_detection: { status: string; model: string; avg_fraud_score: string };
-    gnn_data_prep: { status: string; schema_tables: number };
-    payout_deduplication: { status: string; unique_constraint: boolean };
-  };
+export interface ServiceHealth {
+  id: string;
+  name: string;
+  status: 'live' | 'down';
+}
+
+export interface PlatformStatusResponse {
+  services: ServiceHealth[];
   checked_at: string;
 }
 
