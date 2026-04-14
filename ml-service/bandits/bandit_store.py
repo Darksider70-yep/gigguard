@@ -33,14 +33,24 @@ class BanditStateStore:
         atexit.register(self.force_save)
 
     def _connect(self):
-        """Open psycopg2 connection."""
+        """Get connection from the central pool."""
         if self._is_sqlite:
             import sqlite3
-
             sqlite_path = self.database_url.replace("sqlite+pysqlite:///", "")
             sqlite_path = sqlite_path if sqlite_path else ":memory:"
             return sqlite3.connect(sqlite_path)
-        return psycopg2.connect(self.database_url)
+            
+        from db.connection import connection_pool
+        return connection_pool.getconn()
+
+    def _release(self, conn):
+        """Release connection back to the pool."""
+        if self._is_sqlite:
+            conn.close()
+            return
+            
+        from db.connection import connection_pool
+        connection_pool.putconn(conn)
 
     def _ensure_table(self) -> None:
         """Create table only for sqlite test databases."""
@@ -61,7 +71,7 @@ class BanditStateStore:
             )
             connection.commit()
         finally:
-            connection.close()
+            self._release(connection)
 
     def load(self) -> Dict[str, Any]:
         """Load persisted state from bandit_state table."""
@@ -81,7 +91,7 @@ class BanditStateStore:
         except Exception:
             return {}
         finally:
-            connection.close()
+            self._release(connection)
 
     def load_bandit_state(self) -> Dict[str, Any]:
         """Compatibility alias for loading bandit state."""
@@ -117,7 +127,7 @@ class BanditStateStore:
                 )
             connection.commit()
         finally:
-            connection.close()
+            self._release(connection)
         self._pending_updates = 0
         self._dirty = False
 

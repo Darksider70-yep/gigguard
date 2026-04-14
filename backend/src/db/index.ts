@@ -3,10 +3,13 @@ import { config } from '../config';
 import { logger } from '../lib/logger';
 
 const pool = new Pool({
-  connectionString: config.DATABASE_URL,
-  max: 10,
+  connectionString: process.env.DATABASE_URL || config.DATABASE_URL,
+  max: 5, // max 5 connections from backend
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 5000,
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: false } // Render uses self-signed certs
+    : false,
 });
 
 pool.on('error', (err: Error) => {

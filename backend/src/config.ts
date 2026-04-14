@@ -57,7 +57,6 @@ export const config = {
   AQICN_BASE_URL,
 
   RAZORPAY_KEY_ID: getStringEnv('RAZORPAY_KEY_ID', 'rzp_test_xxx'),
-  RAZORPAY_KEY_SECRET: getStringEnv('RAZORPAY_KEY_SECRET', ''),
   RAZORPAY_ACCOUNT_NUMBER: getStringEnv('RAZORPAY_ACCOUNT_NUMBER', ''),
   RAZORPAY_WEBHOOK_SECRET: getStringEnv('RAZORPAY_WEBHOOK_SECRET', ''),
   HEALTH_WEBHOOK_SECRET: getStringEnv('HEALTH_WEBHOOK_SECRET', ''),
@@ -88,7 +87,6 @@ export const config = {
   openWeatherBaseUrl: OPENWEATHERMAP_BASE_URL,
   jwtSecret: getStringEnv('JWT_SECRET', 'dev_jwt_secret_change_me'),
   razorpayKeyId: getStringEnv('RAZORPAY_KEY_ID', 'rzp_test_xxx'),
-  razorpayKeySecret: getStringEnv('RAZORPAY_KEY_SECRET', ''),
   razorpayWebhookSecret: getStringEnv('RAZORPAY_WEBHOOK_SECRET', ''),
   healthWebhookSecret: getStringEnv('HEALTH_WEBHOOK_SECRET', ''),
   razorpayAccountNumber: getStringEnv('RAZORPAY_ACCOUNT_NUMBER', ''),

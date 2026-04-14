@@ -10,6 +10,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
+import psycopg2
+from psycopg2 import pool as pg_pool
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -18,17 +20,30 @@ if not DATABASE_URL:
 
 def _create_engine(database_url: str) -> Engine:
     """Create SQLAlchemy engine with production pool settings."""
+    connect_args = {}
+    if os.environ.get("PYTHON_ENV") == 'production':
+        connect_args["sslmode"] = "require"
+
     try:
         return create_engine(
             database_url,
             pool_size=5,
-            max_overflow=10,
+            max_overflow=0, # Stick to the 5 limit
             pool_pre_ping=True,
             future=True,
+            connect_args=connect_args
         )
     except TypeError:
         # Some test URLs (for example sqlite) do not support pool options.
         return create_engine(database_url, pool_pre_ping=True, future=True)
+
+
+# Psycopg2 raw connection pool for bandit store etc.
+connection_pool = pg_pool.ThreadedConnectionPool(
+    minconn=1, maxconn=5,
+    dsn=DATABASE_URL,
+    sslmode='require' if os.environ.get('PYTHON_ENV') == 'production' else 'prefer'
+)
 
 
 ENGINE: Engine = _create_engine(DATABASE_URL)

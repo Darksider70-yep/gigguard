@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -38,15 +39,19 @@ app.use((req, res, next) => {
 });
 
 // ── CORS ─────────────────────────────────────────────────────────────────
-app.use((req, res, next) => {
-  const origin = process.env.FRONTEND_URL || 'http://localhost:3000';
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Service-Key');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
-  next();
-});
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000')
+  .split(',')
+  .map(o => o.trim());
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+}));
 
 // ── Security Headers ─────────────────────────────────────────────────────
 app.use((req, res, next) => {

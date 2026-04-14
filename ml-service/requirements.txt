@@ -8,7 +8,8 @@ numpy==1.26.4
 pandas==2.2.2
 stable-baselines3==2.3.2
 gymnasium==0.29.1
-torch==2.3.0
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.3.0+cpu
 torch-geometric==2.5.3
 # torch-scatter and torch-sparse may need platform wheel:
 # pip install torch-scatter torch-sparse -f
