@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import { Router } from 'express';
+import { config } from '../config';
 import { withTransaction } from '../db';
 import { logger } from '../lib/logger';
 import { authenticateInsurer, issueInsurerToken } from '../middleware/auth';
