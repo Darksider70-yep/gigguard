@@ -120,6 +120,28 @@ app.get('/ui/checkout', async (req, res) => {
   res.type('html').send(html);
 });
 
+import { creditWallet, getBalance } from './drivers/dummy/wallet';
+
+// ── Dummy Wallet API ─────────────────────────────────────────────────────
+app.get('/wallet/:worker_id', async (req, res) => {
+  try {
+    const balance_paise = await getBalance(req.params.worker_id);
+    res.json({ balance_paise });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/wallet/:worker_id/topup', async (req, res) => {
+  try {
+    const amount_paise = Number(req.body.amount_paise) || 10000;
+    await creditWallet(req.params.worker_id, amount_paise);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/ui/dashboard', (req, res) => {
   if (activeDriver.name === 'razorpay') return res.status(404).send('Not available in production mode');
   res.type('html').send(renderDashboardUI());
