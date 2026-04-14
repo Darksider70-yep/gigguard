@@ -135,24 +135,35 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   res.status(500).json({ error: 'Internal server error' });
 });
 
+import { runMigrations } from './migrator';
+
 // ── Server ───────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5002;
-const server = app.listen(PORT, () => {
-  console.log(`[payment-service] ✓ Listening on port ${PORT}`);
-  console.log(`[payment-service]   Driver: ${activeDriver.name}`);
-  if (activeDriver.name === 'dummy') {
-    console.log(`[payment-service]   Dashboard: http://localhost:${PORT}/ui/dashboard`);
-  }
-});
 
-// ── Graceful Shutdown ────────────────────────────────────────────────────
-const shutdown = (signal: string) => {
-  console.log(`\n[payment-service] Received ${signal}, shutting down…`);
-  server.close(() => {
-    console.log('[payment-service] Closed.');
-    process.exit(0);
-  });
-  setTimeout(() => process.exit(1), 5000);
-};
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT',  () => shutdown('SIGINT'));
+(async () => {
+  try {
+    await runMigrations();
+    const server = app.listen(PORT, () => {
+      console.log(`[payment-service] ✓ Listening on port ${PORT}`);
+      console.log(`[payment-service]   Driver: ${activeDriver.name}`);
+      if (activeDriver.name === 'dummy') {
+        console.log(`[payment-service]   Dashboard: http://localhost:${PORT}/ui/dashboard`);
+      }
+    });
+
+    // ── Graceful Shutdown ────────────────────────────────────────────────────
+    const shutdown = (signal: string) => {
+      console.log(`\n[payment-service] Received ${signal}, shutting down…`);
+      server.close(() => {
+        console.log('[payment-service] Closed.');
+        process.exit(0);
+      });
+      setTimeout(() => process.exit(1), 5000);
+    };
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT',  () => shutdown('SIGINT'));
+  } catch (err: any) {
+    console.error('[payment-service] Startup failed:', err.message);
+    process.exit(1);
+  }
+})();
