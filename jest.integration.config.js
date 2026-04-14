@@ -10,6 +10,6 @@ module.exports = {
   testEnvironment: 'node',
   testTimeout: 60000,
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  globalSetup: '<rootDir>/test/setup/integration.js',
-  globalTeardown: '<rootDir>/test/setup/teardown.js',
+  globalSetup: '<rootDir>/tests/setup/integration.js',
+  globalTeardown: '<rootDir>/tests/setup/teardown.js',
 };
