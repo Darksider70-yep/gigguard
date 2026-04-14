@@ -147,6 +147,21 @@ app.get('/ui/dashboard', (req, res) => {
   res.type('html').send(renderDashboardUI());
 });
 
+// ── Debugging ────────────────────────────────────────────────────────────
+app.get('/debug/db', async (_req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT current_database(), now()');
+    res.json({
+      status: 'connected',
+      details: rows[0],
+      migrations_table: await pool.query('SELECT count(*) FROM _migrations_payment').then(r => r.rows[0].count).catch(e => e.message),
+      wallet_table: await pool.query('SELECT count(*) FROM dummy_wallets').then(r => r.rows[0].count).catch(e => e.message)
+    });
+  } catch (err: any) {
+    res.status(500).json({ status: 'error', message: err.message, stack: err.stack });
+  }
+});
+
 // ── Error Handling ───────────────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({ error: 'Route not found', service: 'payment-service' });
@@ -154,7 +169,12 @@ app.use((_req, res) => {
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[payment-service] Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+  // In production, return the actual error message temporarily for debugging
+  res.status(500).json({ 
+    error: 'Internal server error', 
+    message: err.message,
+    details: err.stack ? 'Stack trace logged to server console' : undefined
+  });
 });
 
 import { runMigrations } from './migrator';
@@ -164,6 +184,7 @@ const PORT = process.env.PORT || 5002;
 
 (async () => {
   try {
+    console.log(`[payment-service] Allowed Origins: ${allowedOrigins.join(', ')}`);
     await runMigrations();
     const server = app.listen(PORT, () => {
       console.log(`[payment-service] ✓ Listening on port ${PORT}`);
