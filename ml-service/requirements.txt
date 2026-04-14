@@ -4,7 +4,7 @@ sqlalchemy==2.0.30
 psycopg2-binary==2.9.9
 scikit-learn==1.4.2
 joblib==1.4.2
-numpy==1.26.4
+numpy>=2.0.0
 pandas==2.2.2
 stable-baselines3==2.3.2
 gymnasium==0.29.1

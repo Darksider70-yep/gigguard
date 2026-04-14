@@ -183,6 +183,10 @@ def _register_health_blueprint(app: Flask) -> Blueprint:
     """Create and register health blueprint."""
     bp = Blueprint("health", __name__)
 
+    @bp.get("/")
+    def index() -> Any:
+        return jsonify({"status": "ok", "service": "gigguard-ml"})
+
     @bp.get("/health")
     def health() -> Any:
         db_status = "connected"
@@ -607,10 +611,11 @@ def create_app() -> Flask:
     app.extensions["fraud_scorer"] = FraudScorer(settings.if_model_path)
     try:
         from fraud.gnn_scorer import GNNScorer
-        app.extensions["gnn_scorer"] = GNNScorer("models/graphsage_fraud.pt", "models/graphsage_fraud.json")
+        gnn_model_path = os.path.join(settings.base_dir, "models", "graphsage_fraud.pt")
+        gnn_meta_path = os.path.join(settings.base_dir, "models", "graphsage_fraud.json")
+        app.extensions["gnn_scorer"] = GNNScorer(gnn_model_path, gnn_meta_path)
     except Exception as e:
         logger.warning(f"Could not load GNNScorer: {e}")
-        app.extensions["gnn_scorer"] = None
     app.extensions["policy_bandit"] = ThompsonSamplingBandit()
 
     bandit_store = BanditStateStore(settings.database_url, lambda: app.extensions["policy_bandit"].get_state())
