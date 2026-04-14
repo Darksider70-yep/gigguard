@@ -36,10 +36,10 @@ def get_settings() -> Settings:
     """Load and cache ML service settings."""
     return Settings(
         database_url=_require_env("DATABASE_URL"),
-        flask_env=_require_env("FLASK_ENV"),
+        flask_env=os.getenv("FLASK_ENV", "production"),
         ml_service_port=int(os.getenv("ML_SERVICE_PORT", "5001")),
-        sac_model_path=_require_env("SAC_MODEL_PATH"),
-        if_model_path=_require_env("IF_MODEL_PATH"),
-        log_level=_require_env("LOG_LEVEL"),
+        sac_model_path=os.getenv("SAC_MODEL_PATH", "models/sac_premium_v1.zip"),
+        if_model_path=os.getenv("IF_MODEL_PATH", "models/isolation_forest.pkl"),
+        log_level=os.getenv("LOG_LEVEL", "INFO"),
     )
 

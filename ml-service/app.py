@@ -607,7 +607,7 @@ def create_app() -> Flask:
     app.extensions["fraud_scorer"] = FraudScorer(settings.if_model_path)
     try:
         from fraud.gnn_scorer import GNNScorer
-        app.extensions["gnn_scorer"] = GNNScorer("models/graphsage_model.pt", "models/graphsage_meta.json")
+        app.extensions["gnn_scorer"] = GNNScorer("models/graphsage_fraud.pt", "models/graphsage_fraud.json")
     except Exception as e:
         logger.warning(f"Could not load GNNScorer: {e}")
         app.extensions["gnn_scorer"] = None
