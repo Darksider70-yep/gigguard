@@ -163,7 +163,7 @@ export async function processPayoutCreationJob(
 }
 
 export const payoutCreationWorker =
-  config.NODE_ENV === 'test'
+  config.NODE_ENV === 'test' || config.USE_IN_MEMORY_REDIS
     ? null
     : new Worker<PayoutCreationJob>(
         'payout-creation',

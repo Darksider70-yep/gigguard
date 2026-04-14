@@ -141,7 +141,7 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
 }
 
 export const claimValidationWorker =
-  config.NODE_ENV === 'test'
+  config.NODE_ENV === 'test' || config.USE_IN_MEMORY_REDIS
     ? null
     : new Worker<ClaimValidationJob>(
         'claim-validation',

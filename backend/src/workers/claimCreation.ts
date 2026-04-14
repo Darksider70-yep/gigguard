@@ -247,7 +247,7 @@ export async function processClaimCreationJob(
 }
 
 export const claimCreationWorker =
-  config.NODE_ENV === 'test'
+  config.NODE_ENV === 'test' || config.USE_IN_MEMORY_REDIS
     ? null
     : new Worker<ClaimCreationJob>(
         'claim-creation',

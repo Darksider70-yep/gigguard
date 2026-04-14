@@ -56,20 +56,24 @@ router.post('/admin/demo-reset', authenticateInsurer, async (_req, res, next) =>
     const queueNames = ['claim-creation', 'claim-validation', 'payout-creation'];
     const queueErrors: Array<{ queue: string; error: string }> = [];
 
-    await Promise.all(
-      queueNames.map(async (queueName) => {
-        const q = new Queue(queueName, { connection: redisConnection });
-        try {
-          await q.obliterate({ force: true });
-          await q.close();
-        } catch (err) {
-          queueErrors.push({
-            queue: queueName,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      })
-    );
+    if (!config.USE_IN_MEMORY_REDIS) {
+      await Promise.all(
+        queueNames.map(async (queueName) => {
+          const q = new Queue(queueName, { connection: redisConnection });
+          try {
+            await q.obliterate({ force: true });
+            await q.close();
+          } catch (err) {
+            queueErrors.push({
+              queue: queueName,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        })
+      );
+    } else {
+      console.log('[Admin] Skipping queue obliteration (Memory Mode active)');
+    }
 
     logger.info('Admin', 'demo_reset', {
       truncated: ['payouts', 'claims', 'disruption_events', 'rl_shadow_log'],
