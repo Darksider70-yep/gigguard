@@ -17,16 +17,16 @@ const router = Router();
 
 const purchasePolicySchema = z.object({
   body: z.object({
-    razorpay_payment_id: z.string().optional(),
-    razorpay_order_id: z.string().optional(),
-    razorpay_signature: z.string().optional(),
-    payment_order_id: z.string().optional(),
+    razorpay_payment_id: z.string().optional().nullable(),
+    razorpay_order_id: z.string().optional().nullable(),
+    razorpay_signature: z.string().optional().nullable(),
+    payment_order_id: z.string().optional().nullable(),
     premium_paid: z.number(),
     coverage_amount: z.number(),
-    recommended_arm: z.number().int().min(0).max(3).optional(),
-    selected_arm: z.number().int().min(0).max(3).optional(),
-    context_key: z.string().optional(),
-    arm_accepted: z.boolean().optional(),
+    recommended_arm: z.number().int().min(0).max(3).optional().nullable(),
+    selected_arm: z.number().int().min(0).max(3).optional().nullable(),
+    context_key: z.string().optional().nullable(),
+    arm_accepted: z.boolean().optional().nullable(),
   }),
 });
 
