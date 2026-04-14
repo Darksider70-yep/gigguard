@@ -24,6 +24,34 @@ function createQueue(name: string, defaultJobOptions: JobsOptions): Queue {
     } as unknown as Queue;
   }
 
+  if (config.USE_IN_MEMORY_REDIS) {
+    console.log(`[Queue] Using Bypass Queue for '${name}' (Memory Mode)`);
+    return {
+      add: async (jobName: string, data: any) => {
+        // Execute the worker logic immediately to bypass Redis
+        console.log(`[Queue] Bypassing Redis: Executing '${name}/${jobName}' inline`);
+        
+        try {
+          if (name === 'claim-creation') {
+            const { processClaimCreationJob } = await import('../workers/claimCreation');
+            await processClaimCreationJob(data);
+          } else if (name === 'claim-validation') {
+            const { processClaimValidationJob } = await import('../workers/claimValidation');
+            await processClaimValidationJob(data);
+          } else if (name === 'payout-creation') {
+            const { processPayoutCreationJob } = await import('../workers/payoutCreation');
+            await processPayoutCreationJob(data);
+          }
+        } catch (err) {
+          console.error(`[Queue] Inline execution failed for '${name}':`, err);
+        }
+
+        return { id: `memory-${name}-${Date.now()}` } as any;
+      },
+      close: async () => undefined,
+    } as unknown as Queue;
+  }
+
   return new Queue(name, {
     connection: redisConnection,
     defaultJobOptions,

@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import { config } from '../config';
 import { logger } from '../lib/logger';
+import { memoryRedis } from '../lib/memoryRedis';
 
 export interface PendingOtpRecord {
   otp: string;
@@ -12,18 +13,22 @@ const OTP_TTL_SECONDS = 600;
 const RESEND_WINDOW_SECONDS = 60 * 60;
 const MAX_RESENDS_PER_HOUR = 3;
 
-const redis = new Redis(config.REDIS_URL, {
-  lazyConnect: true,
-  maxRetriesPerRequest: 1,
-  enableOfflineQueue: false,
-  retryStrategy: () => null,
-});
+const redis = config.USE_IN_MEMORY_REDIS
+  ? (memoryRedis as unknown as Redis)
+  : new Redis(config.REDIS_URL, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+      retryStrategy: () => null,
+    });
 
-redis.on('error', (error) => {
-  logger.warn('OTPService', 'redis_error', {
-    error: error.message,
+if (!config.USE_IN_MEMORY_REDIS) {
+  redis.on('error', (error) => {
+    logger.warn('OTPService', 'redis_error', {
+      error: error.message,
+    });
   });
-});
+}
 
 function normalizePhoneDigits(phoneNumber: string): string {
   return phoneNumber.replace(/\D/g, '');

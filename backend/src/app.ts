@@ -21,7 +21,10 @@ import { globalErrorHandler } from './middleware/errorHandler';
 let backgroundStarted = false;
 
 function startBackgroundProcesses(): void {
-  if (backgroundStarted || process.env.NODE_ENV === 'test') {
+  if (backgroundStarted || process.env.NODE_ENV === 'test' || config.USE_IN_MEMORY_REDIS) {
+    if (config.USE_IN_MEMORY_REDIS) {
+      console.log('[App] Background workers disabled (Memory Mode active)');
+    }
     return;
   }
 

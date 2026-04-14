@@ -68,6 +68,12 @@ export const config = {
   IS_DEMO_MODE: getBooleanEnv('IS_DEMO_MODE', false),
   FEATURE_PANDEMIC_TRIGGER_ENABLED: getBooleanEnv('FEATURE_PANDEMIC_TRIGGER_ENABLED', true),
 
+  // Auto-enable in-memory mode if Redis is pointing to localhost on production (Render Free Tier)
+  USE_IN_MEMORY_REDIS: getBooleanEnv(
+    'USE_IN_MEMORY_REDIS', 
+    process.env.NODE_ENV === 'production' && (process.env.REDIS_URL || '').includes('localhost')
+  ),
+
   PORT: getNumberEnv('PORT', 4000),
   NODE_ENV: getStringEnv('NODE_ENV', 'development'),
 
