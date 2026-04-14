@@ -1,14 +1,17 @@
 import { pool } from '../../db';
 
 /**
- * Super-logging SQL wrapper
+ * Super-logging SQL wrapper with BigInt support
  */
 async function query(text: string, params: any[]) {
-  console.log(`[wallet-db] Executing: ${text.substring(0, 50)}... | Params: ${JSON.stringify(params)}`);
+  // Safe logging: convert BigInts to strings for JSON.stringify
+  const safeParams = params.map(p => typeof p === 'bigint' ? p.toString() + 'n' : p);
+  console.log(`[wallet-db] Executing: ${text.substring(0, 50)}... | Params: ${JSON.stringify(safeParams)}`);
+  
   try {
     return await pool.query(text, params);
   } catch (err: any) {
-    console.error(`[wallet-db] ERROR: ${err.message} | Code: ${err.code} | Pos: ${err.position}`);
+    console.error(`[wallet-db] ERROR: ${err.message} | Code: ${err.code}`);
     throw err;
   }
 }
@@ -23,11 +26,10 @@ async function ensureTable() {
     )
   `, []);
   
-  // Also try to ALTER it in case it's currently an INTEGER
   try {
     await query(`ALTER TABLE dummy_wallets ALTER COLUMN balance_paise TYPE BIGINT`, []);
   } catch {
-    // Ignore error if it's already bigint
+    // Already bigint
   }
 }
 
@@ -38,6 +40,7 @@ export async function getBalance(worker_id: string): Promise<number> {
       [worker_id]
     );
     if (rows.length === 0) return 0;
+    // CRITICAL: Always convert Postgres BIGINT (string in JS) or BigInt to Number
     return Number(rows[0].balance_paise);
   } catch (err: any) {
     if (err.message.includes('does not exist')) {
@@ -50,7 +53,6 @@ export async function getBalance(worker_id: string): Promise<number> {
 
 export async function creditWallet(worker_id: string, amount_paise: number) {
   try {
-    // We use a simpler two-step approach if UPSERT fails for some reason
     await query(
       `INSERT INTO dummy_wallets (worker_id, balance_paise)
        VALUES ($1, $2)

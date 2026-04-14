@@ -154,11 +154,11 @@ app.get('/debug/db', async (_req, res) => {
     res.json({
       status: 'connected',
       details: rows[0],
-      migrations_table: await pool.query('SELECT count(*) FROM _migrations_payment').then(r => r.rows[0].count).catch(e => e.message),
-      wallet_table: await pool.query('SELECT count(*) FROM dummy_wallets').then(r => r.rows[0].count).catch(e => e.message)
+      migrations_table: await pool.query('SELECT count(*) FROM _migrations_payment').then(r => Number(r.rows[0].count)).catch(e => e.message),
+      wallet_table: await pool.query('SELECT count(*) FROM dummy_wallets').then(r => Number(r.rows[0].count)).catch(e => e.message)
     });
   } catch (err: any) {
-    res.status(500).json({ status: 'error', message: err.message, stack: err.stack });
+    res.status(500).json({ status: 'error', message: err.message });
   }
 });
 
