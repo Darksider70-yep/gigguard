@@ -410,7 +410,10 @@ export function renderCheckoutUI(params: {
 
     function loadWallet() {
       fetch('/wallet/' + WORKER_ID, { headers: { 'X-Service-Key': 'dummy_ui_internal' }})
-        .then(function(r) { return r.json(); })
+        .then(function(r) { 
+          if (!r.ok) return r.json().then(function(err) { throw new Error(err.message || err.error || 'Server error'); });
+          return r.json(); 
+        })
         .then(function(d) {
           document.getElementById('walletBal').textContent = String.fromCharCode(0x20B9) + (d.balance_paise / 100).toLocaleString('en-IN');
           var hasBalance = d.balance_paise >= AMOUNT;
@@ -421,8 +424,10 @@ export function renderCheckoutUI(params: {
             document.getElementById('walletBal').style.color = '';
           }
         })
-        .catch(function() {
-          document.getElementById('walletBal').textContent = String.fromCharCode(0x20B9) + '10,000';
+        .catch(function(err) {
+          console.error('loadWallet failed:', err);
+          document.getElementById('walletBal').textContent = 'Error';
+          // alert('Wallet Error: ' + err.message);
         });
     }
     loadWallet();
@@ -432,7 +437,19 @@ export function renderCheckoutUI(params: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Service-Key': 'dummy_ui_internal' },
         body: JSON.stringify({ amount_paise: 50000 })
-      }).then(function() { loadWallet(); });
+      }).then(function(r) {
+        if (!r.ok) {
+          return r.json().then(function(err) {
+            alert('Top Up Failed: ' + (err.message || err.error || 'Unknown server error'));
+            throw new Error('Top up failed');
+          });
+        }
+        return r.json();
+      }).then(function() { 
+        loadWallet(); 
+      }).catch(function(err) {
+        console.error('topupWallet error:', err);
+      });
     }
 
     function handlePay() {
