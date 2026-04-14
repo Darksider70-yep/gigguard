@@ -647,7 +647,7 @@ No new infrastructure is required. The existing ML Service (Python/Flask) and Po
 
 ---
 
-## 6. Future Innovations
+## 6. Innovations
 
 Beyond the core engine, we have a strategic plan to implement advanced features drawn from the world's leading technology companies, ensuring GigGuard stays at the forefront of the InsurTech space.
 
