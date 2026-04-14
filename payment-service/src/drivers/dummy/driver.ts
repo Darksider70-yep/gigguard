@@ -28,8 +28,9 @@ export class DummyDriver implements IPaymentDriver {
     );
 
     // Provide the checkout_url where the frontend redirects to or opens an iframe.
+    const baseUrl = process.env.PAYMENT_SERVICE_URL || 'http://localhost:5002';
     const checkout_url =
-      `http://localhost:5002/ui/checkout?order_id=${order_id}` +
+      `${baseUrl}/ui/checkout?order_id=${order_id}` +
       `&amount=${params.amount_paise}&worker_id=${params.worker_id}`;
 
     return {
