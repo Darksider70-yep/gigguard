@@ -7,9 +7,11 @@ const pool = new Pool({
   max: 5, // max 5 connections from backend
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false } // Render uses self-signed certs
-    : false,
+  ssl: process.env.DB_SSL === 'false'
+    ? false
+    : (process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false } // Render uses self-signed certs
+        : false),
 });
 
 pool.on('error', (err: Error) => {

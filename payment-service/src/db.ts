@@ -5,7 +5,9 @@ export const pool = new Pool({
   max: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: process.env.DB_SSL === 'false'
+    ? false
+    : (process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : false),
 });
