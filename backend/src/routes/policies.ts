@@ -168,6 +168,7 @@ router.post('/', authenticateWorker, validate(purchasePolicySchema), asyncRoute(
   }
 
   if (!valid) {
+    console.error('[Policies] Payment verification failed. Body:', JSON.stringify(body));
     return res.status(400).json({
       code: 'INVALID_PAYMENT_SIGNATURE',
       message: 'Payment verification failed',

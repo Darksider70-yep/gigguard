@@ -99,6 +99,7 @@ export default function BuyPolicyQuotePage() {
       const { checkout_data } = order;
       
       if (checkout_data.driver === 'dummy') {
+        sessionStorage.setItem('buy_policy_tier', JSON.stringify(selectedTier));
         window.location.href = checkout_data.checkout_url;
         return;
       }

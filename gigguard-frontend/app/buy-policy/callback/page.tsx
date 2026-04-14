@@ -39,17 +39,20 @@ export default function PaymentCallbackPage() {
 
         const quote = JSON.parse(quoteRaw);
         const worker = JSON.parse(workerRaw || '{}');
+        const tierRaw = sessionStorage.getItem('buy_policy_tier');
+        const selectedTier = tierRaw ? JSON.parse(tierRaw) : null;
 
-        // Note: For dummy flow, we must determine standard tier logic as we can't fully map everything backward cleanly
-        // if we didn't save the selectedTier inside session. For safety, we will pull it from quote if missing.
         const purchase = await api.purchasePolicy({
           payment_order_id,
           razorpay_payment_id: driver_payment_id,
           razorpay_order_id: driver_order_id,
           razorpay_signature: driver_signature,
-          premium_paid: Math.round(quote.premium), // Default fallback
-          coverage_amount: 440, // Default fallback
-          recommended_arm: quote.recommended_arm, context_key: quote.context_key, arm_accepted: true,
+          premium_paid: selectedTier ? selectedTier.premium : Math.round(quote.premium),
+          coverage_amount: selectedTier ? selectedTier.coverage : 440,
+          recommended_arm: quote.recommended_arm,
+          selected_arm: selectedTier ? selectedTier.arm : quote.recommended_arm,
+          context_key: quote.context_key,
+          arm_accepted: selectedTier ? selectedTier.arm === quote.recommended_arm : true,
         });
 
         sessionStorage.setItem(
