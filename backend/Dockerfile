@@ -41,8 +41,9 @@ COPY package*.json ./
 RUN npm ci --omit=dev --no-audit && \
     npm cache clean --force
 
-# Copy built application from build stage
+# Copy built application and database migrations
 COPY --from=build --chown=nodejs:nodejs /app/dist ./dist
+COPY --chown=nodejs:nodejs db ./db
 
 # Switch to non-root user
 USER nodejs

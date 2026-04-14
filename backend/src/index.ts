@@ -1,10 +1,20 @@
 import { createApp } from './app';
 import { startServer } from './server';
+import { runMigrations } from './db/migrator';
+import { logger } from './lib/logger';
 
 const app = createApp();
 
 if (require.main === module) {
-  startServer();
+  (async () => {
+    try {
+      await runMigrations();
+      startServer();
+    } catch (err: any) {
+      logger.error('SYSTEM', 'startup_failed', { error: err.message });
+      process.exit(1);
+    }
+  })();
 }
 
 export default app;
