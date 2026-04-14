@@ -386,7 +386,7 @@ describe('Claim pipeline workers', () => {
       await processClaimValidationJob({ claim_id: 'claim-1' });
 
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("SET status='under_review'"),
+        expect.stringContaining("SET status='flagged'"),
         expect.any(Array)
       );
       expect(mockPayoutQueue.add).not.toHaveBeenCalled();

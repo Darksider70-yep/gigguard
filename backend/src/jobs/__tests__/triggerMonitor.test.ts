@@ -159,7 +159,7 @@ describe('triggerMonitor job', () => {
       String(sql).includes('INSERT INTO disruption_events')
     );
     expect(insertCall).toBeDefined();
-    expect(insertCall?.[1]?.[5]).toBe('extreme');
+    expect(insertCall?.[1]?.[7]).toBe('extreme');
   });
 
   test('processTriggerEvent enqueues to claim-creation queue with correct payload', async () => {
