@@ -371,7 +371,7 @@ export default function InsurerPage() {
                     ) : triggers.map((trigger: any) => (
                       <div key={trigger.id} className="p-3 bg-white/5 border border-white/5 rounded-xl space-y-2">
                          <div className="flex justify-between items-start">
-                            <TriggerBadge triggerType={trigger.type} size="sm" />
+                            <TriggerBadge triggerType={trigger.trigger_type} size="sm" />
                             <span className="text-[10px] font-monoData text-text-muted">{trigger.status}</span>
                          </div>
                          <div className="flex justify-between items-end">

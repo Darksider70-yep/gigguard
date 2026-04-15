@@ -30,6 +30,8 @@ export async function processClaimCreationJob(
 
   let claimsCreated = 0;
 
+  let totalPayoutAmount = 0;
+
   for (const workerId of worker_ids) {
     try {
       const upsertResult = await withTransaction(async (client) => {
@@ -190,6 +192,10 @@ export async function processClaimCreationJob(
         claimsCreated += 1;
       }
 
+      if (upsertResult.claimCreated || upsertResult.claimUpdated) {
+        totalPayoutAmount += upsertResult.payoutAmount;
+      }
+
       if (
         trigger_type === 'pandemic_containment' &&
         health_advisory_id &&
@@ -238,9 +244,10 @@ export async function processClaimCreationJob(
   await query(
     `UPDATE disruption_events
      SET total_claims_triggered = total_claims_triggered + $1,
-         affected_workers_count = $2
-     WHERE id = $3`,
-    [claimsCreated, worker_ids.length, disruption_event_id]
+         affected_workers_count = $2,
+         total_payout_amount = total_payout_amount + $3
+     WHERE id = $4`,
+    [claimsCreated, worker_ids.length, totalPayoutAmount, disruption_event_id]
   );
 
   return { claims_created: claimsCreated };

@@ -332,6 +332,7 @@ router.get('/triggers', authenticateInsurer, asyncRoute(async (req, res) => {
   res.json({
     triggers: rows.map(r => ({
       ...r,
+      trigger_type: r.trigger_type, // Ensure this field is present
       trigger_value: Number(r.trigger_value),
       threshold: Number(r.threshold),
       total_payout_amount: Math.round(Number(r.total_payout_amount || 0))

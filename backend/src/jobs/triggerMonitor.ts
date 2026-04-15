@@ -302,16 +302,17 @@ async function processTrigger(params: {
   const zoneKey = zoneHexId ? BigInt(zoneHexId).toString() : BigInt(`0x${eventHex}`).toString();
   const ringHexes = gridDisk(eventHex, 1);
 
+  // Improved suppression: Check for same city/zone/type AND ensure the event is fairly recent (within 1 hour for manual overrides)
   const { rows: existing } = await query<{ id: string }>(
     `SELECT id
      FROM disruption_events
      WHERE city=$1
-       AND zone=$2
-       AND trigger_type=$3
-       AND event_start > NOW() - INTERVAL '6 hours'
-       AND event_end IS NULL
+       AND (zone=$2 OR (latitude=$3 AND longitude=$4))
+       AND trigger_type=$5
+       AND status='active'
+       AND event_start > NOW() - INTERVAL '1 hour'
      LIMIT 1`,
-    [city, zoneKey, triggerType]
+    [city, zoneKey, lat, lng, triggerType]
   );
   if (existing.length > 0) {
     logger.warn('TriggerMonitor', 'duplicate_suppressed', {
