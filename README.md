@@ -904,11 +904,3 @@ All in-depth documentation lives in the [`docs/`](docs/) directory:
 | [**GIN Index Explanation**](docs/GIN_INDEX_EXPLANATION.md) | PostgreSQL GIN indexes for H3 hex lookups |
 | [**Bandit Implementation**](docs/BANDIT_IMPLEMENTATION.md) | Thompson Sampling bandit deep-dive |
 | [**Review Summary**](docs/REVIEW_COMPLETE_SUMMARY.md) | Bandit implementation review and test suite |
-
-#### Additional Documents (Office format)
-| Document | Description |
-|----------|-------------|
-| [**System Architecture**](docs/System_architecture.docx) | Full architecture deep-dive (Word) |
-| [**ER Model**](docs/GigGuard_ER_Model.docx) | Database entity-relationship model (Word) |
-| [**Premium Model**](docs/Premium_model.docx) | Premium formula and business viability (Word) |
-| [**Innovation Plan**](docs/GigGuard_Innovation_Plan.docx) | Future innovations roadmap (Word) |
