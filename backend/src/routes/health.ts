@@ -38,14 +38,12 @@ router.get('/', async (req, res) => {
     if (!res.ok) {
       health.status = 'degraded';
       health.services.ml_service.error = 'Service reported not OK';
-      health.services.ml_service.body = await res.text().then(t => t.slice(0, 200)).catch(() => 'N/A');
     }
   } catch (err: any) {
     health.services.ml_service = { 
       status: 'down', 
       error: err.message, 
-      code: err.code || err.cause?.code,
-      cause: err.cause?.message || 'Unknown network error'
+      code: err.code || err.cause?.code
     };
     health.status = 'degraded';
   }
@@ -65,14 +63,12 @@ router.get('/', async (req, res) => {
     if (!res.ok) {
       health.status = 'degraded';
       health.services.payment_service.error = 'Service reported not OK';
-      health.services.payment_service.body = await res.text().then(t => t.slice(0, 200)).catch(() => 'N/A');
     }
   } catch (err: any) {
     health.services.payment_service = { 
       status: 'down', 
       error: err.message, 
-      code: err.code || err.cause?.code,
-      cause: err.cause?.message || 'Unknown network error'
+      code: err.code || err.cause?.code
     };
     health.status = 'degraded';
   }
