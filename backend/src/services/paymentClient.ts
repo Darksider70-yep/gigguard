@@ -20,14 +20,10 @@ export const paymentClient = {
   getDisbursement:    async (id: string)   => get(`/disbursements/${id}`),
   retryDisbursement:  async (id: string)   => post(`/disbursements/${id}/retry`, {}),
   checkHealth: async () => {
-    try {
-      const res = await fetch(`${PAYMENT_SERVICE_URL}/health`, { 
-        headers: { 'X-Service-Key': SERVICE_KEY }
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
+    const res = await fetch(`${PAYMENT_SERVICE_URL}/health`, { 
+      headers: { 'X-Service-Key': SERVICE_KEY }
+    });
+    return res.ok;
   }
 };
 

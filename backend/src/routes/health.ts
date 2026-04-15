@@ -31,9 +31,12 @@ router.get('/', async (req, res) => {
     const start = Date.now();
     const mlLive = await mlService.checkHealth();
     health.services.ml_service = { status: mlLive ? 'live' : 'down', latency: `${Date.now() - start}ms` };
-    if (!mlLive) health.status = 'degraded';
-  } catch {
-    health.services.ml_service = { status: 'down' };
+    if (!mlLive) {
+      health.status = 'degraded';
+      health.services.ml_service.error = 'Service reported not OK';
+    }
+  } catch (err: any) {
+    health.services.ml_service = { status: 'down', error: err.message, code: err.code };
     health.status = 'degraded';
   }
 
@@ -42,9 +45,12 @@ router.get('/', async (req, res) => {
     const start = Date.now();
     const paymentLive = await paymentClient.checkHealth();
     health.services.payment_service = { status: paymentLive ? 'live' : 'down', latency: `${Date.now() - start}ms` };
-    if (!paymentLive) health.status = 'degraded';
-  } catch {
-    health.services.payment_service = { status: 'down' };
+    if (!paymentLive) {
+      health.status = 'degraded';
+      health.services.payment_service.error = 'Service reported not OK';
+    }
+  } catch (err: any) {
+    health.services.payment_service = { status: 'down', error: err.message, code: err.code };
     health.status = 'degraded';
   }
 

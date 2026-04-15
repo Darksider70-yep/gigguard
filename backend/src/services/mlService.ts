@@ -258,14 +258,13 @@ class MLService {
   }
 
   async checkHealth(): Promise<boolean> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2000);
       const res = await fetch(`${this.baseUrl}/health`, { signal: controller.signal });
-      clearTimeout(timer);
       return res.ok;
-    } catch {
-      return false;
+    } finally {
+      clearTimeout(timer);
     }
   }
 }
