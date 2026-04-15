@@ -47,7 +47,7 @@ export const config = {
   REDIS_URL: getStringEnv('REDIS_URL', 'redis://localhost:6379'),
 
   ML_SERVICE_URL: getStringEnv('ML_SERVICE_URL', 'http://localhost:5001'),
-  ML_SERVICE_TIMEOUT_MS: getNumberEnv('ML_SERVICE_TIMEOUT_MS', getNumberEnv('ML_TIMEOUT_MS', 500)),
+  ML_SERVICE_TIMEOUT_MS: getNumberEnv('ML_SERVICE_TIMEOUT_MS', getNumberEnv('ML_TIMEOUT_MS', 30000)),
   PAYMENT_SERVICE_URL: getStringEnv('PAYMENT_SERVICE_URL', 'http://localhost:5002'),
 
   OPENWEATHERMAP_API_KEY,
@@ -89,7 +89,7 @@ export const config = {
   port: getNumberEnv('PORT', 4000),
   databaseUrl: getStringEnv('DATABASE_URL', 'postgresql://gigguard:password@localhost:5432/gigguard'),
   mlServiceUrl: getStringEnv('ML_SERVICE_URL', 'http://localhost:5001'),
-  mlTimeoutMs: getNumberEnv('ML_SERVICE_TIMEOUT_MS', getNumberEnv('ML_TIMEOUT_MS', 500)),
+  mlTimeoutMs: getNumberEnv('ML_SERVICE_TIMEOUT_MS', getNumberEnv('ML_TIMEOUT_MS', 30000)),
   useMockApis: getBooleanEnv('USE_MOCK_APIS', true),
   useMockPayout: getBooleanEnv('USE_MOCK_PAYOUT', true),
   isDemoMode: getBooleanEnv('IS_DEMO_MODE', false),

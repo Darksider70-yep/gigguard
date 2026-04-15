@@ -4,7 +4,7 @@ import { CircuitBreaker } from '../lib/circuitBreaker';
 
 const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL ?? 'http://payment-service:5002';
 const SERVICE_KEY = process.env.PAYMENT_SERVICE_KEY!;
-const TIMEOUT = 5000; // 5 seconds
+const TIMEOUT = 30000; // 30 seconds (enough for cold starts)
 
 const breaker = new CircuitBreaker({
   name: 'PAYMENT_SERVICE',
