@@ -232,67 +232,42 @@ npm run dev
 
 ---
 
-## Troubleshooting
+## Production Cloud Deployment (Render)
 
-### OneDrive / BuildKit Error
+GigGuard is optimized for deployment on **Render** (Free Tier). Due to networking limitations on the Free plan, specific configurations are required to ensure service-to-service communication.
 
-If your project is inside OneDrive on Windows and Docker BuildKit fails with `invalid file request`:
+### 1. Networking Strategy (Free Tier)
+Render's **Private Networking** is disabled on the Free tier. Services cannot communicate via `http://ml-service:5001`.
+- **Solution**: Use the **Public Service URL** (e.g., `https://gigguard-ml.onrender.com`) as the `ML_SERVICE_URL` in your Backend environment variables.
 
-```powershell
-$env:COMPOSE_DOCKER_CLI_BUILD='0'
-$env:DOCKER_BUILDKIT='0'
-docker compose build --no-cache
-docker compose up
-```
+### 2. Service Configuration Matrix
 
-### ML Service Fails to Start
+| Service | Override `PORT` | Required URL Variables |
+|---------|-----------------|------------------------|
+| **Backend** | (Default) | `ML_SERVICE_URL`, `PAYMENT_SERVICE_URL`, `FRONTEND_URL` |
+| **ML Service** | `5001` | `DATABASE_URL` |
+| **Payment Service** | `5002` | `DATABASE_URL`, `BACKEND_URL` |
 
-**Symptom:** `gigguard-ml` container restarts repeatedly.
+### 3. Cold Start & Uptime Management
+Render Free Tier services spin down after 15 minutes of inactivity.
+- **Uptime Monitoring**: Use [cron-job.org](https://cron-job.org) to ping the `/health` endpoint of all services (Backend, ML, Payment, Frontend) every 10–14 minutes.
+- **Timeouts**: The Backend is configured with a **30-second timeout** for internal service calls to allow enough time for "cold starts."
 
-**Check logs:**
-```bash
-docker compose logs ml-service
-```
+### 4. Database Setup
+1. Provision a **Render PostgreSQL** instance.
+2. Ensure you use the **External Connection String** for local development and the **Internal Connection String** (if on paid plans) or **External URL** (if on free plans) for the backend.
+3. Apply migrations using the provided scripts or via a migrations container.
 
-**Common causes:**
-- Missing `DATABASE_URL` environment variable
-- Missing `FLASK_ENV`, `SAC_MODEL_PATH`, `IF_MODEL_PATH`, or `LOG_LEVEL`
-- Database not ready yet (healthcheck should handle this)
+---
 
-### Backend Can't Connect to ML Service
+## Troubleshooting (Cloud)
 
-**Symptom:** Premium requests return fallback values.
+### Symptom: Backend reports "Internal Service Error"
+- **Check**: Is the internal service (ML/Payment) awake? 
+- **Cause**: Render Free tier might be waking them up. 
+- **Fix**: Check logs. If you see `ECONNREFUSED` or `502`, the target service is cold starting. Wait 30s and retry.
 
-**Fix:** The ML service healthcheck must pass before the backend starts. Check:
-```bash
-docker compose ps  # ml-service should show "healthy"
-curl http://localhost:5001/health
-```
+### Symptom: API requests return 404
+- **Check**: Ensure `ALLOWED_ORIGINS` in the Backend `.env` includes your production Frontend URL.
 
-### High Memory Usage
-
-**Symptom:** Docker containers using too much RAM.
-
-**Fix:** Memory limits are set in `docker-compose.yml`. To reduce further:
-- Reduce ML service gunicorn workers: already set to 1 worker + 2 threads
-- Disable SAC model loading if not needed: set `SAC_MODEL_PATH` to a non-existent path (logs warning, continues)
-
-### Database Migration Errors
-
-**Symptom:** Tables missing or column errors.
-
-**Fix:** Migrations run automatically on first PostgreSQL start via `docker-entrypoint-initdb.d`. If you've changed the schema:
-```bash
-docker compose down -v  # WARNING: destroys data
-docker compose up --build
-```
-
-### Port Conflicts
-
-**Symptom:** `bind: address already in use`
-
-**Fix:** Stop conflicting services or change ports in `docker-compose.yml`:
-```bash
-# Check what's using a port
-netstat -ano | findstr :4000
-```
+---
