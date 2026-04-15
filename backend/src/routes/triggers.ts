@@ -5,6 +5,8 @@ import { query } from '../db';
 import { premiumService } from '../services/premiumService';
 import { logger } from '../lib/logger';
 import { processHealthEmergencyPayload } from './webhooks';
+import { config } from '../config';
+import { processTriggerSync } from '../workers/syncFallback';
 
 const router = Router();
 
@@ -109,6 +111,22 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
       trigger_value: triggerValue,
       disruption_hours: disruptionHours,
     });
+
+    // In-memory mode: BullMQ workers are disabled, so run the full
+    // claim → validate → payout pipeline synchronously right here
+    if (config.USE_IN_MEMORY_REDIS && result.event_id && result.worker_ids.length > 0) {
+      logger.info('Triggers', 'sync_pipeline_start', {
+        event_id: result.event_id,
+        workers: result.worker_ids.length,
+      });
+      await processTriggerSync({
+        disruption_event_id: result.event_id,
+        trigger_type: triggerType,
+        disruption_hours: disruptionHours,
+        trigger_value: triggerValue,
+        worker_ids: result.worker_ids,
+      });
+    }
 
     let totalPayout = 0;
     if (result.worker_ids.length > 0) {

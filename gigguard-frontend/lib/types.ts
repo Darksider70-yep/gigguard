@@ -268,6 +268,28 @@ export interface InsurerPayoutsResponse {
   limit: number;
 }
 
+export interface InsurerPoliciesResponse {
+  policies: Array<{
+    id: string;
+    week_start: string;
+    week_end: string;
+    status: string;
+    premium_paid: number;
+    coverage_amount: number;
+    purchased_at: string;
+    worker_name: string;
+    city: string;
+    zone: string;
+    platform: string;
+  }>;
+  total: number;
+  total_premiums: number;
+  avg_premium: number;
+  avg_coverage: number;
+  page: number;
+  limit: number;
+}
+
 export interface ServiceHealth {
   id: string;
   name: string;

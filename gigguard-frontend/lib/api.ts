@@ -36,6 +36,28 @@ export class APIError extends Error {
   }
 }
 
+export interface InsurerPoliciesResponse {
+  policies: Array<{
+    id: string;
+    week_start: string;
+    week_end: string;
+    status: string;
+    premium_paid: number;
+    coverage_amount: number;
+    purchased_at: string;
+    worker_name: string;
+    city: string;
+    zone: string;
+    platform: string;
+  }>;
+  total: number;
+  total_premiums: number;
+  avg_premium: number;
+  avg_coverage: number;
+  page: number;
+  limit: number;
+}
+
 interface APIRequestOptions extends RequestInit {
   skipAuth?: boolean;
   skipUnauthorizedHandler?: boolean;
@@ -308,6 +330,14 @@ class GigGuardAPI {
 
   getPlatformStatus() {
     return this.request<PlatformStatusResponse>('/insurer/platform-status');
+  }
+
+  getInsurerPolicies(params?: { page?: number; limit?: number; status?: string }) {
+    const query = new URLSearchParams();
+    query.set('page', String(params?.page ?? 1));
+    query.set('limit', String(params?.limit ?? 50));
+    if (params?.status) query.set('status', params.status);
+    return this.request<InsurerPoliciesResponse>(`/insurer/policies?${query.toString()}`);
   }
 
   banditUpdate(context_key: string, arm: number, reward: number) {

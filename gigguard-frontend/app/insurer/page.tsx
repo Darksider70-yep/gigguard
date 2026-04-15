@@ -189,7 +189,7 @@ export default function InsurerPage() {
                { label: 'Flagged Claims', val: stats.flagged_claims, icon: AlertCircle, href: '/insurer/flagged', variant: 'error' },
                { label: 'Net Loss Ratio', val: (stats.loss_ratio * 100).toFixed(1), icon: TrendingUp, suffix: '%', href: '/insurer/analytics' },
                { label: 'Global Reach', val: stats.coverage_area.zones, icon: MapPin, suffix: ' Zones', href: '/insurer/coverage' },
-               { label: 'Avg Premium', val: stats.average_premium, icon: History, prefix: '₹' },
+               { label: 'Avg Premium', val: stats.average_premium, icon: History, prefix: '₹', href: '/insurer/analytics' },
              ].map((s, i) => (
                <GlassCard key={i} interactive className="p-4 group">
                   <Link href={s.href || '#'} className="block space-y-3">

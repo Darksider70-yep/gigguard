@@ -302,6 +302,16 @@ async function processTrigger(params: {
   const zoneKey = zoneHexId ? BigInt(zoneHexId).toString() : BigInt(`0x${eventHex}`).toString();
   const ringHexes = gridDisk(eventHex, 1);
 
+  // Look up a human-readable zone name from the workers table  
+  const ringBigintsForLookup = ringHexes.map((h) => BigInt(`0x${h}`));
+  const { rows: zoneNameRows } = await query<{ zone: string }>(
+    `SELECT zone FROM workers
+     WHERE home_hex_id = ANY($1::bigint[]) AND zone IS NOT NULL AND zone != ''
+     GROUP BY zone ORDER BY COUNT(*) DESC LIMIT 1`,
+    [ringBigintsForLookup]
+  );
+  const humanZone = zoneNameRows.length > 0 ? zoneNameRows[0].zone : (params as any).zoneName || city;
+
   // Improved suppression: Check for same city/zone/type AND ensure the event is fairly recent (within 1 hour for manual overrides)
   const { rows: existing } = await query<{ id: string }>(
     `SELECT id
@@ -362,7 +372,7 @@ async function processTrigger(params: {
     [
       triggerType,
       city,
-      zoneKey,
+      humanZone,
       lat,
       lng,
       value,

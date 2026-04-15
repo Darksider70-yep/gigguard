@@ -379,6 +379,7 @@ router.get('/payouts', authenticateInsurer, asyncRoute(async (req, res) => {
     SELECT COALESCE(SUM(p.amount), 0)::text as total_amount
     FROM payouts p
     WHERE date_trunc('month', p.created_at) = date_trunc('month', to_date($1, 'YYYY-MM'))
+      AND p.status = 'paid'
   `;
 
   const [payoutsResult, countResult, totalResult] = await Promise.all([
@@ -396,6 +397,59 @@ router.get('/payouts', authenticateInsurer, asyncRoute(async (req, res) => {
     payouts,
     total: parseInt(countResult.rows[0]?.count ?? '0', 10),
     total_amount: Number(totalResult.rows[0]?.total_amount ?? 0),
+    page,
+    limit,
+  });
+}));
+
+router.get('/policies', authenticateInsurer, asyncRoute(async (req, res) => {
+  const page = Math.max(parseInt(String(req.query.page ?? '1'), 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 100);
+  const offset = (page - 1) * limit;
+  const status = String(req.query.status ?? '').trim();
+
+  const sql = `
+    SELECT p.id::text, p.week_start, p.week_end, p.status,
+           p.premium_paid::text, p.coverage_amount::text,
+           p.purchased_at,
+           w.name as worker_name, w.city, w.zone, w.platform
+    FROM policies p
+    JOIN workers w ON w.id = p.worker_id
+    WHERE ($1 = '' OR p.status = $1)
+    ORDER BY p.purchased_at DESC
+    LIMIT $2 OFFSET $3
+  `;
+  const countSql = `
+    SELECT COUNT(*)::text as count
+    FROM policies p
+    WHERE ($1 = '' OR p.status = $1)
+  `;
+  const statsSql = `
+    SELECT COALESCE(SUM(premium_paid), 0)::text as total_premiums,
+           ROUND(AVG(premium_paid))::text as avg_premium,
+           ROUND(AVG(coverage_amount))::text as avg_coverage
+    FROM policies
+    WHERE ($1 = '' OR status = $1)
+  `;
+
+  const [policiesResult, countResult, statsResult] = await Promise.all([
+    query(sql, [status, limit, offset]),
+    query<{ count: string }>(countSql, [status]),
+    query<{ total_premiums: string; avg_premium: string; avg_coverage: string }>(statsSql, [status]),
+  ]);
+
+  const policies = policiesResult.rows.map((r: any) => ({
+    ...r,
+    premium_paid: Number(r.premium_paid),
+    coverage_amount: Number(r.coverage_amount),
+  }));
+
+  res.json({
+    policies,
+    total: parseInt(countResult.rows[0]?.count ?? '0', 10),
+    total_premiums: Number(statsResult.rows[0]?.total_premiums ?? 0),
+    avg_premium: Number(statsResult.rows[0]?.avg_premium ?? 0),
+    avg_coverage: Number(statsResult.rows[0]?.avg_coverage ?? 0),
     page,
     limit,
   });
