@@ -36,7 +36,12 @@ router.get('/', async (req, res) => {
       health.services.ml_service.error = 'Service reported not OK';
     }
   } catch (err: any) {
-    health.services.ml_service = { status: 'down', error: err.message, code: err.code };
+    health.services.ml_service = { 
+      status: 'down', 
+      error: err.message, 
+      code: err.code || err.cause?.code,
+      cause: err.cause?.message || 'Unknown network error'
+    };
     health.status = 'degraded';
   }
 
@@ -50,7 +55,12 @@ router.get('/', async (req, res) => {
       health.services.payment_service.error = 'Service reported not OK';
     }
   } catch (err: any) {
-    health.services.payment_service = { status: 'down', error: err.message, code: err.code };
+    health.services.payment_service = { 
+      status: 'down', 
+      error: err.message, 
+      code: err.code || err.cause?.code,
+      cause: err.cause?.message || 'Unknown network error'
+    };
     health.status = 'degraded';
   }
 
