@@ -26,15 +26,9 @@ services:
       - key: JWT_SECRET
         generateValue: true   # Render generates a secure random value
       - key: ML_SERVICE_URL
-        fromService:
-          name: gigguard-ml
-          type: web
-          property: host
+        value: http://gigguard-ml:5001
       - key: PAYMENT_SERVICE_URL
-        fromService:
-          name: gigguard-payment
-          type: web
-          property: host
+        value: http://gigguard-payment:5002
       - key: PAYMENT_SERVICE_KEY
         sync: false           # set manually in Render dashboard (sensitive)
       - key: HEALTH_WEBHOOK_SECRET
