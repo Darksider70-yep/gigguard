@@ -73,9 +73,7 @@ Replaced text-based zone matching ("Andheri West") with Uber's H3 hexagonal grid
 **Migration:** All existing workers backfilled with H3 hex IDs during deployment. Zones kept for backward compatibility.
 
 **Documentation:**
-- [H3 Implementation Guide](docs/H3_IMPLEMENTATION_GUIDE.md)
-- [H3 API Reference](docs/H3_API_REFERENCE.md)
-- [H3 Deployment Summary](docs/H3_DEPLOYMENT_SUMMARY.md)
+- [**Geospatial Intelligence (H3)**](docs/GEOSPATIAL.md) — Unified H3 implementation and API guide.
 
 ---
 
@@ -736,6 +734,18 @@ setx DOCKER_BUILDKIT 0
 - **Backend API:** [http://localhost:4000](http://localhost:4000)
 - **ML Service:** [http://localhost:5001](http://localhost:5001)
 
+---
+
+### ☁️ Production Cloud Deployment (Render)
+
+GigGuard is optimized for **Render (Free Tier)** with the following production-hardened settings:
+- **Port Overrides**: ML Service (`5001`), Payments (`5002`).
+- **Internal Connectivity**: Uses Public URLs for cross-service calls (bypassing Private Networking limits).
+- **Cold-Start Handling**: Backend configured with 30s timeouts.
+- **Uptime Monitoring**: External pings every 10-14 mins via [cron-job.org](https://cron-job.org).
+
+Use the [**render.yaml**](render.yaml) blueprint for a one-click deployment of the entire stack.
+
 **7. Consolidated Test Suite:**
 We have hardened the testing infrastructure. All tests have been consolidated into the root `tests/` directory for better visibility.
 ```bash
@@ -778,9 +788,7 @@ Each Phase 2 innovation has dedicated documentation covering theory, implementat
 
 | Document | Purpose |
 |---|---|
-| [**H3 Implementation Guide**](docs/H3_IMPLEMENTATION_GUIDE.md) | Understanding Uber's H3 hexagon system, trigger monitor algorithm, and efficient backfill at scale |
-| [**H3 API Reference**](docs/H3_API_REFERENCE.md) | API specifications and trigger processing examples |
-| [**H3 Deployment Summary**](docs/H3_DEPLOYMENT_SUMMARY.md) | Live deployment status and performance metrics |
+| [**Geospatial Intelligence (H3)**](docs/GEOSPATIAL.md) | Understanding Uber's H3 hexagon system, trigger monitor algorithm, and API examples. |
 
 **Impact:** 40% reduction in over-payout from precise zone matching
 
@@ -887,16 +895,12 @@ Detailed specifications for rain, AQI, heat, flood, and curfew triggers with thr
 
 All in-depth documentation lives in the [`docs/`](docs/) directory:
 
-| Document | Description |
-|----------|-------------|
 | [**API Reference**](docs/API_REFERENCE.md) | Complete endpoint reference for Backend + ML Service |
 | [**Architecture**](docs/ARCHITECTURE.md) | System design, data flows, database schema, background jobs |
-| [**Deployment Guide**](docs/DEPLOYMENT.md) | Docker setup, RAM-safe build, troubleshooting |
+| [**Deployment Guide**](docs/DEPLOYMENT.md) | **Render instructions**, Docker setup, troubleshooting |
 | [**ML Models**](docs/ML_MODELS.md) | Premium formula, Isolation Forest, Bandits, RL, GNN |
 | [**Trigger Definitions**](docs/trigger-definitions.md) | Parametric trigger specs, thresholds, fraud guards |
-| [**H3 Implementation Guide**](docs/H3_IMPLEMENTATION_GUIDE.md) | H3 geospatial indexing setup and usage |
-| [**H3 API Reference**](docs/H3_API_REFERENCE.md) | H3 code patterns and query examples |
-| [**H3 Deployment Summary**](docs/H3_DEPLOYMENT_SUMMARY.md) | H3 deployment results and performance |
+| [**Geospatial Intelligence**](docs/GEOSPATIAL.md) | Consolidated H3 indexing and API guide |
 | [**GIN Index Explanation**](docs/GIN_INDEX_EXPLANATION.md) | PostgreSQL GIN indexes for H3 hex lookups |
 | [**Bandit Implementation**](docs/BANDIT_IMPLEMENTATION.md) | Thompson Sampling bandit deep-dive |
 | [**Review Summary**](docs/REVIEW_COMPLETE_SUMMARY.md) | Bandit implementation review and test suite |
