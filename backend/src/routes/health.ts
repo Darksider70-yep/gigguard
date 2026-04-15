@@ -29,11 +29,16 @@ router.get('/', async (req, res) => {
   // Check ML Service
   try {
     const start = Date.now();
-    const mlLive = await mlService.checkHealth();
-    health.services.ml_service = { status: mlLive ? 'live' : 'down', latency: `${Date.now() - start}ms` };
-    if (!mlLive) {
+    const res = await fetch(`${mlService['baseUrl']}/health`, { signal: AbortSignal.timeout(2000) });
+    health.services.ml_service = { 
+      status: res.ok ? 'live' : 'down', 
+      latency: `${Date.now() - start}ms`,
+      statusCode: res.status 
+    };
+    if (!res.ok) {
       health.status = 'degraded';
       health.services.ml_service.error = 'Service reported not OK';
+      health.services.ml_service.body = await res.text().then(t => t.slice(0, 200)).catch(() => 'N/A');
     }
   } catch (err: any) {
     health.services.ml_service = { 
@@ -48,11 +53,19 @@ router.get('/', async (req, res) => {
   // Check Payment Service
   try {
     const start = Date.now();
-    const paymentLive = await paymentClient.checkHealth();
-    health.services.payment_service = { status: paymentLive ? 'live' : 'down', latency: `${Date.now() - start}ms` };
-    if (!paymentLive) {
+    const res = await fetch(`${process.env.PAYMENT_SERVICE_URL}/health`, { 
+      headers: { 'X-Service-Key': process.env.PAYMENT_SERVICE_KEY || '' },
+      signal: AbortSignal.timeout(5000)
+    });
+    health.services.payment_service = { 
+      status: res.ok ? 'live' : 'down', 
+      latency: `${Date.now() - start}ms`,
+      statusCode: res.status
+    };
+    if (!res.ok) {
       health.status = 'degraded';
       health.services.payment_service.error = 'Service reported not OK';
+      health.services.payment_service.body = await res.text().then(t => t.slice(0, 200)).catch(() => 'N/A');
     }
   } catch (err: any) {
     health.services.payment_service = { 
