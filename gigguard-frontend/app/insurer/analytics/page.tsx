@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import AuthGuard from '@/components/AuthGuard';
 import InsurerNav from '@/components/layout/InsurerNav';
 import { useDataRefresh } from '@/hooks/useDataRefresh';
@@ -49,27 +50,57 @@ export default function InsurerAnalyticsPage() {
       {!loading && !error && data ? (
         <div className="space-y-5">
           <section className="surface-card p-5">
-            <h2 className="text-xl font-semibold">Loss ratio gauge</h2>
-            <div className="mt-4 flex items-end gap-8">
-              <div className="relative h-[180px] w-[360px] overflow-hidden rounded-t-full border border-slate-700 bg-slate-900/60">
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background: 'conic-gradient(from 180deg, #10b981 0deg, #10b981 117deg, #f59e0b 117deg, #f59e0b 144deg, #ef4444 144deg, #ef4444 180deg, transparent 180deg)',
-                    borderRadius: '999px 999px 0 0',
-                  }}
-                />
-                <div className="absolute left-1/2 top-full h-[150px] w-[2px] origin-top -translate-x-1/2"
-                  style={{
-                    background: needleColor,
-                    transform: `translateX(-50%) rotate(${-90 + (lossRatioPct / 100) * 180}deg)`,
-                    transition: 'transform 900ms ease',
-                  }}
-                />
+            <h2 className="text-xl font-semibold">Loss ratio distribution</h2>
+            <div className="mt-4 flex items-center gap-8">
+              <div className="relative h-[220px] w-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Used Target', value: lossRatioPct, color: needleColor },
+                        { name: 'Remaining Target', value: Math.max(0, 100 - lossRatioPct), color: 'rgba(51, 65, 85, 0.4)' }
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={70}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      startAngle={90}
+                      endAngle={-270}
+                      dataKey="value"
+                      stroke="none"
+                      isAnimationActive={true}
+                      animationDuration={1500}
+                    >
+                      {[
+                        { color: needleColor },
+                        { color: 'rgba(51, 65, 85, 0.4)' }
+                      ].map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.color} 
+                          className="transition-all duration-300 hover:opacity-80 cursor-pointer"
+                          style={{ filter: "drop-shadow(0px 4px 6px rgba(0, 0, 0, 0.3))" }} 
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }}
+                      itemStyle={{ color: '#cbd5e1' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Center Text */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <p className="font-mono-data text-2xl text-amber-300 drop-shadow-md">{lossRatioPct}%</p>
+                  <p className="text-[10px] uppercase tracking-wider text-secondary">Ratio</p>
+                </div>
               </div>
               <div>
-                <p className="font-mono-data text-4xl text-amber-300">{lossRatioPct}%</p>
-                <p className="text-sm text-secondary">{statusText(lossRatioPct)}</p>
+                <h3 className="text-2xl font-bold text-white">{statusText(lossRatioPct)}</h3>
+                <p className="mt-2 text-sm text-secondary max-w-[200px]">
+                  The ratio is currently tracked dynamically to manage expected risk levels against policy premiums.
+                </p>
               </div>
             </div>
           </section>
