@@ -83,7 +83,7 @@ export default function DashboardPage() {
     ? WEATHER_ICON[activePolicy.active_claim.trigger_type] ?? WEATHER_ICON.default
     : WEATHER_ICON.default;
 
-  const monthTotal = Math.round(claims?.stats.total_paid_out ?? 0);
+  const monthTotal = Math.round(claims?.stats?.total_paid_out ?? 0);
   const memberSince = worker?.created_at
     ? new Date(worker.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
     : '-';
@@ -377,7 +377,7 @@ export default function DashboardPage() {
                       View your detailed anti-spoofing review results, appeals, and payout timelines on the dedicated claims page.
                     </p>
                   </div>
-                  <Link href="/history/claims" className="inline-block bg-white text-bg-base font-black px-8 py-3 rounded-2xl hover:bg-white/90 transition-all">
+                  <Link href="/claims" className="inline-block bg-white text-bg-base font-black px-8 py-3 rounded-2xl hover:bg-white/90 transition-all">
                     View Complete Audit
                   </Link>
                 </GlassCard>

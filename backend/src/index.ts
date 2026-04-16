@@ -11,7 +11,11 @@ if (require.main === module) {
       await runMigrations();
       startServer();
     } catch (err: any) {
-      logger.error('SYSTEM', 'startup_failed', { error: err.message });
+      logger.error('SYSTEM', 'startup_failed', { 
+        message: err.message,
+        stack: err.stack,
+        code: err.code
+      });
       process.exit(1);
     }
   })();

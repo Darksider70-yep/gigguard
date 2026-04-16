@@ -40,7 +40,7 @@ export default function ClaimsPage() {
     return () => { active = false; };
   }, []);
 
-  const totalPaid = Math.round(data?.stats.total_paid_out ?? 0);
+  const totalPaid = Math.round(data?.stats?.total_paid_out ?? 0);
   const monthClaims = data?.stats.claims_this_month ?? 0;
   const streak = data?.stats.paid_streak ?? 0;
 

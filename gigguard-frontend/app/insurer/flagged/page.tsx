@@ -83,8 +83,8 @@ export default function InsurerFlaggedPage() {
       <section className="grid grid-cols-4 gap-3">
         <div className="surface-card p-4"><p className="text-xs text-secondary">Tier 3 (BCS &lt; 40)</p><p className="mt-1 font-mono-data text-3xl text-rose-300">{tier3Count}</p></div>
         <div className="surface-card p-4"><p className="text-xs text-secondary">Tier 2 (BCS 40-65)</p><p className="mt-1 font-mono-data text-3xl text-amber-300">{tier2Count}</p></div>
-        <div className="surface-card p-4"><p className="text-xs text-secondary">Auto-approved today</p><p className="mt-1 font-mono-data text-3xl text-emerald-300">{stats.auto_approved_today}</p></div>
-        <div className="surface-card p-4"><p className="text-xs text-secondary">Fraud prevented</p><p className="mt-1 font-mono-data text-3xl text-amber-300">{`${INR}${Math.round(stats.fraud_prevented_inr)}`}</p></div>
+        <div className="surface-card p-4"><p className="text-xs text-secondary">Auto-approved today</p><p className="mt-1 font-mono-data text-3xl text-emerald-300">{stats?.auto_approved_today ?? 0}</p></div>
+        <div className="surface-card p-4"><p className="text-xs text-secondary">Fraud prevented</p><p className="mt-1 font-mono-data text-3xl text-amber-300">{`${INR}${Math.round(stats?.fraud_prevented_inr ?? 0)}`}</p></div>
       </section>
 
       <section className="surface-card mt-4 p-4">
