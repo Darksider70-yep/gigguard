@@ -7,6 +7,8 @@ import { mlService } from '../services/mlService';
 import { config } from '../config';
 import { weatherBudget } from '../services/weatherService';
 import { asyncRoute } from '../middleware/errorHandler';
+import { logger } from '../lib/logger';
+
 
 const router = Router();
 
