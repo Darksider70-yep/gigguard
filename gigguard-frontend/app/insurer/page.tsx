@@ -170,7 +170,10 @@ export default function InsurerPage() {
       };
 
       const result = (await api.simulateTrigger(payload)) as any;
-      setSimSteps(prev => [...prev, `Success. ${result.affected_workers ?? 0} workers notified.`]);
+      const names = result.affected_worker_names || [];
+      const nameStr = names.length > 0 ? `: ${names.slice(0, 3).join(', ')}${names.length > 3 ? '...' : ''}` : '';
+      
+      setSimSteps(prev => [...prev, `Success. ${result.affected_workers ?? 0} workers affected${nameStr}.`]);
       await refresh();
       setEventsFlash(true);
     } catch {

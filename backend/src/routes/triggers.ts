@@ -151,6 +151,7 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
       trigger_value: triggerValue,
       disruption_hours: disruptionHours,
       is_simulated: true, // Mark as simulation for Demo Mode
+      radius: 2, // Widen simulation to hit more real workers
     });
 
     // In-memory mode: BullMQ workers are disabled, so run the full
@@ -191,6 +192,7 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
       zone,
       value: triggerValue,
       affected_workers: result.affected_worker_count,
+      affected_worker_names: result.worker_names,
       total_payout: totalPayout,
       hex_ring_size: result.affected_hex_ids.length,
       event_hex: result.event_hex,

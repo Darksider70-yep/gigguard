@@ -291,18 +291,20 @@ async function processTrigger(params: {
   zoneHexId?: string;
   zoneName?: string;
   isSimulated?: boolean;
+  radius?: number;
 }): Promise<{
   eventId: string;
   workerIds: string[];
+  workerNames: string[];
   ringHexes: string[];
   eventHex: string;
   zoneKey: string;
 } | null> {
-  const { triggerType, city, lat, lng, value, zoneHexId, zoneName, isSimulated } = params;
+  const { triggerType, city, lat, lng, value, zoneHexId, zoneName, isSimulated, radius = 1 } = params;
 
   const eventHex = latLngToCell(lat, lng, 8);
   const zoneKey = zoneHexId ? BigInt(zoneHexId).toString() : BigInt(`0x${eventHex}`).toString();
-  const ringHexes = gridDisk(eventHex, 1);
+  const ringHexes = gridDisk(eventHex, radius);
 
   // Look up a human-readable zone name from the workers table  
   const ringBigintsForLookup = ringHexes.map((h) => BigInt(`0x${h}`));
@@ -336,8 +338,8 @@ async function processTrigger(params: {
   }
 
   const ringBigints = ringHexes.map((h) => BigInt(`0x${h}`));
-  const { rows: affectedWorkers } = await query<{ id: string; hex_is_centroid_fallback: boolean }>(
-    `SELECT DISTINCT w.id, COALESCE(w.hex_is_centroid_fallback, FALSE) AS hex_is_centroid_fallback
+  const { rows: affectedWorkers } = await query<{ id: string; name: string; hex_is_centroid_fallback: boolean }>(
+    `SELECT DISTINCT w.id, w.name, COALESCE(w.hex_is_centroid_fallback, FALSE) AS hex_is_centroid_fallback
      FROM workers w
      JOIN policies p ON p.worker_id = w.id
      WHERE w.home_hex_id = ANY($1::bigint[])
@@ -392,6 +394,7 @@ async function processTrigger(params: {
 
   const eventId = events[0].id;
   const workerIds = affectedWorkers.map((w) => w.id);
+  const workerNames = affectedWorkers.map((w) => w.name);
 
   logger.info('TriggerMonitor', 'trigger_fired', {
     trigger_type: triggerType,
@@ -428,7 +431,7 @@ async function processTrigger(params: {
     await processTriggerSync(jobData);
   }
 
-  return { eventId, workerIds, ringHexes, eventHex, zoneKey };
+  return { eventId, workerIds, workerNames, ringHexes, eventHex, zoneKey };
 }
 
 export async function processTriggerEvent(input: {
@@ -440,12 +443,14 @@ export async function processTriggerEvent(input: {
   trigger_value?: number;
   disruption_hours?: number;
   is_simulated?: boolean;
+  radius?: number;
 }): Promise<{
   event_id: string | null;
   event_hex: string;
   affected_hex_ids: string[];
   affected_worker_count: number;
   worker_ids: string[];
+  worker_names: string[];
 }> {
   const result = await processTrigger({
     triggerType: input.trigger_type,
@@ -455,10 +460,11 @@ export async function processTriggerEvent(input: {
     value: input.trigger_value ?? premiumService.getThreshold(input.trigger_type),
     zoneName: input.zone,
     isSimulated: input.is_simulated,
+    radius: input.radius,
   });
 
   const eventHex = latLngToCell(input.lat, input.lng, 8);
-  const ringHexes = gridDisk(eventHex, 1);
+  const ringHexes = gridDisk(eventHex, input.radius ?? 1);
 
   return {
     event_id: result?.eventId ?? null,
@@ -466,5 +472,6 @@ export async function processTriggerEvent(input: {
     affected_hex_ids: ringHexes,
     affected_worker_count: result?.workerIds.length ?? 0,
     worker_ids: result?.workerIds ?? [],
+    worker_names: result?.workerNames ?? [],
   };
 }
