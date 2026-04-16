@@ -139,7 +139,7 @@ export default function BuyPolicyStepOnePage() {
                         <span className="text-lg grayscale group-hover:grayscale-0 transition-all">{item.icon}</span>
                         <span className="text-sm font-medium text-text-secondary">{item.label}</span>
                       </div>
-                      <AmountDisplay amount={quote.coverage[item.id as keyof typeof quote.coverage] || 0} size="sm" className="font-bold" />
+                      <AmountDisplay amount={quote?.coverage ? (quote.coverage[item.id as keyof typeof quote.coverage] || 0) : 0} size="sm" className="font-bold" />
                     </div>
                   ))}
                 </div>

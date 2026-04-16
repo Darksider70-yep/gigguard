@@ -266,13 +266,13 @@ export default function DashboardPage() {
                       </div>
                     )}
 
-                    {showFormula && quote && (
+                    {showFormula && quote?.formula_breakdown && (
                       <div className="mt-6 animate-fade-in-up">
                          <PremiumFormula
-                           baseRate={quote.formula_breakdown.base_rate}
-                           zoneMultiplier={quote.formula_breakdown.zone_multiplier}
-                           weatherMultiplier={quote.formula_breakdown.weather_multiplier}
-                           historyMultiplier={quote.formula_breakdown.history_multiplier}
+                           baseRate={quote.formula_breakdown.base_rate ?? 35}
+                           zoneMultiplier={quote.formula_breakdown.zone_multiplier ?? 1}
+                           weatherMultiplier={quote.formula_breakdown.weather_multiplier ?? 1}
+                           historyMultiplier={quote.formula_breakdown.history_multiplier ?? 1}
                            finalPremium={quote.premium}
                          />
                       </div>

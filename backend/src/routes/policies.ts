@@ -135,7 +135,18 @@ router.get('/premium', authenticateWorker, asyncRoute(async (req, res) => {
     season: policyService.getSeason(),
     zone_risk: policyService.getZoneRisk(Number(worker.zone_multiplier)),
   };
-  const banditRec = await mlService.recommendTier(worker.id, context);
+  let banditRec;
+  try {
+    banditRec = await mlService.recommendTier(worker.id, context);
+  } catch (err) {
+    logger.warn('PremiumRoute', 'recommend_tier_failed_fallback', { error: String(err) });
+    // Default recommendation baseline
+    banditRec = {
+      recommended_arm: 1,
+      recommended_premium: 44,
+      context_key: null
+    };
+  }
 
   const { weekStart, weekEnd } = premiumService.getWeekBounds();
   const existing = await query<{ id: string }>(
