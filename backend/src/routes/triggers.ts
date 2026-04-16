@@ -75,16 +75,19 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
     let lng = req.body?.lng ? Number(req.body.lng) : null;
     let zone = String(req.body?.zone || '');
 
-    // SMART TARGETING: If no specific location is provided, find a real worker hotspot in the city
+    // SMART TARGETING: Randomly pick from all distinct zones in the city that have active workers
     if (!lat || !lng) {
       const { rows: hotspotRows } = await query<{ home_hex_id: string; zone: string }>(
-        `SELECT w.home_hex_id::text, w.zone
-         FROM workers w
-         JOIN policies p ON p.worker_id = w.id
-         WHERE LOWER(w.city) = $1
-           AND p.status = 'active'
-           AND CURRENT_DATE BETWEEN p.week_start AND p.week_end
-           AND w.home_hex_id IS NOT NULL
+        `WITH city_zones AS (
+           SELECT DISTINCT w.zone, w.home_hex_id::text
+           FROM workers w
+           JOIN policies p ON p.worker_id = w.id
+           WHERE LOWER(w.city) = $1
+             AND p.status = 'active'
+             AND CURRENT_DATE BETWEEN p.week_start AND p.week_end
+             AND w.home_hex_id IS NOT NULL
+         )
+         SELECT * FROM city_zones
          ORDER BY RANDOM()
          LIMIT 1`,
         [city]

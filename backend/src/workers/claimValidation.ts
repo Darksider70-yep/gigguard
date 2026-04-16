@@ -82,7 +82,7 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
   const rec = (fraudResult.recommendation === 'approve' || (fraudResult.fraud_score < 0.35 && !fraudResult.flagged))
       ? 'approve'
       : (fraudResult.recommendation === 'deny' || fraudResult.fraud_score > 0.7)
-        ? 'deny'
+        ? 'review' // Force everything else to manual review for testing
         : 'review';
 
   await query(
