@@ -222,7 +222,7 @@ router.get('/anti-spoofing-alerts', authenticateInsurer, asyncRoute(async (_req,
             c.graph_flags, c.payout_amount, c.created_at
      FROM claims c
      JOIN workers w ON w.id = c.worker_id
-     WHERE c.status = 'under_review'
+     WHERE c.status IN ('under_review', 'flagged')
      ORDER BY c.created_at DESC`
   );
 

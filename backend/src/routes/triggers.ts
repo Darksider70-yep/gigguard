@@ -69,16 +69,47 @@ router.get('/live-events', async (req, res: Response) => {
 router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const city = String(req.body?.city || 'mumbai').toLowerCase();
-    const coords = CITY_COORDINATES[city] || CITY_COORDINATES.mumbai;
-
-    const lat = Number(req.body?.lat ?? coords.lat);
-    const lng = Number(req.body?.lng ?? coords.lng);
     const triggerType = String(req.body?.trigger_type ?? req.body?.triggerType ?? 'heavy_rainfall');
+    
+    let lat = req.body?.lat ? Number(req.body.lat) : null;
+    let lng = req.body?.lng ? Number(req.body.lng) : null;
+    let zone = String(req.body?.zone || '');
+
+    // SMART TARGETING: If no specific location is provided, find a real worker hotspot in the city
+    if (!lat || !lng) {
+      const { rows: hotspotRows } = await query<{ home_hex_id: string; zone: string }>(
+        `SELECT w.home_hex_id::text, w.zone
+         FROM workers w
+         JOIN policies p ON p.worker_id = w.id
+         WHERE LOWER(w.city) = $1
+           AND p.status = 'active'
+           AND CURRENT_DATE BETWEEN p.week_start AND p.week_end
+           AND w.home_hex_id IS NOT NULL
+         ORDER BY RANDOM()
+         LIMIT 1`,
+        [city]
+      );
+
+      if (hotspotRows[0]) {
+        const { cellToLatLng } = await import('h3-js');
+        const [hLat, hLng] = cellToLatLng(BigInt(hotspotRows[0].home_hex_id).toString(16));
+        lat = hLat;
+        lng = hLng;
+        zone = hotspotRows[0].zone;
+        logger.info('Simulate', 'smart_target_acquired', { city, zone, lat, lng });
+      } else {
+        // Fallback to city center if no active workers found
+        const fallbackCoords = CITY_COORDINATES[city] || CITY_COORDINATES.mumbai;
+        lat = fallbackCoords.lat;
+        lng = fallbackCoords.lng;
+        logger.warn('Simulate', 'no_active_workers_found_using_fallback', { city });
+      }
+    }
+
     const triggerValue = Number(req.body?.trigger_value ?? req.body?.value ?? 0);
     const disruptionHours = Number(
       req.body?.disruption_hours ?? premiumService.getDisruptionHours(triggerType)
     );
-    const zone = String(req.body?.zone || '');
 
     // Clear existing active events for this trigger type so simulate always fires fresh
     await query(
@@ -89,8 +120,9 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
     );
 
     if (triggerType === 'pandemic_containment') {
-      const latForPolygon = Number(req.body?.lat ?? coords.lat);
-      const lngForPolygon = Number(req.body?.lng ?? coords.lng);
+      const fallbackCoords = CITY_COORDINATES[city] || CITY_COORDINATES.mumbai;
+      const latForPolygon = Number(req.body?.lat ?? fallbackCoords.lat);
+      const lngForPolygon = Number(req.body?.lng ?? fallbackCoords.lng);
       const severity = String(req.body?.severity ?? 'containment').toLowerCase();
 
       const webhookResult = await processHealthEmergencyPayload({
