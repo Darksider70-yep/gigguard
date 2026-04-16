@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import AuthGuard from '@/components/AuthGuard';
 import InsurerNav from '@/components/layout/InsurerNav';
 import WorkerSlideOver from '@/components/ui/WorkerSlideOver';
@@ -118,11 +119,22 @@ export default function InsurerWorkersPage() {
                   <th className="px-3 py-2 text-left">Member Since</th>
                 </tr>
               </thead>
-              <tbody>
+              <motion.tbody
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  visible: { transition: { staggerChildren: 0.05 } },
+                  hidden: {}
+                }}
+              >
                 {workers.map((worker) => {
                   const risk = Math.min(100, Math.round((worker.zone_multiplier / 1.6) * 100));
                   return (
-                    <tr
+                    <motion.tr
+                      variants={{
+                        hidden: { opacity: 0, y: 15 },
+                        visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } }
+                      }}
                       key={worker.id}
                       className="table-row-hover cursor-pointer border-t border-slate-800"
                       onClick={() => setSelected(worker)}
@@ -152,10 +164,10 @@ export default function InsurerWorkersPage() {
                           year: 'numeric',
                         })}
                       </td>
-                    </tr>
+                    </motion.tr>
                   );
                 })}
-              </tbody>
+              </motion.tbody>
             </table>
           </div>
         ) : null}

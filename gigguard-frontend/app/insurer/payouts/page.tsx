@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import AuthGuard from '@/components/AuthGuard';
 import InsurerNav from '@/components/layout/InsurerNav';
 import { api } from '@/lib/api';
@@ -147,10 +148,12 @@ export default function InsurerPayoutsPage() {
                   <span>{formatInr(row.total)}</span>
                 </div>
                 <div className="h-3 rounded bg-slate-800">
-                  <div
+                  <motion.div
                     className="h-3 rounded"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.round((row.total / maxCity) * 100)}%` }}
+                    transition={{ duration: 0.8, ease: "easeOut", delay: index * 0.1 }}
                     style={{
-                      width: `${Math.round((row.total / maxCity) * 100)}%`,
                       background: ['#f59e0b', '#fbbf24', '#fcd34d', '#fde68a', '#fef3c7'][index % 5],
                     }}
                   />
