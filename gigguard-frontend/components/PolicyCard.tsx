@@ -1,5 +1,6 @@
-// components/PolicyCard.tsx
-import { BadgeCheck, ChevronsRight } from 'lucide-react';
+import { BadgeCheck, ChevronsRight, XCircle } from 'lucide-react';
+import { api } from '@/lib/api';
+import { useState } from 'react';
 
 interface Policy {
   id: string;
@@ -23,6 +24,22 @@ interface PolicyCardProps {
 }
 
 const PolicyCard = ({ policy }: PolicyCardProps) => {
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancel = async () => {
+    if (confirm('Are you sure you want to cancel this policy?')) {
+      try {
+        setCancelling(true);
+        await api.cancelPolicy();
+        window.location.reload();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Failed to cancel policy');
+      } finally {
+        setCancelling(false);
+      }
+    }
+  };
+
   return (
     <div className="rounded-xl border-2 border-sky-500 bg-sky-50/50 p-6 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between">
@@ -73,6 +90,17 @@ const PolicyCard = ({ policy }: PolicyCardProps) => {
             </p>
           </div>
         </details>
+      </div>
+
+      <div className="mt-6">
+        <button
+          onClick={handleCancel}
+          disabled={cancelling}
+          className="flex w-full items-center justify-center space-x-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-600 transition-colors hover:bg-rose-100 disabled:opacity-50"
+        >
+          <XCircle className="h-4 w-4" />
+          <span>{cancelling ? 'CANCELLING...' : 'CANCEL POLICY'}</span>
+        </button>
       </div>
     </div>
   );

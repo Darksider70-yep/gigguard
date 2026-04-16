@@ -346,6 +346,12 @@ class GigGuardAPI {
       body: JSON.stringify({ context_key, arm, reward }),
     });
   }
+
+  cancelPolicy() {
+    return this.request<{ success: boolean; message: string; policy_id: string }>('/policies/cancel', {
+      method: 'POST',
+    });
+  }
 }
 
 export const api = new GigGuardAPI();

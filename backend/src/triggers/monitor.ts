@@ -186,11 +186,14 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
       created_at: new Date(),
     };
 
+    const triggerValue = metadata?.rainfall_mm || metadata?.aqi_value || 1.0;
+    const disruptionHours = premiumService.getDisruptionHours(trigger_type);
+
     try {
       const insertResult = await pool.query(
         `INSERT INTO disruption_events 
-         (id, trigger_type, city, latitude, longitude, affected_hex_ids, affected_worker_count, total_payout, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (id, trigger_type, city, latitude, longitude, affected_hex_ids, affected_worker_count, total_payout, created_at, trigger_value, disruption_hours, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
          RETURNING id`,
         [
           disruptionEvent.id,
@@ -202,6 +205,8 @@ export async function processH3Trigger(event: TriggerEvent): Promise<string[]> {
           disruptionEvent.affected_worker_count,
           disruptionEvent.total_payout,
           disruptionEvent.created_at,
+          triggerValue,
+          disruptionHours,
         ]
       );
 

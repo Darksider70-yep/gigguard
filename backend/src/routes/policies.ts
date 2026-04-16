@@ -10,6 +10,7 @@ import { weatherService } from '../services/weatherService';
 import { premiumService } from '../services/premiumService';
 import { policyService } from '../services/policyService';
 import { paymentClient } from '../services/paymentClient';
+import { claimCreationQueue } from '../queues';
 
 const router = Router();
 
@@ -221,17 +222,83 @@ router.post('/', authenticateWorker, validate(purchasePolicySchema), asyncRoute(
     void mlService.updateBandit(worker.id, body.context_key, selectedArm, 1.0);
   }
 
-  res.status(201).json({
-    policy_id: policyService.generatePolicyId(worker.name),
-    policy: {
-      id: policy.id,
-      week_start: policy.week_start,
-      week_end: policy.week_end,
-      premium_paid: Math.round(Number(policy.premium_paid)),
-      coverage_amount: Number(policy.coverage_amount),
-      status: policy.status,
-    },
-    message: "Policy active.",
+    res.status(201).json({
+      policy_id: policyService.generatePolicyId(worker.name),
+      policy: {
+        id: policy.id,
+        week_start: policy.week_start,
+        week_end: policy.week_end,
+        premium_paid: Math.round(Number(policy.premium_paid)),
+        coverage_amount: Number(policy.coverage_amount),
+        status: policy.status,
+      },
+      message: "Policy active.",
+    });
+
+    // --- Side Effect: Check for active disruption events covering this worker ---
+    // If a disruption event is currently active in the worker's hex, 
+    // they should be included even if they just bought the policy.
+    if (worker.home_hex_id) {
+      try {
+        const { rows: activeEvents } = await query<{ id: string, trigger_type: string, disruption_hours: number, trigger_value: number }>(
+          `SELECT id, trigger_type, disruption_hours, trigger_value 
+           FROM disruption_events 
+           WHERE status = 'active' 
+             AND $1 = ANY(affected_hex_ids)`,
+          [worker.home_hex_id.toString()]
+        );
+
+        for (const event of activeEvents) {
+          await claimCreationQueue.add(
+            'create-claims',
+            {
+              disruption_event_id: event.id,
+              trigger_type: event.trigger_type,
+              disruption_hours: event.disruption_hours,
+              trigger_value: Number(event.trigger_value),
+              worker_ids: [worker.id],
+            },
+            {
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 5000 },
+              removeOnComplete: { count: 1000 },
+              removeOnFail: { count: 500 },
+            }
+          );
+          console.log(`[Policies] Enqueued late-registration claim for worker ${worker.id} and event ${event.id}`);
+        }
+      } catch (err) {
+        console.error('[Policies] Failed to check for active disruptions:', err);
+      }
+    }
+  })
+);
+
+router.post('/cancel', authenticateWorker, asyncRoute(async (req, res) => {
+  const worker = req.worker!;
+  const { weekStart } = premiumService.getWeekBounds();
+
+  const { rows } = await query(
+    `UPDATE policies 
+     SET status = 'cancelled' 
+     WHERE worker_id = $1 
+       AND week_start = $2 
+       AND status = 'active' 
+     RETURNING id`,
+    [worker.id, weekStart]
+  );
+
+  if (rows.length === 0) {
+    return res.status(404).json({
+      code: 'NO_ACTIVE_POLICY',
+      message: 'No active policy found for this week to cancel',
+    });
+  }
+
+  res.json({
+    success: true,
+    message: 'Policy cancelled successfully',
+    policy_id: rows[0].id,
   });
 }));
 

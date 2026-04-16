@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [clock, setClock] = useState(new Date());
   const [tab, setTab] = useState<Tab>('dashboard');
   const [showFormula, setShowFormula] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 1000);
@@ -195,12 +196,34 @@ export default function DashboardPage() {
                             <div className="text-right"><AmountDisplay amount={activePolicy.policy.coverage_amount} size="sm" className="text-accent-saffron" /></div>
                           </div>
 
-                          <button 
-                            onClick={() => setShowFormula(!showFormula)}
-                            className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold transition-all"
-                          >
-                            {showFormula ? 'Hide' : 'View'} Pricing Breakdown
-                          </button>
+                          <div className="flex flex-col gap-2">
+                            <button 
+                              onClick={() => setShowFormula(!showFormula)}
+                              className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold transition-all"
+                            >
+                              {showFormula ? 'Hide' : 'View'} Pricing Breakdown
+                            </button>
+
+                            <button 
+                              onClick={async () => {
+                                if (confirm('Are you sure you want to cancel your active policy? This action cannot be undone.')) {
+                                  try {
+                                    setCancelling(true);
+                                    await api.cancelPolicy();
+                                    window.location.reload();
+                                  } catch (err) {
+                                    alert(err instanceof Error ? err.message : 'Failed to cancel policy');
+                                  } finally {
+                                    setCancelling(false);
+                                  }
+                                }
+                              }}
+                              disabled={cancelling}
+                              className="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                              {cancelling ? 'Cancelling...' : 'Cancel Policy'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ) : (
