@@ -79,10 +79,10 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
   // 2. High confidence ML approvals or low fraud scores (< 0.35) are fast-tracked
   // 3. High risk scores (> 0.7) or ML denials are flagged
   // 4. Everything else goes to manual review
-  const rec = (fraudResult.recommendation === 'approve' || (fraudResult.fraud_score < 0.35 && !fraudResult.flagged))
+  const rec: 'approve' | 'deny' | 'review' = (fraudResult.recommendation === 'approve' || (fraudResult.fraud_score < 0.35 && !fraudResult.flagged))
       ? 'approve'
       : (fraudResult.recommendation === 'deny' || fraudResult.fraud_score > 0.7)
-        ? 'review' // Force everything else to manual review for testing
+        ? 'deny'
         : 'review';
 
   await query(
