@@ -210,6 +210,10 @@ export interface AntiSpoofingAlertsResponse {
     graph_flags: string[] | { ring_size_estimate: number; contributing_edges: string[]; flagged_neighbors: string[] };
     created_at: string;
   }>;
+  stats: {
+    auto_approved_today: number;
+    fraud_prevented_inr: number;
+  };
 }
 
 export interface InsurerDashboardResponse {

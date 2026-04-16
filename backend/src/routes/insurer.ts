@@ -179,34 +179,48 @@ router.get('/disruption-events', authenticateInsurer, asyncRoute(async (req, res
 }));
 
 router.get('/anti-spoofing-alerts', authenticateInsurer, asyncRoute(async (_req, res) => {
-  const { rows } = await query<{
-    claim_id: string;
-    worker_name: string;
-    city: string;
-    zone: string;
-    trigger_type: string;
-    bcs_score: number;
-    graph_flags: string[] | null;
-    payout_amount: string;
-    created_at: string;
-  }>(
-    `SELECT c.id as claim_id, w.name as worker_name,
-            w.city, w.zone, c.trigger_type, c.bcs_score,
-            c.graph_flags, c.payout_amount, c.created_at
-     FROM claims c
-     JOIN workers w ON w.id = c.worker_id
-     WHERE c.status = 'under_review'
-     ORDER BY c.created_at DESC`
-  );
-
-  const alerts = rows.map((r) => ({
+  const [alertsRes, statsRes] = await Promise.all([
+    query<{
+      claim_id: string;
+      worker_name: string;
+      city: string;
+      zone: string;
+      trigger_type: string;
+      bcs_score: number;
+      graph_flags: any;
+      payout_amount: string;
+      created_at: string;
+    }>(
+      `SELECT c.id as claim_id, w.name as worker_name,
+              w.city, w.zone, c.trigger_type, c.bcs_score,
+              c.graph_flags, c.payout_amount, c.created_at
+       FROM claims c
+       JOIN workers w ON w.id = c.worker_id
+       WHERE c.status = 'under_review'
+       ORDER BY c.created_at DESC`
+    ),
+    query<{ auto_approved_today: string; fraud_prevented_inr: string }>(
+      `SELECT 
+         COUNT(*) FILTER (WHERE status = 'approved' AND created_at >= CURRENT_DATE)::text as auto_approved_today,
+         COALESCE(SUM(payout_amount) FILTER (WHERE status IN ('flagged', 'denied')), 0)::text as fraud_prevented_inr
+       FROM claims`
+    )
+  ]);
+  
+  const alerts = alertsRes.rows.map((r) => ({
     ...r,
     bcs_tier: r.bcs_score < 34 ? 3 : 2,
     payout_amount: Math.round(Number(r.payout_amount)),
     graph_flags: Array.isArray(r.graph_flags) ? (r.graph_flags ?? []).map(flagToHumanReadable) : r.graph_flags,
   }));
 
-  res.json({ alerts });
+  res.json({ 
+    alerts,
+    stats: {
+      auto_approved_today: parseInt(statsRes.rows[0].auto_approved_today, 10),
+      fraud_prevented_inr: Math.round(Number(statsRes.rows[0].fraud_prevented_inr))
+    }
+  });
 }));
 
 router.post('/claims/:id/approve', authenticateInsurer, asyncRoute(async (req, res) => {

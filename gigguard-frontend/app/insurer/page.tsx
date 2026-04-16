@@ -181,7 +181,13 @@ export default function InsurerPage() {
   };
 
   const stats = data?.dashboard.stats;
-  const events = data?.events ?? [];
+  const rawEvents = data?.events ?? [];
+  const events = useMemo(() => {
+    return rawEvents.filter(e => {
+      const hoursSinceStart = (Date.now() - new Date(e.event_start).getTime()) / 3600000;
+      return hoursSinceStart < 24;
+    });
+  }, [rawEvents]);
   const zones = data?.zones ?? [];
   const alerts = data?.alerts ?? [];
   const triggers = data?.triggers ?? [];
