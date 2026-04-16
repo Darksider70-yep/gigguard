@@ -11,6 +11,8 @@ import { premiumService } from '../services/premiumService';
 import { policyService } from '../services/policyService';
 import { paymentClient } from '../services/paymentClient';
 import { claimCreationQueue } from '../queues';
+import { logger } from '../lib/logger';
+
 
 const router = Router();
 
@@ -81,27 +83,48 @@ router.get('/premium', authenticateWorker, asyncRoute(async (req, res) => {
     [worker.id, abCohort]
   );
 
-  let premiumData = await mlService.predictPremium(
-    worker.id,
-    Number(worker.zone_multiplier),
-    weatherMultiplier,
-    Number(worker.history_multiplier),
-    worker.city,
-    worker.zone ?? ''
-  );
-
-  if (inCohortB) {
-    const rlData = await mlService.predictRLPremium(
+  let premiumData: any;
+  try {
+    premiumData = await mlService.predictPremium(
       worker.id,
       Number(worker.zone_multiplier),
       weatherMultiplier,
       Number(worker.history_multiplier),
-      worker.platform,
-      worker.avg_daily_earning
+      worker.city,
+      worker.zone ?? ''
     );
-    if (rlData.rl_premium !== null) {
-      premiumData.premium = Math.round(rlData.rl_premium);
-      premiumData.rl_premium = rlData.rl_premium;
+  } catch (err) {
+    logger.error('PremiumRoute', 'ml_predict_failed_fallback', { error: String(err) });
+    // Emergency baseline fallback
+    const baseRate = 12.0;
+    const formulaPremium = baseRate * Number(worker.zone_multiplier) * weatherMultiplier * Number(worker.history_multiplier);
+    premiumData = {
+      premium: formulaPremium,
+      formula_breakdown: {
+        base_rate: baseRate,
+        zone_multiplier: Number(worker.zone_multiplier),
+        weather_multiplier: weatherMultiplier,
+        history_multiplier: Number(worker.history_multiplier)
+      }
+    };
+  }
+
+  if (inCohortB) {
+    try {
+      const rlData = await mlService.predictRLPremium(
+        worker.id,
+        Number(worker.zone_multiplier),
+        weatherMultiplier,
+        Number(worker.history_multiplier),
+        worker.platform,
+        worker.avg_daily_earning
+      );
+      if (rlData.rl_premium !== null) {
+        premiumData.premium = Math.round(rlData.rl_premium);
+        premiumData.rl_premium = rlData.rl_premium;
+      }
+    } catch (err) {
+      logger.warn('PremiumRoute', 'rl_predict_failed_using_formula', { error: String(err) });
     }
   }
 

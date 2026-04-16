@@ -14,6 +14,8 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { AmountDisplay } from '@/components/ui/AmountDisplay';
 import { ShieldCheck, Zap, History, Clock, AlertTriangle, MapPin, Activity } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+
 
 const WEATHER_ICON: Record<string, string> = {
   heavy_rainfall: '🌧️',
@@ -27,6 +29,8 @@ const WAVE = '👋';
 type Tab = 'dashboard' | 'policies' | 'claims';
 
 export default function DashboardPage() {
+  const { worker: authWorker, isLoading: authLoading } = useAuth();
+
   const t = useTranslations('dashboard');
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [activePolicy, setActivePolicy] = useState<ActivePolicyResponse | null>(null);
@@ -46,33 +50,54 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    // Wait for auth to finish hydrating so we have the token in api instance
+    if (authLoading) return;
+    
     let active = true;
     const load = async () => {
+      setLoading(true);
+      setError(null);
+      
       try {
-        const [me, policyData, claimData, historyData, premiumData] = await Promise.all([
-          api.getMe(),
+        // me Profile is critical
+        const me = await api.getMe();
+        if (!active) return;
+        setWorker(me);
+
+        // Fetch other data in parallel but handle failures gracefully
+        const [policyResult, claimResult, historyResult, premiumResult] = await Promise.allSettled([
           api.getActivePolicy(),
           api.getClaims(20),
           api.getPolicyHistory(1, 10),
           api.getPremiumQuote(),
         ]);
+
         if (!active) return;
-        setWorker(me);
-        setActivePolicy(policyData);
-        setClaims(claimData);
-        setHistory(historyData);
-        setQuote(premiumData);
-        setError(null);
+
+        if (policyResult.status === 'fulfilled') setActivePolicy(policyResult.value);
+        else console.error('Dashboard: fetch active policy failed', policyResult.reason);
+
+        if (claimResult.status === 'fulfilled') setClaims(claimResult.value);
+        else console.error('Dashboard: fetch claims failed', claimResult.reason);
+
+        if (historyResult.status === 'fulfilled') setHistory(historyResult.value);
+        else console.error('Dashboard: fetch history failed', historyResult.reason);
+
+        if (premiumResult.status === 'fulfilled') setQuote(premiumResult.value);
+        else console.error('Dashboard: fetch premium quote failed', premiumResult.reason);
+
       } catch (err) {
         if (!active) return;
+        console.error('Dashboard: critical fetch failed (me)', err);
         setError(err instanceof APIError && err.status === 0 ? 'Network unavailable' : 'Failed to load dashboard');
       } finally {
         if (active) setLoading(false);
       }
     };
+
     void load();
     return () => { active = false; };
-  }, []);
+  }, [authLoading]);
 
   const weeklyEarnings = useMemo(() => Math.round((worker?.avg_daily_earning ?? 0) * 6), [worker]);
   const coverageAmount = Number(activePolicy?.policy?.coverage_amount ?? 0);
