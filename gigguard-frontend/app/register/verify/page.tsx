@@ -171,6 +171,10 @@ export default function RegisterVerifyPage() {
         <p className="text-sm text-secondary">{t('otp_sent_to')}</p>
 
         <OtpInput value={otp} onChange={setOtp} onComplete={verifyOtp} disabled={verifying} />
+        
+        <div className="mx-auto max-w-xs rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-200">
+          Demo Mode: Enter <strong>000000</strong> for instant access
+        </div>
 
         <button
           type="button"

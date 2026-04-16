@@ -144,10 +144,10 @@ export default function InsurerPage() {
       
       const cityCoords: any = {
         mumbai: { lat: 19.1364, lng: 72.8296, zone: 'Andheri West' },
-        delhi: { lat: 28.6139, lng: 77.2090, zone: 'Connaught Place' },
-        bangalore: { lat: 12.9716, lng: 77.5946, zone: 'Indiranagar' },
-        chennai: { lat: 13.0827, lng: 80.2707, zone: 'T. Nagar' },
-        hyderabad: { lat: 17.3850, lng: 78.4867, zone: 'Banjara Hills' },
+        delhi: { lat: 28.6309, lng: 77.2164, zone: 'Connaught Place' },
+        bangalore: { lat: 12.9708, lng: 77.6450, zone: 'Indiranagar' },
+        chennai: { lat: 13.0397, lng: 80.2368, zone: 'T. Nagar' },
+        hyderabad: { lat: 17.4149, lng: 78.4481, zone: 'Banjara Hills' },
       };
 
       const coords = cityCoords[selectedCity];

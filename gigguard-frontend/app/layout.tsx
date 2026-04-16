@@ -4,7 +4,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'GigGuard Phase 2 Command Center',
+  title: 'GigGuard Command Center',
   description: 'AI-powered parametric income insurance for gig workers in India.',
 };
 
@@ -28,7 +28,7 @@ export default async function RootLayout({
             <main className="mx-auto w-full max-w-7xl px-5 py-8">{children}</main>
           </Providers>
           <footer className="mt-14 border-t border-slate-800 py-6 text-center text-xs text-muted">
-            © 2026 GigGuard | AI Parametric Insurance Command Center
+            © 2026 GigGuard | AI Parametric Insurance
           </footer>
         </NextIntlClientProvider>
       </body>
