@@ -74,9 +74,18 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
   if (fraudResult.bcs_tier === 2 || fraudResult.tier === 2) bcsScore = 60;
   if (fraudResult.bcs_tier === 3 || fraudResult.tier === 3) bcsScore = 20;
 
+  // AI Automated Approval Logic
+  // 1. Simulations are always approved
+  // 2. High confidence ML approvals or low fraud scores (< 0.35) are fast-tracked
+  // 3. High risk scores (> 0.7) or ML denials are flagged
+  // 4. Everything else goes to manual review
   const rec = rows[0].is_simulated 
     ? 'approve' 
-    : (fraudResult.recommendation || (fraudResult.tier === 3 ? 'deny' : 'approve'));
+    : (fraudResult.recommendation === 'approve' || (fraudResult.fraud_score < 0.35 && !fraudResult.flagged))
+      ? 'approve'
+      : (fraudResult.recommendation === 'deny' || fraudResult.fraud_score > 0.7)
+        ? 'deny'
+        : 'review';
 
   await query(
     `UPDATE claims

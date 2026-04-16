@@ -35,16 +35,15 @@ export async function processClaimCreationJob(
   for (const workerId of worker_ids) {
     try {
       const upsertResult = await withTransaction(async (client) => {
-        const { weekStart } = premiumService.getWeekBounds();
         const { rows: policies } = await client.query(
           `SELECT p.id, w.avg_daily_earning
            FROM policies p
            JOIN workers w ON w.id = p.worker_id
            WHERE p.worker_id = $1
-             AND p.week_start = $2
+             AND CURRENT_DATE BETWEEN p.week_start AND p.week_end
              AND p.status = 'active'
            LIMIT 1`,
-          [workerId, weekStart]
+          [workerId]
         );
 
         if (policies.length === 0) {

@@ -166,7 +166,7 @@ export async function runTriggerCycle(): Promise<void> {
      FROM workers w
      JOIN policies p ON p.worker_id = w.id
      WHERE p.status = 'active'
-       AND p.week_start = date_trunc('week', NOW())::date
+       AND CURRENT_DATE BETWEEN p.week_start AND p.week_end
        AND w.home_hex_id IS NOT NULL`
   );
 
@@ -342,7 +342,7 @@ async function processTrigger(params: {
      JOIN policies p ON p.worker_id = w.id
      WHERE w.home_hex_id = ANY($1::bigint[])
        AND p.status = 'active'
-       AND p.week_start = date_trunc('week', NOW())::date`,
+       AND CURRENT_DATE BETWEEN p.week_start AND p.week_end`,
     [ringBigints]
   );
 
