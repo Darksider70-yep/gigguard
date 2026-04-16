@@ -18,10 +18,12 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
     zone_multiplier: number;
     platform: string;
     worker_created_at: string;
+    is_simulated: boolean;
   }>(
-    `SELECT c.*, w.zone_multiplier, w.platform, w.created_at as worker_created_at
+    `SELECT c.*, w.zone_multiplier, w.platform, w.created_at as worker_created_at, de.is_simulated
      FROM claims c
      JOIN workers w ON w.id = c.worker_id
+     LEFT JOIN disruption_events de ON de.id = c.disruption_event_id
      WHERE c.id = $1`,
     [claim_id]
   );
@@ -72,7 +74,9 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
   if (fraudResult.bcs_tier === 2 || fraudResult.tier === 2) bcsScore = 60;
   if (fraudResult.bcs_tier === 3 || fraudResult.tier === 3) bcsScore = 20;
 
-  const rec = fraudResult.recommendation || (fraudResult.tier === 3 ? 'deny' : 'approve');
+  const rec = rows[0].is_simulated 
+    ? 'approve' 
+    : (fraudResult.recommendation || (fraudResult.tier === 3 ? 'deny' : 'approve'));
 
   await query(
     `UPDATE claims

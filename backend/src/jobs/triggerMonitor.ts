@@ -289,6 +289,8 @@ async function processTrigger(params: {
   lng: number;
   value: number;
   zoneHexId?: string;
+  zoneName?: string;
+  isSimulated?: boolean;
 }): Promise<{
   eventId: string;
   workerIds: string[];
@@ -296,7 +298,7 @@ async function processTrigger(params: {
   eventHex: string;
   zoneKey: string;
 } | null> {
-  const { triggerType, city, lat, lng, value, zoneHexId } = params;
+  const { triggerType, city, lat, lng, value, zoneHexId, zoneName, isSimulated } = params;
 
   const eventHex = latLngToCell(lat, lng, 8);
   const zoneKey = zoneHexId ? BigInt(zoneHexId).toString() : BigInt(`0x${eventHex}`).toString();
@@ -310,7 +312,7 @@ async function processTrigger(params: {
      GROUP BY zone ORDER BY COUNT(*) DESC LIMIT 1`,
     [ringBigintsForLookup]
   );
-  const humanZone = zoneNameRows.length > 0 ? zoneNameRows[0].zone : (params as any).zoneName || city;
+  const humanZone = zoneNameRows.length > 0 ? zoneNameRows[0].zone : (zoneName || city);
 
   // Improved suppression: Check for same city/zone/type AND ensure the event is fairly recent (within 1 hour for manual overrides)
   const { rows: existing } = await query<{ id: string }>(
@@ -363,26 +365,29 @@ async function processTrigger(params: {
   }
 
   const { rows: events } = await query<{ id: string }>(
-    `INSERT INTO disruption_events (
-       trigger_type, city, zone, latitude, longitude, trigger_value, trigger_threshold,
-       severity, disruption_hours, affected_hex_ids,
-       affected_worker_count, affected_workers_count, total_payout, total_payout_amount, status
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,0,'active')
-     RETURNING id`,
-    [
-      triggerType,
-      city,
-      humanZone,
-      lat,
-      lng,
-      value,
-      threshold,
-      severity,
-      disruptionHours,
-      ringBigints,
-      affectedWorkers.length,
-      affectedWorkers.length,
-    ]
+     `INSERT INTO disruption_events (
+        trigger_type, city, zone, latitude, longitude, trigger_value, trigger_threshold,
+        severity, disruption_hours, affected_hex_ids,
+        affected_worker_count, affected_workers_count, total_payout, total_payout_amount, is_simulated, status
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'active')
+      RETURNING id`,
+      [
+        triggerType,
+        city,
+        humanZone, // Now stores human readable neighborhood name
+        lat,
+        lng,
+        value,
+        threshold,
+        severity,
+        disruptionHours,
+        ringBigints,
+        affectedWorkers.length,
+        affectedWorkers.length,
+        0, // total_payout
+        isSimulated ? affectedWorkers.length * premiumService.calculateCoverageAmount(200, triggerType) : 0, // estimated payout for simulation
+        !!isSimulated,
+      ]
   );
 
   const eventId = events[0].id;
@@ -434,6 +439,7 @@ export async function processTriggerEvent(input: {
   lng: number;
   trigger_value?: number;
   disruption_hours?: number;
+  is_simulated?: boolean;
 }): Promise<{
   event_id: string | null;
   event_hex: string;
@@ -447,6 +453,8 @@ export async function processTriggerEvent(input: {
     lat: input.lat,
     lng: input.lng,
     value: input.trigger_value ?? premiumService.getThreshold(input.trigger_type),
+    zoneName: input.zone,
+    isSimulated: input.is_simulated,
   });
 
   const eventHex = latLngToCell(input.lat, input.lng, 8);

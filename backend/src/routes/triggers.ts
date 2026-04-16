@@ -113,11 +113,12 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
     const result = await processTriggerEvent({
       trigger_type: triggerType,
       city,
-      zone,
+      zone, // Human-readable zone name (e.g. 'Andheri West')
       lat,
       lng,
       trigger_value: triggerValue,
       disruption_hours: disruptionHours,
+      is_simulated: true, // Mark as simulation for Demo Mode
     });
 
     // In-memory mode: BullMQ workers are disabled, so run the full
