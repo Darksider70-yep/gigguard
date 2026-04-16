@@ -75,31 +75,37 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
     let lng = req.body?.lng ? Number(req.body.lng) : null;
     let zone = String(req.body?.zone || '');
 
-    // SMART TARGETING: Randomly pick from all distinct zones in the city that have active workers
+    // SMART TARGETING: Identify all distinct neighborhoods with active policyholders and pick one fairly
     if (!lat || !lng) {
-      const { rows: hotspotRows } = await query<{ home_hex_id: string; zone: string }>(
-        `WITH city_zones AS (
-           SELECT DISTINCT w.zone, w.home_hex_id::text
-           FROM workers w
-           JOIN policies p ON p.worker_id = w.id
-           WHERE LOWER(w.city) = $1
-             AND p.status = 'active'
-             AND CURRENT_DATE BETWEEN p.week_start AND p.week_end
-             AND w.home_hex_id IS NOT NULL
-         )
-         SELECT * FROM city_zones
-         ORDER BY RANDOM()
-         LIMIT 1`,
+      const { rows: allActiveZones } = await query<{ zone: string; home_hex_id: string }>(
+        `SELECT DISTINCT w.zone, w.home_hex_id::text
+         FROM workers w
+         JOIN policies p ON p.worker_id = w.id
+         WHERE LOWER(w.city) = $1
+           AND p.status = 'active'
+           AND CURRENT_DATE BETWEEN p.week_start AND p.week_end
+           AND w.home_hex_id IS NOT NULL`,
         [city]
       );
 
-      if (hotspotRows[0]) {
+      if (allActiveZones.length > 0) {
+        // Shuffle and pick to ensure variety
+        const chosen = allActiveZones[Math.floor(Math.random() * allActiveZones.length)];
         const { cellToLatLng } = await import('h3-js');
-        const [hLat, hLng] = cellToLatLng(BigInt(hotspotRows[0].home_hex_id).toString(16));
+        const [hLat, hLng] = cellToLatLng(BigInt(chosen.home_hex_id).toString(16));
         lat = hLat;
         lng = hLng;
-        zone = hotspotRows[0].zone;
-        logger.info('Simulate', 'smart_target_acquired', { city, zone, lat, lng });
+        zone = chosen.zone;
+
+        logger.info('Simulate', 'smart_target_variety_acquired', { 
+          city, 
+          zone, 
+          available_zones: allActiveZones.length,
+          other_zones: allActiveZones.map(z => z.zone).filter(z => z !== zone)
+        });
+        
+        // Return available zones in response for transparency
+        (req as any)._available_zones = allActiveZones.map(z => z.zone);
       } else {
         // Fallback to city center if no active workers found
         const fallbackCoords = CITY_COORDINATES[city] || CITY_COORDINATES.mumbai;
@@ -196,6 +202,7 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
       value: triggerValue,
       affected_workers: result.affected_worker_count,
       affected_worker_names: result.worker_names,
+      available_zones: (req as any)._available_zones || [],
       total_payout: totalPayout,
       hex_ring_size: result.affected_hex_ids.length,
       event_hex: result.event_hex,
