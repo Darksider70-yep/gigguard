@@ -41,8 +41,8 @@ export default function ClaimsPage() {
   }, []);
 
   const totalPaid = Math.round(data?.stats?.total_paid_out ?? 0);
-  const monthClaims = data?.stats.claims_this_month ?? 0;
-  const streak = data?.stats.paid_streak ?? 0;
+  const monthClaims = data?.stats?.claims_this_month ?? 0;
+  const streak = data?.stats?.paid_streak ?? 0;
 
   const handleAppeal = async (claimId: string) => {
     if (!appealReason || appealReason.length < 10) return;

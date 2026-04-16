@@ -8,7 +8,7 @@ const router = Router();
 router.get('/', authenticateWorker, asyncRoute(async (req, res) => {
   const workerId = req.user!.id;
 
-  const { rows: claims } = await query<{
+  const { rows: claimsRows } = await query<{
     id: string;
     trigger_type: string;
     trigger_value: string | null;
@@ -30,33 +30,48 @@ router.get('/', authenticateWorker, asyncRoute(async (req, res) => {
        c.disruption_hours, c.fraud_score, c.graph_flags, c.bcs_score,
        c.status, c.notes, c.created_at, c.paid_at,
        de.city, de.zone,
-       pay.razorpay_payout_id as razorpay_ref
+       pay.razorpay_ref
      FROM claims c
      LEFT JOIN disruption_events de ON de.id = c.disruption_event_id
-     LEFT JOIN payouts pay ON pay.claim_id = c.id
+     LEFT JOIN (
+       SELECT DISTINCT ON (claim_id) claim_id, razorpay_payout_id as razorpay_ref 
+       FROM payouts 
+       ORDER BY claim_id, created_at DESC
+     ) pay ON pay.claim_id = c.id
      WHERE c.worker_id = $1
      ORDER BY c.created_at DESC`,
     [workerId]
   );
 
-  const { rows: stats } = await query<{
-    total_paid_out: string;
-    claims_this_month: string;
-    total_paid_count: string;
-  }>(
-    `SELECT
-       COALESCE(SUM(payout_amount) FILTER (WHERE status = 'paid'), 0)::text as total_paid_out,
-       COUNT(*) FILTER (
-         WHERE created_at > NOW() - INTERVAL '30 days'
-         AND status = 'paid'
-       )::text as claims_this_month,
-       COUNT(*) FILTER (WHERE status = 'paid')::text as total_paid_count
-     FROM claims
-     WHERE worker_id = $1`,
-    [workerId]
-  );
+  let total_paid_out = 0;
+  let claims_this_month = 0;
+  let total_paid_count = 0;
 
-  const enrichedClaims = claims.map((claim) => {
+  try {
+    const { rows: statsRows } = await query<{
+      total_paid_out: string;
+      claims_this_month: string;
+      total_paid_count: string;
+    }>(
+      `SELECT
+         COALESCE(SUM(CASE WHEN status = 'paid' THEN payout_amount ELSE 0 END), 0)::text as total_paid_out,
+         COUNT(CASE WHEN created_at > NOW() - INTERVAL '30 days' AND status = 'paid' THEN 1 ELSE NULL END)::text as claims_this_month,
+         COUNT(CASE WHEN status = 'paid' THEN 1 ELSE NULL END)::text as total_paid_count
+       FROM claims
+       WHERE worker_id = $1`,
+      [workerId]
+    );
+    if (statsRows[0]) {
+      total_paid_out = Math.round(Number(statsRows[0].total_paid_out));
+      claims_this_month = parseInt(statsRows[0].claims_this_month, 10);
+      total_paid_count = parseInt(statsRows[0].total_paid_count, 10);
+    }
+  } catch (err) {
+    // Non-critical metrics failure should not block the claim list load
+    console.error('Claims: Failed to fetch worker stats', err);
+  }
+
+  const enrichedClaims = claimsRows.map((claim) => {
     const base = {
       ...claim,
       payout_amount: Math.round(Number(claim.payout_amount)),
@@ -82,9 +97,9 @@ router.get('/', authenticateWorker, asyncRoute(async (req, res) => {
 
   res.json({
     stats: {
-      total_paid_out: stats[0] ? Math.round(Number(stats[0].total_paid_out)) : 0,
-      claims_this_month: stats[0] ? parseInt(stats[0].claims_this_month, 10) : 0,
-      paid_streak: stats[0] ? parseInt(stats[0].total_paid_count, 10) : 0,
+      total_paid_out,
+      claims_this_month,
+      paid_streak: total_paid_count,
     },
     claims: enrichedClaims,
   });
