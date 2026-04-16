@@ -54,6 +54,19 @@ export default function InsurerPage() {
   const [status, setStatus] = useState<PlatformStatusResponse | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [eventsFlash, setEventsFlash] = useState(false);
+  const [selectedType, setSelectedType] = useState('heavy_rainfall');
+  const [selectedCity, setSelectedCity] = useState('mumbai');
+
+  const TRIGGER_TYPES = [
+    { id: 'heavy_rainfall', label: 'Heavy Rainfall' },
+    { id: 'extreme_heat', label: 'Extreme Heat' },
+    { id: 'flood_red_alert', label: 'Flood Red Alert' },
+    { id: 'severe_aqi', label: 'Severe AQI' },
+    { id: 'curfew_strike', label: 'Curfew / Strike' },
+    { id: 'pandemic_containment', label: 'Pandemic Zone' },
+  ];
+
+  const CITIES = ['mumbai', 'delhi', 'bangalore', 'chennai', 'hyderabad'];
 
   const fetchBundle = async (): Promise<DashboardBundle> => {
     const currentDate = new Date();
@@ -127,15 +140,35 @@ export default function InsurerPage() {
     setSimulating(true);
     setSimSteps([]);
     try {
-      setSimSteps(['Initializing disruption event...', 'Analyzing affected workers...', 'Calculating parametric payouts...']);
-      const payload: SimulateTriggerBody = {
-        trigger_type: 'heavy_rainfall',
-        city: 'mumbai',
-        zone: 'Andheri West',
-        trigger_value: 25.4,
-        lat: 19.1364,
-        lng: 72.8296,
+      setSimSteps([`Initializing ${selectedType} event in ${selectedCity}...`, 'Analyzing affected workers...', 'Calculating parametric payouts...']);
+      
+      const cityCoords: any = {
+        mumbai: { lat: 19.1364, lng: 72.8296, zone: 'Andheri West' },
+        delhi: { lat: 28.6139, lng: 77.2090, zone: 'Connaught Place' },
+        bangalore: { lat: 12.9716, lng: 77.5946, zone: 'Indiranagar' },
+        chennai: { lat: 13.0827, lng: 80.2707, zone: 'T. Nagar' },
+        hyderabad: { lat: 17.3850, lng: 78.4867, zone: 'Banjara Hills' },
       };
+
+      const coords = cityCoords[selectedCity];
+      const testValues: any = {
+        heavy_rainfall: 25.4,
+        extreme_heat: 42.5,
+        flood_red_alert: 1,
+        severe_aqi: 450,
+        curfew_strike: 1,
+        pandemic_containment: 1,
+      };
+
+      const payload: SimulateTriggerBody = {
+        trigger_type: selectedType,
+        city: selectedCity,
+        zone: coords.zone,
+        trigger_value: testValues[selectedType],
+        lat: coords.lat,
+        lng: coords.lng,
+      };
+
       const result = (await api.simulateTrigger(payload)) as any;
       setSimSteps(prev => [...prev, `Success. ${result.affected_workers ?? 0} workers notified.`]);
       await refresh();
@@ -313,19 +346,43 @@ export default function InsurerPage() {
                        <p className="text-xs text-text-secondary leading-relaxed">
                           Force trigger events for emergency overrides or stress testing the parametric pipeline.
                        </p>
-                       <div className="p-4 bg-amber-500/10 border border-dashed border-amber-500/30 rounded-2xl space-y-3">
-                          <div className="flex items-center justify-between">
-                             <p className="text-[10px] font-black text-amber-200 uppercase tracking-widest">Manual Override Test</p>
-                             <Zap size={14} className="text-amber-400 animate-pulse" />
+                       
+                       <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                             <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Trigger Type</label>
+                             <select 
+                               value={selectedType}
+                               onChange={(e) => setSelectedType(e.target.value)}
+                               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none cursor-pointer uppercase tracking-tight focus:border-accent-saffron/50 transition-colors"
+                             >
+                                {TRIGGER_TYPES.map(t => (
+                                   <option key={t.id} value={t.id} className="bg-bg-base">{t.label}</option>
+                                ))}
+                             </select>
                           </div>
+                          <div className="space-y-1">
+                             <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Target City</label>
+                             <select 
+                               value={selectedCity}
+                               onChange={(e) => setSelectedCity(e.target.value)}
+                               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none cursor-pointer uppercase tracking-tight focus:border-accent-saffron/50 transition-colors"
+                             >
+                                {CITIES.map(c => (
+                                   <option key={c} value={c} className="bg-bg-base">{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                                ))}
+                             </select>
+                          </div>
+                       </div>
+
+                       <div className="p-4 bg-amber-500/10 border border-dashed border-amber-500/30 rounded-2xl space-y-3 mt-2">
                           <button 
                             disabled={simulating}
                             onClick={simulateTrigger}
-                            className="w-full bg-accent-saffron hover:bg-amber-400 text-bg-base font-black py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
+                            className="w-full bg-accent-saffron hover:bg-amber-400 disabled:opacity-50 text-bg-base font-black py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.2)]"
                           >
-                             {simulating ? <span className="animate-spin w-4 h-4 border-2 border-bg-base border-t-transparent rounded-full" /> : 'Simulate Major Rainfall'}
+                             {simulating ? <span className="animate-spin w-4 h-4 border-2 border-bg-base border-t-transparent rounded-full" /> : `Simulate ${TRIGGER_TYPES.find(t => t.id === selectedType)?.label}`}
                           </button>
-                          <div className="space-y-1">
+                          <div className="space-y-1 min-h-[40px]">
                              {simSteps.map((s, i) => <p key={i} className="text-[10px] text-amber-100/60 font-monoData"> {'>'} {s}</p>)}
                           </div>
                        </div>

@@ -80,6 +80,14 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
     );
     const zone = String(req.body?.zone || '');
 
+    // Clear existing active events for this trigger type so simulate always fires fresh
+    await query(
+      `UPDATE disruption_events
+       SET status='processed'
+       WHERE city=$1 AND trigger_type=$2 AND status='active'`,
+      [city, triggerType]
+    );
+
     if (triggerType === 'pandemic_containment') {
       const latForPolygon = Number(req.body?.lat ?? coords.lat);
       const lngForPolygon = Number(req.body?.lng ?? coords.lng);
