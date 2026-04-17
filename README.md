@@ -902,7 +902,7 @@ All in-depth documentation lives in the [`docs/`](docs/) directory:
 [DEMO VIDEO](https://drive.google.com/file/d/1ixiRNWg9tTNWHhzBur0g_8b_Pfrt8x8a/view?usp=drive_link)
 
 ## **LIVE at**
-[LIVE at:-](https://gigguard-kjj5.onrender.com)
+[LIVE](https://gigguard-kjj5.onrender.com)
 
 ## **INSURER LOGIN**
 [INSURER LOGIN](https://gigguard-kjj5.onrender.com/insurer/login)
