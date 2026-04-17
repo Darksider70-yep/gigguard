@@ -905,7 +905,7 @@ All in-depth documentation lives in the [`docs/`](docs/) directory:
 [LIVE](https://gigguard-kjj5.onrender.com)
 
 ## **INSURER LOGIN**
-[INSURER LOGIN](https://gigguard-kjj5.onrender.com/insurer/login)
+[INSURER LOGIN](https://gigguard-kjj5.onrender.com/insurer-login)
 
 ## **INSURER PASSWORD**
 [INSURER PASSWORD](docs/INSURER.txt)
