@@ -84,7 +84,7 @@ export async function processClaimCreationJob(
           const existingPayout = Number(existingClaim.payout_amount);
           const shouldUpgrade = payout > existingPayout && existingClaim.status !== 'paid';
 
-          if (!shouldUpgrade && !is_simulated) {
+          if (!shouldUpgrade) {
             logger.warn('ClaimCreation', 'claim_suppressed_daily_limit', {
               worker_id: workerId,
               existing_claim_id: existingClaim.id,
