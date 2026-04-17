@@ -269,7 +269,14 @@ export default function DashboardPage() {
                     {showFormula && (
                       <div className="mt-6 animate-fade-in-up">
                          <PremiumFormula
-                           baseRate={quote?.formula_breakdown?.base_rate ?? (activePolicy?.policy?.premium_paid ? Math.round(activePolicy.policy.premium_paid / ((worker?.zone_multiplier ?? 1) * (quote?.formula_breakdown?.weather_multiplier ?? 1))) : 35)}
+                           baseRate={(() => {
+                            const z = quote?.formula_breakdown?.zone_multiplier ?? worker?.zone_multiplier ?? 1;
+                            const w = quote?.formula_breakdown?.weather_multiplier ?? 1;
+                            const h = quote?.formula_breakdown?.history_multiplier ?? 1;
+                            const totalMult = z * w * h;
+                            const paid = activePolicy?.policy?.premium_paid ?? quote?.premium ?? 44;
+                            return totalMult > 0 ? paid / totalMult : 35;
+                           })()}
                            zoneMultiplier={quote?.formula_breakdown?.zone_multiplier ?? worker?.zone_multiplier ?? 1}
                            weatherMultiplier={quote?.formula_breakdown?.weather_multiplier ?? 1}
                            historyMultiplier={quote?.formula_breakdown?.history_multiplier ?? 1}
