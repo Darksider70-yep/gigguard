@@ -50,8 +50,6 @@ The services communicate via REST APIs to perform their functions:
 4.  **Database (PostgreSQL):** The single source of truth for all persistent data, including worker profiles, policy details, disruption events, and claim statuses.
 5.  **Payment Service (Node.js/Express):** A standalone microservice handling all financial gateways. Completely isolates Razorpay endpoints and Dummy mode drivers into abstract layers so the main backend avoids processor coupling.
 
-> For a deeper technical dive, including the full database schema and API design, see the [**Architecture Document**](docs/System_architecture.docx) and the [**ER Model**](docs/GigGuard_ER_Model.docx).
-
 ---
 
 ## 3.5 Phase 2: What's New
@@ -209,7 +207,7 @@ Comprehensive guides for all Phase 2 features:
 | Document | Purpose |
 |---|---|
 
-| [H3 Implementation Guide](docs/H3_IMPLEMENTATION_GUIDE.md) | H3 hexagon theory, trigger monitor algorithm, backfill process |
+| [H3 Implementation Guide](docs/GEOSPATIAL.md) | H3 hexagon theory, trigger monitor algorithm, backfill process |
 | [Bandit Policy Recommendation](docs/BANDIT_POLICY_RECOMMENDATION.md) | Thompson Sampling math, context features, cold start handling |
 | [RL Premium Engine](docs/RL_PREMIUM_ENGINE.md) | SAC algorithm, state-action-reward, nightly training, shadow evaluation |
 | [GNN Fraud Detection](docs/GNN_FRAUD_DETECTION.md) | Graph schema, synthetic data generation, GraphSAGE model, Phase 3 prep |
@@ -358,7 +356,7 @@ Insurance is a trust product. Trust requires comprehension. Comprehension requir
 
 | Language | States Covered | Estimated Worker Base |
 |---|---|---|
-| **Hindi** | Delhi, parts of Mumbai | ~30% of GigGuard workers |
+| **Hindi** | Delhi,Noida, parts of Mumbai | ~30% of GigGuard workers |
 | **Tamil** | Chennai | ~20% of GigGuard workers |
 | **Telugu** | Hyderabad | ~15% of GigGuard workers |
 | **Kannada** | Bangalore | ~18% of GigGuard workers |
@@ -854,16 +852,6 @@ JWT-only authentication, payout deduplication (database constraints + app-level 
 
 <table>
 <tr>
-<td width="20" align="center">🔗</td>
-<td>
-
-**[API Changes Phase 2](docs/API_CHANGES_PHASE2.md)** — *Understand what changed in the API*
-
-Breaking changes, new endpoints, error codes, backwards compatibility matrix, SDK updates, and testing examples. Use this when integrating Phase 2 features into your client applications.
-
-</td>
-</tr>
-<tr>
 <td width="20" align="center">⚡</td>
 <td>
 
@@ -901,8 +889,11 @@ All in-depth documentation lives in the [`docs/`](docs/) directory:
 | [**ML Models**](docs/ML_MODELS.md) | Premium formula, Isolation Forest, Bandits, RL, GNN |
 | [**Trigger Definitions**](docs/trigger-definitions.md) | Parametric trigger specs, thresholds, fraud guards |
 | [**Geospatial Intelligence**](docs/GEOSPATIAL.md) | Consolidated H3 indexing and API guide |
-| [**Bandit Implementation**](docs/BANDIT_IMPLEMENTATION.md) | Thompson Sampling bandit deep-dive |
-| [**Review Summary**](docs/REVIEW_COMPLETE_SUMMARY.md) | Bandit implementation review and test suite |
+| [**Bandit Implementation**](docs/BANDIT_POLICY_RECOMMENDATION.md) | Thompson Sampling bandit deep-dive |
+| [**GNN Fraud Detection**](docs/GNN_FRAUD_DETECTION.md) | Graph Neural Network for fraud detection |
+| [**RL Premium Engine**](docs/RL_PREMIUM_ENGINE.md) | Reinforcement Learning for premium optimization |
+| [**Security Hardening**](docs/SECURITY_HARDENING.md) | Security best practices for the platform |
+| [**Multilingual Support**](docs/MULTILINGUAL_SUPPORT.md) | Multilingual support for the platform |
 
-**PITCH DECK**
+## **PITCH DECK**
 [PITCH DECK](https://drive.google.com/file/d/1scuDDcWpa1QbZAeeFIERM6q9LW6AXSls/view?usp=drive_link)
