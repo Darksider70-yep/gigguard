@@ -10,7 +10,10 @@ export const ZONES = [
   { zone_id: 'DEL-ROH', zone: 'Rohini', city: 'Delhi', lat: 28.741, lng: 77.0674, zone_multiplier: 1.2, risk: 'medium' },
   { zone_id: 'DEL-DWA', zone: 'Dwarka', city: 'Delhi', lat: 28.5921, lng: 77.046, zone_multiplier: 1.15, risk: 'medium' },
   { zone_id: 'DEL-SAK', zone: 'Saket', city: 'Delhi', lat: 28.5245, lng: 77.2066, zone_multiplier: 1.1, risk: 'medium' },
-  { zone_id: 'DEL-NOI', zone: 'Noida Sector 18', city: 'Delhi', lat: 28.5679, lng: 77.326, zone_multiplier: 1.05, risk: 'low' },
+  { zone_id: 'NOI-SEC18', zone: 'Sector 18', city: 'Noida', lat: 28.5679, lng: 77.326, zone_multiplier: 1.3, risk: 'high' },
+  { zone_id: 'NOI-SEC52', zone: 'Sector 52', city: 'Noida', lat: 28.5866, lng: 77.3621, zone_multiplier: 1.25, risk: 'medium' },
+  { zone_id: 'NOI-SEC62', zone: 'Sector 62', city: 'Noida', lat: 28.6235, lng: 77.3685, zone_multiplier: 1.2, risk: 'medium' },
+  { zone_id: 'NOI-SEC126', zone: 'Sector 126', city: 'Noida', lat: 28.5414, lng: 77.3312, zone_multiplier: 1.15, risk: 'medium' },
   { zone_id: 'CHE-TNA', zone: 'T. Nagar', city: 'Chennai', lat: 13.0418, lng: 80.2341, zone_multiplier: 1.1, risk: 'medium' },
   { zone_id: 'CHE-ADY', zone: 'Adyar', city: 'Chennai', lat: 13.0012, lng: 80.2565, zone_multiplier: 1.15, risk: 'medium' },
   { zone_id: 'CHE-ANN', zone: 'Anna Nagar', city: 'Chennai', lat: 13.085, lng: 80.2101, zone_multiplier: 1.05, risk: 'low' },
@@ -31,7 +34,7 @@ export const ZONES = [
   { zone_id: 'HYD-LBN', zone: 'LB Nagar', city: 'Hyderabad', lat: 17.3478, lng: 78.5519, zone_multiplier: 1.0, risk: 'low' },
 ] as const;
 
-export const CITIES = ['Mumbai', 'Delhi', 'Chennai', 'Bangalore', 'Hyderabad'] as const;
+export const CITIES = ['Mumbai', 'Delhi', 'Chennai', 'Bangalore', 'Hyderabad', 'Noida'] as const;
 
 export type ZoneRisk = (typeof ZONES)[number]['risk'];
 export type ZoneCity = (typeof CITIES)[number];

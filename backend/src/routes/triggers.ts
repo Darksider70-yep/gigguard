@@ -17,6 +17,7 @@ const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   chennai: { lat: 13.0827, lng: 80.2707 },
   bangalore: { lat: 12.9716, lng: 77.5946 },
   hyderabad: { lat: 17.385, lng: 78.4867 },
+  noida: { lat: 28.57, lng: 77.32 },
 };
 
 router.get('/live-events', async (req, res: Response) => {

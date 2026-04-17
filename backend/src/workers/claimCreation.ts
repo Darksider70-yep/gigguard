@@ -83,8 +83,13 @@ export async function processClaimCreationJob(
           const shouldUpgrade = payout > existingPayout && existingClaim.status !== 'paid';
 
           if (!shouldUpgrade) {
-            logger.info('ClaimCreation', 'one_claim_per_day_enforced', {
+            logger.warn('ClaimCreation', 'claim_suppressed_daily_limit', {
               worker_id: workerId,
+              existing_claim_id: existingClaim.id,
+              existing_status: existingClaim.status,
+              existing_payout: existingPayout,
+              new_event_target_payout: payout,
+              reason: 'Worker already has a valid claim for today and new event is not a high-intensity upgrade.'
             });
             return {
               claimId: existingClaim.id,

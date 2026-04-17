@@ -66,7 +66,7 @@ export default function InsurerPage() {
     { id: 'pandemic_containment', label: 'Pandemic Zone' },
   ];
 
-  const CITIES = ['mumbai', 'delhi', 'bangalore', 'chennai', 'hyderabad'];
+  const CITIES = ['mumbai', 'delhi', 'bangalore', 'chennai', 'hyderabad', 'noida'];
 
   const fetchBundle = async (): Promise<DashboardBundle> => {
     const currentDate = new Date();
