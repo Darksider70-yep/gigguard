@@ -899,7 +899,7 @@ All in-depth documentation lives in the [`docs/`](docs/) directory:
 [PITCH DECK](https://drive.google.com/file/d/1scuDDcWpa1QbZAeeFIERM6q9LW6AXSls/view?usp=drive_link)
 
 ## **Demo video**
-[Demo video](https://drive.google.com/file/d/1ixiRNWg9tTNWHhzBur0g_8b_Pfrt8x8a/view?usp=drive_link)
+[DEMO VIDEO](https://drive.google.com/file/d/1ixiRNWg9tTNWHhzBur0g_8b_Pfrt8x8a/view?usp=drive_link)
 
 ## **LIVE at**
 [LIVE at:-](https://gigguard-kjj5.onrender.com)
