@@ -195,7 +195,7 @@ export default function DashboardPage() {
                         <div className="space-y-4 text-center">
                           <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Coverage Protection</p>
                           <div className="relative inline-flex items-center justify-center">
-                             <svg className="w-32 h-32 md:w-40 md:h-40 transform -rotate-90">
+                            <svg className="w-32 h-32 md:w-40 md:h-40 transform -rotate-90" viewBox="0 0 128 128">
                               <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/5" />
                               <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="transparent" 
                                 strokeDasharray={351} strokeDashoffset={351 - (351 * coveragePct) / 100}
@@ -266,14 +266,14 @@ export default function DashboardPage() {
                       </div>
                     )}
 
-                    {showFormula && quote?.formula_breakdown && (
+                    {showFormula && (
                       <div className="mt-6 animate-fade-in-up">
                          <PremiumFormula
-                           baseRate={quote.formula_breakdown.base_rate ?? 35}
-                           zoneMultiplier={quote.formula_breakdown.zone_multiplier ?? 1}
-                           weatherMultiplier={quote.formula_breakdown.weather_multiplier ?? 1}
-                           historyMultiplier={quote.formula_breakdown.history_multiplier ?? 1}
-                           finalPremium={quote.premium}
+                           baseRate={quote?.formula_breakdown?.base_rate ?? (activePolicy?.policy?.premium_paid ? Math.round(activePolicy.policy.premium_paid / ((worker?.zone_multiplier ?? 1) * (quote?.formula_breakdown?.weather_multiplier ?? 1))) : 35)}
+                           zoneMultiplier={quote?.formula_breakdown?.zone_multiplier ?? worker?.zone_multiplier ?? 1}
+                           weatherMultiplier={quote?.formula_breakdown?.weather_multiplier ?? 1}
+                           historyMultiplier={quote?.formula_breakdown?.history_multiplier ?? 1}
+                           finalPremium={activePolicy?.policy?.premium_paid ?? quote?.premium ?? 44}
                          />
                       </div>
                     )}
