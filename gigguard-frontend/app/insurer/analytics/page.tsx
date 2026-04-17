@@ -52,28 +52,112 @@ export default function InsurerAnalyticsPage() {
 
       {!loading && !error && data ? (
         <div className="space-y-5">
-          <section className="surface-card p-5">
-            <h2 className="text-xl font-semibold">Loss ratio gauge</h2>
-            <div className="mt-4 flex items-end gap-8">
-              <div className="relative h-[180px] w-[360px] overflow-hidden rounded-t-full border border-slate-700 bg-slate-900/60">
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background: 'conic-gradient(from 180deg, #10b981 0deg, #10b981 117deg, #f59e0b 117deg, #f59e0b 144deg, #ef4444 144deg, #ef4444 180deg, transparent 180deg)',
-                    borderRadius: '999px 999px 0 0',
-                  }}
-                />
-                <div className="absolute left-1/2 top-full h-[150px] w-[2px] origin-top -translate-x-1/2"
-                  style={{
-                    background: needleColor,
-                    transform: `translateX(-50%) rotate(${-90 + (lossRatioPct / 100) * 180}deg)`,
-                    transition: 'transform 900ms ease',
-                  }}
+          <section className="surface-card p-6">
+            <h2 className="text-xl font-semibold opacity-90">Loss ratio health</h2>
+            <div className="mt-6 flex flex-col items-center justify-center gap-10 md:flex-row md:items-start md:justify-start">
+              <div className="relative h-48 w-48">
+                <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90 transform">
+                  {/* Background Track */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    fill="transparent"
+                    stroke="#1e293b"
+                    strokeWidth="8"
+                    className="opacity-50"
+                  />
+                  {/* Segments */}
+                  {/* Secure: 0-65% */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    fill="transparent"
+                    stroke="#10b981"
+                    strokeWidth="8"
+                    strokeDasharray={`${(65 / 100) * 251.2} 251.2`}
+                    className="opacity-20"
+                  />
+                  {/* Warning: 65-80% */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    fill="transparent"
+                    stroke="#f59e0b"
+                    strokeWidth="8"
+                    strokeDasharray={`${(15 / 100) * 251.2} 251.2`}
+                    strokeDashoffset={`${-(65 / 100) * 251.2}`}
+                    className="opacity-20"
+                  />
+                  {/* Danger: 80-100% */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    fill="transparent"
+                    stroke="#ef4444"
+                    strokeWidth="8"
+                    strokeDasharray={`${(20 / 100) * 251.2} 251.2`}
+                    strokeDashoffset={`${-(80 / 100) * 251.2}`}
+                    className="opacity-20"
+                  />
+                  
+                  {/* Active Value Ring */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    fill="transparent"
+                    stroke={needleColor}
+                    strokeWidth="10"
+                    strokeDasharray={`${(lossRatioPct / 100) * 251.2} 251.2`}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dasharray 1.2s ease, stroke 0.5s ease' }}
+                    className="drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]"
+                  />
+                </svg>
+                
+                {/* Center Content */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="font-mono-data text-3xl font-bold" style={{ color: needleColor }}>
+                    {lossRatioPct}%
+                  </span>
+                  <span className="text-[10px] uppercase tracking-widest text-secondary opacity-80">
+                    Loss Ratio
+                  </span>
+                </div>
+
+                {/* Glow layer */}
+                <div 
+                  className="absolute inset-2 -z-10 rounded-full opacity-10 blur-2xl"
+                  style={{ backgroundColor: needleColor }}
                 />
               </div>
-              <div>
-                <p className="font-mono-data text-4xl text-amber-300">{lossRatioPct}%</p>
-                <p className="text-sm text-secondary">{statusText(lossRatioPct)}</p>
+
+              <div className="max-w-xs space-y-4 pt-2">
+                <div>
+                  <h4 className="flex items-center gap-2 text-sm font-medium text-white">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: needleColor }} />
+                    {statusText(lossRatioPct)}
+                  </h4>
+                  <p className="mt-1 text-xs text-secondary leading-relaxed">
+                    The loss ratio represents the percentage of premiums paid out as claims. 
+                    GigGuard targets a <span className="text-emerald-400">&lt;65% ratio</span> for sustainable unit economics.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 rounded-lg bg-slate-800/40 p-3 border border-slate-700/50">
+                  <div>
+                    <p className="text-[10px] text-secondary uppercase tracking-tight">Total Payouts</p>
+                    <p className="font-mono-data text-sm">{INR}{data.dashboard.stats.payouts_this_month.toLocaleString('en-IN')}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-secondary uppercase tracking-tight">Active Policies</p>
+                    <p className="font-mono-data text-sm">{data.dashboard.stats.active_policies.toLocaleString('en-IN')}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
