@@ -901,6 +901,8 @@ All in-depth documentation lives in the [`docs/`](docs/) directory:
 | [**ML Models**](docs/ML_MODELS.md) | Premium formula, Isolation Forest, Bandits, RL, GNN |
 | [**Trigger Definitions**](docs/trigger-definitions.md) | Parametric trigger specs, thresholds, fraud guards |
 | [**Geospatial Intelligence**](docs/GEOSPATIAL.md) | Consolidated H3 indexing and API guide |
-| [**GIN Index Explanation**](docs/GIN_INDEX_EXPLANATION.md) | PostgreSQL GIN indexes for H3 hex lookups |
 | [**Bandit Implementation**](docs/BANDIT_IMPLEMENTATION.md) | Thompson Sampling bandit deep-dive |
 | [**Review Summary**](docs/REVIEW_COMPLETE_SUMMARY.md) | Bandit implementation review and test suite |
+
+**PITCH DECK**
+[PITCH DECK](https://drive.google.com/file/d/1scuDDcWpa1QbZAeeFIERM6q9LW6AXSls/view?usp=drive_link)
