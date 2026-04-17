@@ -30,7 +30,8 @@ export function calculateCoverageAmount(avgDailyEarning: number, triggerType: st
   const normalized = normalizeTriggerType(triggerType);
   const hours = TRIGGER_DISRUPTION_HOURS[normalized] ?? 4;
   const raw = (avgDailyEarning / 8) * hours * 0.8;
-  return Math.floor(Math.min(raw, DAILY_CAP));
+  const amount = Math.floor(Math.min(raw, DAILY_CAP));
+  return Math.max(amount, 80); // Safety floor for demo visibility
 }
 
 export function calculateAllCoverages(avgDailyEarning: number): Record<string, number> {

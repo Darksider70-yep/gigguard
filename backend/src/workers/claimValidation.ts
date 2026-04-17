@@ -59,16 +59,34 @@ export async function processClaimValidationJob(data: ClaimValidationJob): Promi
     (Date.now() - new Date(claim.worker_created_at).getTime()) / 86400000
   );
 
-  const fraudResult = await mlService.scoreFraud({
-    claim_id,
-    worker_id: claim.worker_id,
-    payout_amount: Number(claim.payout_amount),
-    claim_freq_30d: claimFreq30d,
-    hours_since_trigger: hoursSinceTrigger,
-    zone_multiplier: Number(claim.zone_multiplier),
-    platform: claim.platform,
-    account_age_days: accountAgeDays,
-  });
+  let fraudResult;
+  try {
+    fraudResult = await Promise.race([
+      mlService.scoreFraud({
+        claim_id,
+        worker_id: claim.worker_id,
+        payout_amount: Number(claim.payout_amount),
+        claim_freq_30d: claimFreq30d,
+        hours_since_trigger: hoursSinceTrigger,
+        zone_multiplier: Number(claim.zone_multiplier),
+        platform: claim.platform,
+        account_age_days: accountAgeDays,
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('ML Scoring Timeout')), 10000))
+    ]);
+  } catch (err) {
+    logger.warn('ClaimValidation', 'ml_scorer_error_fallback_to_review', {
+      claim_id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    // Fallback result for demo/simulation stability
+    fraudResult = {
+      fraud_score: 0.5,
+      recommendation: 'review',
+      flagged: true,
+      scorer: 'fallback_error'
+    };
+  }
 
   let bcsScore = 100;
   if (fraudResult.bcs_tier === 2 || fraudResult.tier === 2) bcsScore = 60;
