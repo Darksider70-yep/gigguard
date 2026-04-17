@@ -16,7 +16,7 @@
 **/coverage/
 !gigguard-frontend/app/insurer/coverage/
 !gigguard-frontend/app/insurer/coverage/page.tsx
-
+Presentation_Guide.md
 # Logs
 **/*.log
 
