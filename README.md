@@ -895,5 +895,11 @@ All in-depth documentation lives in the [`docs/`](docs/) directory:
 | [**Security Hardening**](docs/SECURITY_HARDENING.md) | Security best practices for the platform |
 | [**Multilingual Support**](docs/MULTILINGUAL_SUPPORT.md) | Multilingual support for the platform |
 
-## **PITCH DECK**
+## **Pitch deck**
 [PITCH DECK](https://drive.google.com/file/d/1scuDDcWpa1QbZAeeFIERM6q9LW6AXSls/view?usp=drive_link)
+
+## **Demo video**
+[Demo video](https://drive.google.com/file/d/1ixiRNWg9tTNWHhzBur0g_8b_Pfrt8x8a/view?usp=drive_link)
+
+## **LIVE at**
+[LIVE at:-](https://gigguard-kjj5.onrender.com)
