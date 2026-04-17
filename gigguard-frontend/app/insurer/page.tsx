@@ -211,7 +211,7 @@ export default function InsurerPage() {
         </header>
 
         {stats && (
-          <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 animate-fade-in-up delay-100">
+          <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 animate-fade-in-up delay-100">
              {[
                { label: 'Fleet Strength', val: stats.total_workers, icon: Globe, href: '/insurer/workers' },
                { label: 'Active Policies', val: stats.active_policies, icon: ShieldCheck, href: '/insurer/policies', variant: 'success' },
@@ -221,17 +221,17 @@ export default function InsurerPage() {
                { label: 'Global Reach', val: stats.coverage_area.zones, icon: MapPin, suffix: ' Zones', href: '/insurer/coverage' },
                { label: 'Avg Premium', val: stats.average_premium, icon: History, prefix: '₹', href: '/insurer/analytics' },
              ].map((s, i) => (
-               <GlassCard key={i} interactive className="p-4 group">
-                  <Link href={s.href || '#'} className="block space-y-3">
+               <GlassCard key={i} interactive className="p-3 md:p-4 group">
+                  <Link href={s.href || '#'} className="block space-y-2 md:space-y-3">
                     <div className="flex items-center justify-between">
-                       <div className={`p-2 rounded-lg bg-white/5 ${s.variant === 'success' ? 'text-emerald-400' : s.variant === 'saffron' ? 'text-accent-saffron' : s.variant === 'error' ? 'text-rose-400' : 'text-text-muted'} group-hover:scale-110 transition-transform`}>
-                          <s.icon size={16} />
+                       <div className={`p-1.5 md:p-2 rounded-lg bg-white/5 ${s.variant === 'success' ? 'text-emerald-400' : s.variant === 'saffron' ? 'text-accent-saffron' : s.variant === 'error' ? 'text-rose-400' : 'text-text-muted'} group-hover:scale-110 transition-transform`}>
+                          <s.icon size={14} />
                        </div>
-                       <ChevronRight size={14} className="text-text-muted opacity-0 group-hover:opacity-100 transition-all" />
+                       <ChevronRight size={12} className="text-text-muted opacity-0 group-hover:opacity-100 transition-all" />
                     </div>
                     <div>
-                       <p className="text-[10px] text-text-muted font-bold uppercase tracking-tighter">{s.label}</p>
-                       <p className="text-xl font-monoData font-bold leading-none mt-1">
+                       <p className="text-[9px] md:text-[10px] text-text-muted font-bold uppercase tracking-tighter line-clamp-1">{s.label}</p>
+                       <p className="text-lg md:text-xl font-monoData font-bold leading-none mt-0.5">
                           {s.prefix}{s.val}{s.suffix}
                        </p>
                     </div>

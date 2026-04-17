@@ -86,18 +86,18 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
-      <section className="hero-grid relative flex min-h-[86vh] flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[var(--bg-surface)] p-10">
+      <section className="hero-grid relative flex min-h-[86vh] flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[var(--bg-surface)] p-6 md:p-10">
         <div className="hex-bg absolute inset-0 opacity-45" />
         <div className="relative z-10 flex flex-1 flex-col justify-center">
-          <p className="animate-fade-in-up delay-0 text-xs uppercase tracking-[0.25em] text-secondary">
+          <p className="animate-fade-in-up delay-0 text-[10px] md:text-xs uppercase tracking-[0.25em] text-secondary">
             GigGuard Command Center
           </p>
-          <h1 className="animate-fade-in-up delay-100 mt-4 text-6xl font-semibold leading-tight">
+          <h1 className="animate-fade-in-up delay-100 mt-4 text-4xl md:text-6xl font-semibold leading-tight">
             <span>Your income,</span>
             <br />
             <span className="cursor-blink text-amber-400">protected.</span>
           </h1>
-          <p className="animate-fade-in-up delay-300 mt-5 max-w-2xl text-lg text-secondary">
+          <p className="animate-fade-in-up delay-300 mt-5 max-w-2xl text-sm md:text-lg text-secondary">
             AI-powered parametric insurance for Zomato and Swiggy riders. Trigger-driven payouts for monsoons,
             heatwaves, and disruption shocks.
           </p>
@@ -117,7 +117,7 @@ export default function HomePage() {
               type="button"
               onClick={handleInsurerLogin}
               disabled={isLoading}
-              className="btn-outline-saffron px-5 py-3 text-sm disabled:opacity-60"
+              className="btn-outline-saffron w-full sm:w-auto px-5 py-3 text-sm disabled:opacity-60"
             >
               Insurer Login
             </button>
@@ -129,30 +129,30 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="surface-card animate-fade-in-up delay-100 grid grid-cols-3 divide-x divide-slate-800 px-4 py-5">
-        <div className="px-4">
-          <p className="font-mono-data text-3xl font-semibold text-amber-300">
+      <section className="surface-card animate-fade-in-up delay-100 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-800 px-4 py-5 gap-6 md:gap-0">
+        <div className="px-4 py-2 md:py-0">
+          <p className="font-mono-data text-2xl md:text-3xl font-semibold text-amber-300">
             <CountUp value={150000} />
           </p>
-          <p className="text-sm text-secondary">gig workers in India</p>
+          <p className="text-xs md:text-sm text-secondary">gig workers in India</p>
         </div>
-        <div className="px-4">
-          <p className="font-mono-data text-3xl font-semibold text-amber-300">
+        <div className="px-4 py-2 md:py-0">
+          <p className="font-mono-data text-2xl md:text-3xl font-semibold text-amber-300">
             <CountUp value={5} />
           </p>
-          <p className="text-sm text-secondary">cities covered</p>
+          <p className="text-xs md:text-sm text-secondary">cities covered</p>
         </div>
-        <div className="px-4">
-          <p className="font-mono-data text-3xl font-semibold text-amber-300">
+        <div className="px-4 py-2 md:py-0">
+          <p className="font-mono-data text-2xl md:text-3xl font-semibold text-amber-300">
             &lt; <CountUp value={15} /> min
           </p>
-          <p className="text-sm text-secondary">average payout time</p>
+          <p className="text-xs md:text-sm text-secondary">average payout time</p>
         </div>
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold">How it works</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <h2 className="text-xl md:text-2xl font-semibold">How it works</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {HOW_IT_WORKS.map((item, index) => {
             const Icon = item.icon;
             return (
@@ -160,7 +160,7 @@ export default function HomePage() {
                 key={item.id}
                 className={`surface-card animate-fade-in-up delay-${index * 100} card-interactive relative overflow-hidden p-5`}
               >
-                <span className="font-mono-data absolute -right-2 -top-3 text-6xl font-bold text-amber-500/12">
+                <span className="font-mono-data absolute -right-2 -top-3 text-4xl md:text-6xl font-bold text-amber-500/12">
                   {item.id}
                 </span>
                 <Icon className="h-5 w-5 text-amber-300" />

@@ -118,10 +118,10 @@ export default function DashboardPage() {
       <div className="max-w-5xl mx-auto space-y-6 pb-20">
         {loading ? (
           <div className="space-y-4 animate-pulse">
-            <div className="h-32 bg-white/5 rounded-2xl" />
-            <div className="grid grid-cols-5 gap-4">
-              <div className="col-span-3 h-64 bg-white/5 rounded-2xl" />
-              <div className="col-span-2 h-64 bg-white/5 rounded-2xl" />
+            <div className="h-44 bg-white/5 rounded-2xl" />
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="md:col-span-3 h-64 bg-white/5 rounded-2xl" />
+              <div className="md:col-span-2 h-64 bg-white/5 rounded-2xl" />
             </div>
           </div>
         ) : error ? (
@@ -185,25 +185,25 @@ export default function DashboardPage() {
               <section className="lg:col-span-3 animate-fade-in-up delay-200">
                 <GlassCard className="h-full flex flex-col overflow-hidden">
                   <div className="p-6 border-b border-white/5 flex items-center justify-between">
-                    <h3 className="font-bold flex items-center gap-2"><ShieldCheck size={18} className="text-accent-saffron" /> {t('active_policy_title')}</h3>
+                    <h3 className="font-bold flex items-center gap-2 text-sm md:text-base"><ShieldCheck size={18} className="text-accent-saffron" /> {t('active_policy_title')}</h3>
                     {activePolicy?.has_active_policy && <StatusBadge variant="success" dot>Active</StatusBadge>}
                   </div>
                   
-                  <div className="flex-1 p-6">
+                  <div className="flex-1 p-4 md:p-6">
                     {activePolicy?.has_active_policy && activePolicy.policy ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                         <div className="space-y-4 text-center">
-                          <p className="text-xs text-text-muted font-medium uppercase tracking-wider">Coverage Protection</p>
+                          <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Coverage Protection</p>
                           <div className="relative inline-flex items-center justify-center">
-                             <svg className="w-40 h-40 transform -rotate-90">
-                              <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/5" />
-                              <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="8" fill="transparent" 
-                                strokeDasharray={440} strokeDashoffset={440 - (440 * coveragePct) / 100}
+                             <svg className="w-32 h-32 md:w-40 md:h-40 transform -rotate-90">
+                              <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/5" />
+                              <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="transparent" 
+                                strokeDasharray={351} strokeDashoffset={351 - (351 * coveragePct) / 100}
                                 className="text-accent-saffron transition-all duration-1000 ease-out" 
                               />
                             </svg>
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                              <span className="font-monoData text-3xl font-bold">{coveragePct}%</span>
+                              <span className="font-monoData text-2xl md:text-3xl font-bold">{coveragePct}%</span>
                               <span className="text-[10px] text-text-muted font-bold uppercase">Covered</span>
                             </div>
                           </div>
@@ -323,14 +323,14 @@ export default function DashboardPage() {
               </section>
             </div>
 
-            <section className="animate-fade-in-up delay-500">
-               <div className="inline-flex p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10">
+            <section className="animate-fade-in-up delay-500 overflow-x-auto custom-scrollbar pb-2">
+               <div className="inline-flex p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 min-w-max">
                 {(['dashboard', 'policies', 'claims'] as Tab[]).map((t) => (
                   <button
                     key={t}
                     onClick={() => setTab(t)}
                     className={`
-                      px-6 py-2 rounded-xl text-sm font-bold capitalize transition-all
+                      px-4 md:px-6 py-2 rounded-xl text-xs md:text-sm font-bold capitalize transition-all
                       ${tab === t ? 'bg-accent-saffron text-bg-base shadow-lg' : 'text-text-secondary hover:text-white'}
                     `}
                   >
