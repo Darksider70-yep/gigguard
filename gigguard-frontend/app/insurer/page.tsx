@@ -142,15 +142,6 @@ export default function InsurerPage() {
     try {
       setSimSteps([`Initializing ${selectedType} event in ${selectedCity}...`, 'Analyzing affected workers...', 'Calculating parametric payouts...']);
       
-      const cityCoords: any = {
-        mumbai: { lat: 19.1364, lng: 72.8296, zone: 'Andheri West' },
-        delhi: { lat: 28.6309, lng: 77.2164, zone: 'Connaught Place' },
-        bangalore: { lat: 12.9708, lng: 77.6450, zone: 'Indiranagar' },
-        chennai: { lat: 13.0397, lng: 80.2368, zone: 'T. Nagar' },
-        hyderabad: { lat: 17.4149, lng: 78.4481, zone: 'Banjara Hills' },
-      };
-
-      const coords = cityCoords[selectedCity];
       const testValues: any = {
         heavy_rainfall: 25.4,
         extreme_heat: 42.5,
@@ -163,10 +154,7 @@ export default function InsurerPage() {
       const payload: SimulateTriggerBody = {
         trigger_type: selectedType,
         city: selectedCity,
-        zone: coords.zone,
         trigger_value: testValues[selectedType],
-        lat: coords.lat,
-        lng: coords.lng,
       };
 
       const result = (await api.simulateTrigger(payload)) as any;

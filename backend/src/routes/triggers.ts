@@ -76,7 +76,7 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
     let lng = req.body?.lng ? Number(req.body.lng) : null;
     let zone = String(req.body?.zone || '');
 
-    // SMART TARGETING: Identify all distinct neighborhoods with active policyholders and pick one fairly
+    // DIVERSITY LOGIC: Combine active hotspots with all predefined zones to ensure simulations cover the whole city
     if (!lat || !lng) {
       const { rows: allActiveZones } = await query<{ zone: string; home_hex_id: string }>(
         `SELECT DISTINCT w.zone, w.home_hex_id::text
@@ -89,40 +89,39 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
         [city]
       );
 
-      if (allActiveZones.length > 0) {
-        // Shuffle and pick to ensure variety
-        const chosen = allActiveZones[Math.floor(Math.random() * allActiveZones.length)];
-        const { cellToLatLng } = await import('h3-js');
-        const [hLat, hLng] = cellToLatLng(BigInt(chosen.home_hex_id).toString(16));
-        lat = hLat;
-        lng = hLng;
+      const cityZones = getZonesByCity(city.charAt(0).toUpperCase() + city.slice(1));
+      
+      // Build a pool of candidates: ALL predefined zones + any active ones found (to preserve hotspots)
+      const candidates: Array<{ zone: string; lat: number; lng: number }> = [...cityZones];
+      
+      const { cellToLatLng } = await import('h3-js');
+      allActiveZones.forEach(az => {
+        const [aLat, aLng] = cellToLatLng(BigInt(az.home_hex_id).toString(16));
+        // Only add if not already in cityZones to avoid duplicates
+        if (!candidates.some(c => c.zone === az.zone)) {
+          candidates.push({ zone: az.zone, lat: aLat, lng: aLng });
+        }
+      });
+
+      if (candidates.length > 0) {
+        const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+        lat = chosen.lat;
+        lng = chosen.lng;
         zone = chosen.zone;
 
-        logger.info('Simulate', 'smart_target_variety_acquired', { 
+        logger.info('Simulate', 'diverse_target_acquired', { 
           city, 
           zone, 
-          available_zones: allActiveZones.length,
-          other_zones: allActiveZones.map(z => z.zone).filter(z => z !== zone)
+          pool_size: candidates.length,
+          active_zones_found: allActiveZones.length 
         });
         
-        // Return available zones in response for transparency
-        (req as any)._available_zones = allActiveZones.map(z => z.zone);
+        (req as any)._available_zones = candidates.map(c => c.zone);
       } else {
-        // Fallback: Pick a random neighborhood from our master list if no active workers found
-        const cityZones = getZonesByCity(city.charAt(0).toUpperCase() + city.slice(1));
-        const cityWideFallback = cityZones.length > 0 
-          ? cityZones[Math.floor(Math.random() * cityZones.length)]
-          : { lat: 19.1136, lng: 72.8697, zone: 'Default Zone' };
-
-        lat = cityWideFallback.lat;
-        lng = cityWideFallback.lng;
-        zone = cityWideFallback.zone;
-        
-        logger.warn('Simulate', 'no_active_workers_found_using_fallback_variety', { 
-          city, 
-          chosen_zone: zone,
-          candidate_count: cityZones.length 
-        });
+        // Absolute fallback if city is unknown
+        lat = 19.1136;
+        lng = 72.8697;
+        zone = 'Default Zone';
       }
     }
 
