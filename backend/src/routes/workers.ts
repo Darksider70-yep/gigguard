@@ -202,30 +202,15 @@ async function resolveInsurerProfile(): Promise<InsurerProfileRow> {
 }
 
 router.post('/register', validate(registerSchema), asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
-  const name = String(req.body?.name || '').trim();
-  const phoneNumber = getRequestPhone(req.body);
-  const platform = String(req.body?.platform || '').toLowerCase();
-  const city = normalizeCity(String(req.body?.city || ''));
-  const zone = String(req.body?.zone || '').trim();
-  const avgDailyEarning = Number(req.body?.avg_daily_earning);
-  const upiVpa = String(req.body?.upi_vpa || '').trim();
-  let preferredLanguage = String(req.body?.preferred_language || 'en').toLowerCase();
-  
-  if (!['en', 'hi', 'ta', 'te', 'kn', 'mr'].includes(preferredLanguage)) {
-    preferredLanguage = 'en';
-  }
+  const { name, city, zone, platform, upi_vpa, avg_daily_earning, preferred_language = 'en' } = req.body;
+  const phoneNumber = req.body.phone_number; // Already normalized by Zod middleware
 
-  if (!name) return res.status(400).json({ message: 'name is required' });
-  if (!phoneNumber) return res.status(400).json({ message: 'phone_number must be a valid +91 number' });
-  if (!['zomato', 'swiggy'].includes(platform)) return res.status(400).json({ message: 'platform must be zomato or swiggy' });
-  if (!city) return res.status(400).json({ message: 'city is required' });
-  if (!zone) return res.status(400).json({ message: 'zone is required' });
-  if (!Number.isFinite(avgDailyEarning) || avgDailyEarning < 200 || avgDailyEarning > 5000) {
-    return res.status(400).json({ message: 'avg_daily_earning must be between 200 and 5000' });
+  // Zone validation (Logic based, not just schema)
+  const zoneData = getZoneByName(zone, city);
+  if (!zoneData) {
+    console.warn(`[REGISTER_FAILURE] Invalid zone "${zone}" for city "${city}"`);
+    return res.status(400).json({ message: 'Invalid zone for selected city' });
   }
-
-  const atCount = (upiVpa.match(/@/g) || []).length;
-  if (atCount !== 1) return res.status(400).json({ message: 'upi_vpa must contain exactly one @ symbol' });
 
   const existingWorker = await query<{ id: string }>(
     `SELECT id::text FROM workers WHERE phone_number = $1 LIMIT 1`,
@@ -239,41 +224,42 @@ router.post('/register', validate(registerSchema), asyncRoute(async (req: Authen
     });
   }
 
-  const zoneData = getZoneByName(zone, city);
-  if (!zoneData) return res.status(400).json({ message: 'Invalid zone for selected city' });
-
   const workerId = randomUUID();
   const zoneMultiplier = Number(zoneData.zone_multiplier);
   const { homeHexId, fallback } = resolveHomeHex(city, Number(zoneData.lat), Number(zoneData.lng));
   const deviceFingerprint = getDeviceFingerprint(req);
-  const avatarSeed = computeAvatarSeed(name, phoneNumber);
-
-  await mlService.predictPremium(workerId, zoneMultiplier, 1.0, 1.0, city, zone);
-
-  await query(
-    `INSERT INTO workers (
-      id, name, phone_number, platform, city, zone,
-      avg_daily_earning, zone_multiplier, history_multiplier,
-      upi_vpa, experience_tier, home_hex_id, hex_is_centroid_fallback,
-      device_fingerprint, avatar_seed, verified, created_at, updated_at,
-      preferred_language
-    ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,FALSE,NOW(),NOW(),$16
-    )`,
-    [workerId, name, phoneNumber, platform, city, zone, avgDailyEarning, zoneMultiplier, 1.0, upiVpa, 'new', homeHexId, fallback, deviceFingerprint, avatarSeed, preferredLanguage]
-  );
+  const avatarSeed = computeAvatarSeed(String(name), phoneNumber);
 
   try {
-    await otpService.issueOtp(phoneNumber, workerId);
-  } catch {
-    return res.status(503).json({ message: 'OTP service unavailable', code: 'OTP_UNAVAILABLE' });
-  }
+    await mlService.predictPremium(workerId, zoneMultiplier, 1.0, 1.0, city, zone);
 
-  return res.status(201).json({
-    message: 'OTP sent',
-    worker_id: workerId,
-    phone_number: phoneNumber,
-  });
+    await query(
+      `INSERT INTO workers (
+        id, name, phone_number, platform, city, zone,
+        avg_daily_earning, zone_multiplier, history_multiplier,
+        upi_vpa, experience_tier, home_hex_id, hex_is_centroid_fallback,
+        device_fingerprint, avatar_seed, verified, created_at, updated_at,
+        preferred_language
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,FALSE,NOW(),NOW(),$16
+      )`,
+      [workerId, name, phoneNumber, platform, city, zone, avg_daily_earning, zoneMultiplier, 1.0, upi_vpa, 'new', homeHexId, fallback, deviceFingerprint, avatarSeed, preferred_language]
+    );
+
+    await otpService.issueOtp(phoneNumber, workerId);
+
+    return res.status(201).json({
+      message: 'OTP sent',
+      worker_id: workerId,
+      phone_number: phoneNumber,
+    });
+  } catch (err) {
+    console.error('[REGISTER_CRITICAL_FAILURE]', err);
+    return res.status(500).json({ 
+      message: err instanceof Error ? err.message : 'Registration failed internally',
+      code: 'REGISTRATION_FAILED' 
+    });
+  }
 }));
 
 router.post('/login', validate(loginSchema), asyncRoute(async (req, res: Response) => {

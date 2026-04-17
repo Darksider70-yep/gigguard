@@ -142,6 +142,12 @@ export default function RegisterPage() {
     } catch (err) {
       if (err instanceof APIError && err.status === 409 && err.code === 'PHONE_ALREADY_REGISTERED') {
         setPhoneConflict(true);
+      } else if (err instanceof APIError && err.status === 400 && err.details) {
+        // Handle Zod validation errors
+        const detailMsg = Array.isArray(err.details) 
+          ? err.details.map((d: any) => d.message).join('. ')
+          : typeof err.details === 'string' ? err.details : null;
+        setError(detailMsg || 'Validation failed. Please check your inputs.');
       } else if (err instanceof APIError && err.status === 0) {
         setError('Network unavailable. Check backend connectivity.');
       } else if (err instanceof APIError) {

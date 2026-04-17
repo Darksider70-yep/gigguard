@@ -28,11 +28,13 @@ import {
 export class APIError extends Error {
   status: number;
   code?: string;
+  details?: any;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, details?: any) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -116,7 +118,13 @@ class GigGuardAPI {
         ) {
           this.unauthorizedHandler();
         }
-        throw new APIError(payload.message || 'Request failed', response.status, payload.code);
+        const errObj = payload.error || payload;
+        throw new APIError(
+          errObj.message || 'Request failed',
+          response.status,
+          errObj.code,
+          errObj.details
+        );
       }
 
       return payload as T;
