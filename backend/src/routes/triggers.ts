@@ -188,6 +188,7 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
         disruption_hours: disruptionHours,
         trigger_value: triggerValue,
         worker_ids: result.worker_ids,
+        is_simulated: true,
       });
     }
 

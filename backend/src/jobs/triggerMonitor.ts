@@ -413,6 +413,7 @@ async function processTrigger(params: {
     disruption_hours: disruptionHours,
     trigger_value: value,
     worker_ids: workerIds,
+    is_simulated: !!isSimulated,
   };
 
   try {

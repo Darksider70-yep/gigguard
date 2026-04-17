@@ -13,6 +13,7 @@ export interface ClaimCreationJob {
   worker_ids: string[];
   health_advisory_id?: string;
   claim_date?: string;
+  is_simulated?: boolean;
 }
 
 export async function processClaimCreationJob(
@@ -26,6 +27,7 @@ export async function processClaimCreationJob(
     worker_ids,
     health_advisory_id,
     claim_date,
+    is_simulated,
   } = data;
 
   let claimsCreated = 0;
@@ -82,7 +84,7 @@ export async function processClaimCreationJob(
           const existingPayout = Number(existingClaim.payout_amount);
           const shouldUpgrade = payout > existingPayout && existingClaim.status !== 'paid';
 
-          if (!shouldUpgrade) {
+          if (!shouldUpgrade && !is_simulated) {
             logger.warn('ClaimCreation', 'claim_suppressed_daily_limit', {
               worker_id: workerId,
               existing_claim_id: existingClaim.id,

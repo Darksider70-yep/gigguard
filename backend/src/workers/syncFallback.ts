@@ -7,6 +7,7 @@ interface SyncTriggerParams {
   disruption_hours: number;
   trigger_value: number;
   worker_ids: string[];
+  is_simulated?: boolean;
 }
 
 export async function processTriggerSync(params: SyncTriggerParams): Promise<void> {
