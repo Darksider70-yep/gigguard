@@ -387,7 +387,7 @@ async function processTrigger(params: {
         affectedWorkers.length,
         affectedWorkers.length,
         0, // total_payout
-        isSimulated ? affectedWorkers.length * premiumService.calculateCoverageAmount(200, triggerType) : 0, // estimated payout for simulation
+        0, // total_payout_amount (will be updated by claims)
         !!isSimulated,
       ]
   );

@@ -250,11 +250,9 @@ export async function processClaimCreationJob(
   await query(
     `UPDATE disruption_events
      SET total_claims_triggered = total_claims_triggered + $1,
-         affected_worker_count = $2,
-         affected_workers_count = $2,
-         total_payout_amount = total_payout_amount + $3
-     WHERE id = $4`,
-    [claimsCreated, worker_ids.length, totalPayoutAmount, disruption_event_id]
+         total_payout_amount = total_payout_amount + $2
+     WHERE id = $3`,
+    [claimsCreated, totalPayoutAmount, disruption_event_id]
   );
 
   return { claims_created: claimsCreated };
