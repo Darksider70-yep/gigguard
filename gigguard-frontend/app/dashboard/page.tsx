@@ -323,8 +323,8 @@ export default function DashboardPage() {
               </section>
             </div>
 
-            <section className="animate-fade-in-up delay-500 overflow-x-auto custom-scrollbar pb-2">
-               <div className="inline-flex p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 min-w-max">
+            <section className="animate-fade-in-up delay-500 overflow-x-auto custom-scrollbar pb-2 flex justify-center">
+               <div className="inline-flex p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 min-w-max mx-auto">
                 {(['dashboard', 'policies', 'claims'] as Tab[]).map((t) => (
                   <button
                     key={t}

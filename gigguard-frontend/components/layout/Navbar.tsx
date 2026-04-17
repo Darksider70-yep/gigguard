@@ -20,13 +20,13 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-50 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5">
-        <div className="flex items-center gap-8">
-          <Link href="/" className="inline-flex items-center gap-2">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-5">
+        <div className="flex items-center gap-4 md:gap-8 min-w-0">
+          <Link href="/" className="inline-flex items-center gap-2 shrink-0">
             <Shield className="h-5 w-5 text-amber-400" />
-            <span className="text-lg font-semibold tracking-wide">GigGuard</span>
+            <span className="text-base md:text-lg font-semibold tracking-wide truncate">GigGuard</span>
           </Link>
-          <div className="flex items-center gap-5 text-sm text-secondary">
+          <div className="hidden md:flex items-center gap-5 text-sm text-secondary">
             {role === null ? <Link href="/">Home</Link> : null}
             {role === 'worker' ? (
               <>
@@ -43,14 +43,14 @@ export default function Navbar() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3 shrink-0">
           {/* Language switcher for logged-in workers */}
           {role === 'worker' ? (
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setShowLangPicker((prev) => !prev)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-secondary transition hover:border-slate-600 hover:text-white"
+                className="inline-flex items-center gap-1 md:gap-1.5 rounded-md border border-slate-700 px-2 py-1.5 text-[10px] md:text-xs text-secondary transition hover:border-slate-600 hover:text-white"
                 title="Change language"
               >
                 <Globe className="h-3.5 w-3.5" />
@@ -72,12 +72,12 @@ export default function Navbar() {
           ) : null}
 
           {role === 'worker' ? (
-            <div className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs text-secondary">
+            <div className="hidden sm:block rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs text-secondary">
               {worker?.name ?? 'Worker'}
             </div>
           ) : null}
           {role === 'insurer' ? (
-            <div className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs text-secondary">
+            <div className="hidden sm:block rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs text-secondary">
               {insurer?.name ?? 'Insurer'}
             </div>
           ) : null}
@@ -86,10 +86,10 @@ export default function Navbar() {
             <button
               onClick={() => logout()}
               type="button"
-              className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-1.5 text-sm text-secondary transition hover:border-slate-600 hover:text-white"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-2 md:px-3 py-1.5 text-xs md:text-sm text-secondary transition hover:border-slate-600 hover:text-white"
             >
               <LogOut className="h-4 w-4" />
-              {t('logout')}
+              <span className="hidden xs:inline">{t('logout')}</span>
             </button>
           ) : null}
         </div>
