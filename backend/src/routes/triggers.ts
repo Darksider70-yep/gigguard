@@ -7,6 +7,7 @@ import { logger } from '../lib/logger';
 import { processHealthEmergencyPayload } from './webhooks';
 import { config } from '../config';
 import { processTriggerSync } from '../workers/syncFallback';
+import { getZonesByCity } from '../constants/zones';
 
 const router = Router();
 
@@ -107,11 +108,21 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
         // Return available zones in response for transparency
         (req as any)._available_zones = allActiveZones.map(z => z.zone);
       } else {
-        // Fallback to city center if no active workers found
-        const fallbackCoords = CITY_COORDINATES[city] || CITY_COORDINATES.mumbai;
-        lat = fallbackCoords.lat;
-        lng = fallbackCoords.lng;
-        logger.warn('Simulate', 'no_active_workers_found_using_fallback', { city });
+        // Fallback: Pick a random neighborhood from our master list if no active workers found
+        const cityZones = getZonesByCity(city.charAt(0).toUpperCase() + city.slice(1));
+        const cityWideFallback = cityZones.length > 0 
+          ? cityZones[Math.floor(Math.random() * cityZones.length)]
+          : { lat: 19.1136, lng: 72.8697, zone: 'Default Zone' };
+
+        lat = cityWideFallback.lat;
+        lng = cityWideFallback.lng;
+        zone = cityWideFallback.zone;
+        
+        logger.warn('Simulate', 'no_active_workers_found_using_fallback_variety', { 
+          city, 
+          chosen_zone: zone,
+          candidate_count: cityZones.length 
+        });
       }
     }
 
@@ -129,9 +140,10 @@ router.post('/simulate', requireInsurer, async (req: AuthenticatedRequest, res: 
     );
 
     if (triggerType === 'pandemic_containment') {
-      const fallbackCoords = CITY_COORDINATES[city] || CITY_COORDINATES.mumbai;
-      const latForPolygon = Number(req.body?.lat ?? fallbackCoords.lat);
-      const lngForPolygon = Number(req.body?.lng ?? fallbackCoords.lng);
+      const cityZones = getZonesByCity(city.charAt(0).toUpperCase() + city.slice(1));
+      const fallback = cityZones[Math.floor(Math.random() * cityZones.length)] || { lat: 19.1136, lng: 72.8697, zone: 'Default' };
+      const latForPolygon = Number(req.body?.lat ?? fallback.lat);
+      const lngForPolygon = Number(req.body?.lng ?? fallback.lng);
       const severity = String(req.body?.severity ?? 'containment').toLowerCase();
 
       const webhookResult = await processHealthEmergencyPayload({
