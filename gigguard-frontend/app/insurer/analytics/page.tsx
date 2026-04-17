@@ -5,11 +5,12 @@ import AuthGuard from '@/components/AuthGuard';
 import InsurerNav from '@/components/layout/InsurerNav';
 import { useDataRefresh } from '@/hooks/useDataRefresh';
 import { api } from '@/lib/api';
-import { InsurerDashboardResponse, ShadowComparisonResponse } from '@/lib/types';
+import { InsurerDashboardResponse, PremiumDistributionResponse, ShadowComparisonResponse } from '@/lib/types';
 
 interface AnalyticsBundle {
   dashboard: InsurerDashboardResponse;
   shadow: ShadowComparisonResponse;
+  distribution: PremiumDistributionResponse;
 }
 const INR = '\u20B9';
 
@@ -22,8 +23,12 @@ function statusText(lossRatioPct: number): string {
 export default function InsurerAnalyticsPage() {
   const { data, loading, error } = useDataRefresh<AnalyticsBundle>(
     async () => {
-      const [dashboard, shadow] = await Promise.all([api.getInsurerDashboard(), api.getShadowComparison()]);
-      return { dashboard, shadow };
+      const [dashboard, shadow, distribution] = await Promise.all([
+        api.getInsurerDashboard(),
+        api.getShadowComparison(),
+        api.getPremiumDistribution(),
+      ]);
+      return { dashboard, shadow, distribution };
     },
     30000,
     true
@@ -33,11 +38,10 @@ export default function InsurerAnalyticsPage() {
   const needleColor = lossRatioPct > 80 ? '#ef4444' : lossRatioPct >= 65 ? '#f59e0b' : '#10b981';
 
   const distribution = useMemo(() => {
-    const base = data?.dashboard.stats.average_premium ?? 50;
-    return Array.from({ length: 7 }).map((_, index) => Math.max(20, Math.round(base * (0.78 + index * 0.05))));
+    return data?.distribution.distribution ?? [];
   }, [data]);
 
-  const maxDistribution = Math.max(...distribution, 1);
+  const maxDistribution = Math.max(...distribution.map(d => d.total), 1);
 
   return (
     <AuthGuard allowedRoles={['insurer']}>
@@ -78,14 +82,16 @@ export default function InsurerAnalyticsPage() {
             <div className="surface-card p-5">
               <h3 className="text-lg font-semibold">Premium distribution (7 days)</h3>
               <div className="mt-4 flex h-48 items-end gap-3">
-                {distribution.map((value, index) => (
+                {distribution.map((d, index) => (
                   <div key={index} className="group flex-1">
                     <div
                       className="rounded-t bg-amber-400/80 transition hover:bg-amber-300"
-                      style={{ height: `${Math.round((value / maxDistribution) * 100)}%` }}
-                      title={`${INR}${value}`}
+                      style={{ height: `${Math.round((d.total / maxDistribution) * 100)}%` }}
+                      title={`${INR}${d.total}`}
                     />
-                    <p className="mt-2 text-center text-xs text-secondary">D{index + 1}</p>
+                    <p className="mt-2 text-center text-[10px] text-secondary">
+                      {new Date(d.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </p>
                   </div>
                 ))}
               </div>

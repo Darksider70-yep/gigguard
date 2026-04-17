@@ -120,6 +120,32 @@ router.get('/dashboard', authenticateInsurer, asyncRoute(async (_req, res) => {
   });
 }));
 
+router.get('/premium-distribution', authenticateInsurer, asyncRoute(async (_req, res) => {
+  const { rows } = await query<{ date: string; total: string }>(`
+    WITH days AS (
+      SELECT generate_series(
+        CURRENT_DATE - INTERVAL '6 days',
+        CURRENT_DATE,
+        '1 day'::interval
+      )::date as d
+    )
+    SELECT 
+      days.d as date,
+      COALESCE(SUM(p.premium_paid), 0)::text as total
+    FROM days
+    LEFT JOIN policies p ON DATE(p.purchased_at) = days.d
+    GROUP BY days.d
+    ORDER BY days.d ASC
+  `);
+
+  res.json({
+    distribution: rows.map(r => ({
+      date: r.date,
+      total: Math.round(Number(r.total))
+    }))
+  });
+}));
+
 router.get('/disruption-events', authenticateInsurer, asyncRoute(async (req, res) => {
   const status = req.query.status as string | undefined;
   const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);

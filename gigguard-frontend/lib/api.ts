@@ -12,6 +12,7 @@ import {
   OtpRequest,
   PlatformStatusResponse,
   PolicyHistoryResponse,
+  PremiumDistributionResponse,
   PremiumQuoteResponse,
   PurchasePolicyBody,
   PurchasePolicyResponse,
@@ -302,6 +303,10 @@ class GigGuardAPI {
 
   getShadowComparison() {
     return this.request<ShadowComparisonResponse>('/insurer/shadow-comparison');
+  }
+
+  getPremiumDistribution() {
+    return this.request<PremiumDistributionResponse>('/insurer/premium-distribution');
   }
 
   getInsurerWorkers(params?: {

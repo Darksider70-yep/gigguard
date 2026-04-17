@@ -361,4 +361,11 @@ export interface VerifyOtpResponse {
   worker: WorkerProfile;
 }
 
+export interface PremiumDistributionResponse {
+  distribution: Array<{
+    date: string;
+    total: number;
+  }>;
+}
+
 export type RegistrationStep = 'details' | 'verify' | 'complete';
